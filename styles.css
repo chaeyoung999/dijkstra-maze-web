@@ -62,6 +62,15 @@ code, pre, .mono { font-family: "Cascadia Mono", "Consolas", "SFMono-Regular", M
   --radius: 10px;
   --focus-ring: #1c6fb0;
   --scrollbar: #cbb989;
+
+  /* Python syntax-highlight token colors (VS Code "Light+" default theme) */
+  --tok-kw: #0000ff;
+  --tok-str: #a31515;
+  --tok-cm: #008000;
+  --tok-num: #098658;
+  --tok-fn: #795e26;
+  --tok-cls: #267f99;
+  --tok-self: #001080;
 }
 
 :root[data-theme="dark"] {
@@ -89,6 +98,15 @@ code, pre, .mono { font-family: "Cascadia Mono", "Consolas", "SFMono-Regular", M
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
   --focus-ring: #6fb8ec;
   --scrollbar: #4a4030;
+
+  /* Python syntax-highlight token colors (VS Code "Dark+" default theme) */
+  --tok-kw: #569cd6;
+  --tok-str: #ce9178;
+  --tok-cm: #6a9955;
+  --tok-num: #b5cea8;
+  --tok-fn: #dcdcaa;
+  --tok-cls: #4ec9b0;
+  --tok-self: #9cdcfe;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -117,6 +135,15 @@ code, pre, .mono { font-family: "Cascadia Mono", "Consolas", "SFMono-Regular", M
     --shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
     --focus-ring: #6fb8ec;
     --scrollbar: #4a4030;
+
+    /* Python syntax-highlight token colors (VS Code "Dark+" default theme) */
+    --tok-kw: #569cd6;
+    --tok-str: #ce9178;
+    --tok-cm: #6a9955;
+    --tok-num: #b5cea8;
+    --tok-fn: #dcdcaa;
+    --tok-cls: #4ec9b0;
+    --tok-self: #9cdcfe;
   }
 }
 
@@ -430,6 +457,7 @@ body {
 .editor-part-label { font-weight: 700; color: var(--torch-bright); }
 .code-block {
   display: flex;
+  font-family: "Cascadia Mono", "Consolas", "SFMono-Regular", Menlo, monospace;
   font-size: 0.86rem;
   line-height: 1.55;
 }
@@ -442,12 +470,30 @@ body {
   user-select: none;
   white-space: pre;
 }
-.code-lines { flex: 1; white-space: pre-wrap; word-break: break-word; padding: 10px 12px; }
-.context-block .code-lines { color: var(--text-faint); }
+.code-lines {
+  flex: 1;
+  min-width: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: 10px 12px;
+}
 .context-block { opacity: 0.85; }
 .context-block.context-before { border-bottom: 1px dashed var(--panel-border); }
 .context-block.context-after { border-top: 1px dashed var(--panel-border); }
 .marker-line { color: var(--accent); font-weight: 700; opacity: 0.8; }
+
+/* Python syntax-highlight token colors, applied to both the read-only
+   context blocks (rendered straight to HTML) and the highlight-behind-
+   textarea layer for the editable block. Mirrors VS Code's default
+   Dark+/Light+ Python coloring closely enough to read as "the same" at a
+   glance; see --tok-* variables above for the per-theme values. */
+.tok-kw { color: var(--tok-kw); }
+.tok-str { color: var(--tok-str); }
+.tok-cm { color: var(--tok-cm); font-style: italic; }
+.tok-num { color: var(--tok-num); }
+.tok-fn { color: var(--tok-fn); }
+.tok-cls { color: var(--tok-cls); }
+.tok-self { color: var(--tok-self); }
 
 .editable-wrap {
   position: relative;
@@ -471,6 +517,7 @@ body {
 }
 .editable-grid {
   display: flex;
+  font-family: "Cascadia Mono", "Consolas", "SFMono-Regular", Menlo, monospace;
 }
 .editor-gutter {
   flex-shrink: 0;
@@ -484,21 +531,74 @@ body {
   line-height: 1.55;
   overflow: hidden;
 }
-.code-textarea {
+/* Positioning context shared by the highlight layer and the real
+   textarea, so the two always occupy exactly the same box regardless of
+   how the surrounding flex layout sizes this column. */
+.code-editor-stack {
+  position: relative;
   flex: 1;
+  min-width: 0;
+}
+/* The colorized layer sits behind the (text-transparent) textarea. Its
+   box model, font metrics, whitespace handling and padding must match
+   .code-textarea exactly or the colors will drift out of alignment with
+   the real (invisible) characters and caret above it. */
+.code-highlight-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  margin: 0;
+  overflow: hidden;
+  pointer-events: none;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.86rem;
+  font-weight: normal;
+  font-style: normal;
+  line-height: 1.55;
+  letter-spacing: normal;
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: 10px 12px;
+  tab-size: 4;
+}
+.code-textarea {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
   min-width: 0;
   border: none;
   resize: none;
   background: transparent;
-  color: var(--text);
+  color: transparent;
+  caret-color: var(--text);
+  font-family: inherit;
   font-size: 0.86rem;
+  font-weight: normal;
+  font-style: normal;
   line-height: 1.55;
+  letter-spacing: normal;
+  white-space: pre-wrap;
+  word-break: break-word;
   padding: 10px 12px;
   overflow-y: hidden;
   max-height: 420px;
   tab-size: 4;
 }
-.code-textarea:focus { background: color-mix(in srgb, var(--editable-bg) 96%, var(--accent) 4%); }
+/* Selection still needs to be visible even though the text itself is
+   transparent - browsers render the selection highlight independently of
+   text color, so this is purely cosmetic polish for contrast. */
+.code-textarea::selection { background: color-mix(in srgb, var(--accent) 35%, transparent); }
+.code-textarea:focus { outline: none; }
+/* The textarea's own background stays transparent (its text is
+   transparent too, see above) so the highlight layer underneath is what
+   actually shows; the focus tint is painted on the highlight layer via
+   :focus-within on their shared wrapper so it works regardless of which
+   of the two layers is later in DOM order. */
+.code-editor-stack:focus-within .code-highlight-layer {
+  background: color-mix(in srgb, transparent 94%, var(--accent) 6%);
+}
 
 .autocomplete-popup {
   position: absolute;

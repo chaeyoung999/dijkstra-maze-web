@@ -672,6 +672,111 @@
     return { onInput: onInput, handleKeydown: handleKeydown, close: close };
   }
 
+  // ------------------------------------------------- 7a. Python syntax highlighting
+  //
+  // Small hand-rolled, regex-based tokenizer (not a full parser - keywords,
+  // strings incl. f-strings/triple-quotes, comments, numbers, identifiers;
+  // "self"/"cls" and def/class names and call-sites get their own token
+  // types). Used to render VS Code Dark+/Light+ -like colors for both the
+  // read-only context blocks and the editable textarea (via a synced
+  // highlight-behind-textarea overlay - see buildEditableBlock).
+  //
+  // IMPORTANT: every character of the input MUST come back out somewhere in
+  // the token stream, unchanged, or the highlight overlay will drift out of
+  // pixel alignment with the real (invisible) textarea text and cursor.
+  // This is validated by round-tripping tokens back into a string and
+  // diffing against the original (see the report for how this was tested
+  // without a browser available).
+  var PY_KEYWORDS_LIST = ["False", "None", "True", "and", "as", "assert", "async", "await",
+    "break", "class", "continue", "def", "del", "elif", "else", "except", "finally",
+    "for", "from", "global", "if", "import", "in", "is", "lambda", "nonlocal", "not",
+    "or", "pass", "raise", "return", "try", "while", "with", "yield"];
+  var PY_KEYWORDS_SET = {};
+  PY_KEYWORDS_LIST.forEach(function (k) { PY_KEYWORDS_SET[k] = true; });
+
+  // Group 1 = comment, 2 = triple-quoted string, 3 = single/double-quoted
+  // string, 4 = decorator, 5 = number, 6 = word (identifier/keyword). This
+  // is a REGEX LITERAL on purpose (not built from a string via
+  // `new RegExp(...)`) - safer/simpler escaping, one less place to get
+  // double-backslashing wrong.
+  var PY_TOKEN_RE = /(#[^\n]*)|([rRbBfFuU]{0,2}(?:'''[\s\S]*?'''|"""[\s\S]*?"""))|([rRbBfFuU]{0,2}(?:"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'))|(@[A-Za-z_][A-Za-z0-9_.]*)|(\b0[xX][0-9a-fA-F]+\b|\b\d+\.\d*(?:[eE][+-]?\d+)?\b|\b\.\d+\b|\b\d+[eE][+-]?\d+\b|\b\d+\b)|(\b[A-Za-z_][A-Za-z0-9_]*\b)/g;
+
+  function tokenizePython(code) {
+    code = code == null ? "" : String(code);
+    var tokens = [];
+    var lastIndex = 0;
+    var m;
+    PY_TOKEN_RE.lastIndex = 0;
+    while ((m = PY_TOKEN_RE.exec(code)) !== null) {
+      if (m.index > lastIndex) tokens.push({ type: "plain", text: code.slice(lastIndex, m.index) });
+      // Truthy checks (not `!== undefined`): every alternative requires at
+      // least one character to match, so a real match is never "", and
+      // this is also safe against engines that report non-participating
+      // groups as "" instead of `undefined`.
+      if (m[1]) tokens.push({ type: "comment", text: m[1] });
+      else if (m[2]) tokens.push({ type: "string", text: m[2] });
+      else if (m[3]) tokens.push({ type: "string", text: m[3] });
+      else if (m[4]) tokens.push({ type: "decorator", text: m[4] });
+      else if (m[5]) tokens.push({ type: "number", text: m[5] });
+      else if (m[6]) {
+        var w = m[6];
+        var type = "identifier";
+        if (PY_KEYWORDS_SET[w]) type = "keyword";
+        else if (w === "self" || w === "cls") type = "self";
+        tokens.push({ type: type, text: w });
+      }
+      lastIndex = PY_TOKEN_RE.lastIndex;
+      if (m.index === PY_TOKEN_RE.lastIndex) PY_TOKEN_RE.lastIndex++; // guard against zero-length matches
+    }
+    if (lastIndex < code.length) tokens.push({ type: "plain", text: code.slice(lastIndex) });
+
+    // Context-sensitive upgrades: name right after `def`/`class`, and any
+    // identifier immediately followed by "(" (a call site), matching how
+    // VS Code's default (TextMate-grammar) Python coloring works.
+    for (var i = 0; i < tokens.length; i++) {
+      if (tokens[i].type === "keyword" && (tokens[i].text === "def" || tokens[i].text === "class")) {
+        var isClass = tokens[i].text === "class";
+        for (var j = i + 1; j < tokens.length; j++) {
+          if (tokens[j].type === "plain" && tokens[j].text.trim() === "") continue;
+          if (tokens[j].type === "identifier") tokens[j].type = isClass ? "classname" : "function";
+          break;
+        }
+      }
+    }
+    for (var i2 = 0; i2 < tokens.length; i2++) {
+      if (tokens[i2].type === "identifier") {
+        var next = tokens[i2 + 1];
+        if (next && next.type === "plain" && next.text.charAt(0) === "(") tokens[i2].type = "function";
+      }
+    }
+    return tokens;
+  }
+
+  function escapeHtmlForCode(s) {
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  var PY_TOKEN_CLASS_MAP = {
+    keyword: "tok-kw", string: "tok-str", comment: "tok-cm", number: "tok-num",
+    decorator: "tok-fn", "function": "tok-fn", classname: "tok-cls", self: "tok-self",
+  };
+
+  function highlightPythonToHtml(code) {
+    var tokens = tokenizePython(code);
+    var out = [];
+    for (var i = 0; i < tokens.length; i++) {
+      var t = tokens[i];
+      var escaped = escapeHtmlForCode(t.text);
+      var cls = PY_TOKEN_CLASS_MAP[t.type];
+      out.push(cls ? '<span class="' + cls + '">' + escaped + '</span>' : escaped);
+    }
+    // A trailing newline needs a following blank "line" to render with the
+    // same height a textarea gives it; a lone newline at the very end of
+    // pre-wrap content can otherwise be collapsed visually.
+    if (code.length === 0 || code.charAt(code.length - 1) === "\n") out.push(" ");
+    return out.join("");
+  }
+
   function makeGutter(startLine, count) {
     var nums = [];
     for (var i = 0; i < count; i++) nums.push(startLine + i);
@@ -683,7 +788,7 @@
     var count = Math.max(1, text.split("\n").length);
     return el("div", { class: "code-block context-block " + extraClass }, [
       el("div", { class: "code-gutter", text: makeGutter(startLine, count) }),
-      el("div", { class: "code-lines", text: text }),
+      el("div", { class: "code-lines", html: highlightPythonToHtml(text) }),
     ]);
   }
 
@@ -694,6 +799,14 @@
     wrap.appendChild(el("div", { class: "editable-flag", text: "Your code" }));
     var grid = el("div", { class: "editable-grid" });
     var gutter = el("div", { class: "editor-gutter", "aria-hidden": "true" });
+    // The textarea sits ON TOP of a synced, colorized highlight layer
+    // ("highlight-behind-textarea" technique): the textarea's own text is
+    // made transparent (see styles.css .code-textarea) so only its caret
+    // and selection are visible, while the highlight layer underneath
+    // shows the actual colored syntax. Both share one stacking wrapper so
+    // they always occupy exactly the same box.
+    var stack = el("div", { class: "code-editor-stack" });
+    var highlightLayer = el("div", { class: "code-highlight-layer", "aria-hidden": "true" });
     var textarea = el("textarea", {
       class: "code-textarea",
       spellcheck: "false",
@@ -702,24 +815,67 @@
       "aria-label": "Your code for TODO " + step.id + (partIndex != null ? ", part " + (partIndex + 1) : ""),
     });
     textarea.value = initialCode;
+    stack.appendChild(highlightLayer);
+    stack.appendChild(textarea);
     grid.appendChild(gutter);
-    grid.appendChild(textarea);
+    grid.appendChild(stack);
     wrap.appendChild(grid);
 
     var api = { node: wrap, textarea: textarea, onLineCountChange: null };
     api.lineCount = function () { return Math.max(1, textarea.value.split("\n").length); };
 
-    function refresh() {
-      var count = api.lineCount();
-      gutter.textContent = makeGutter(startLine, count);
+    function updateHighlight() {
+      highlightLayer.innerHTML = highlightPythonToHtml(textarea.value);
+    }
+
+    // scrollHeight (and offsetHeight/clientHeight) read as 0 for any
+    // element that isn't actually laid out yet - either because it's not
+    // attached to `document` at all (buildEditorShell()'s returned node is
+    // still an in-memory fragment the first time buildEditableBlock runs;
+    // it only gets appended to #mainPanel by the caller afterwards), or
+    // because it's attached but sitting inside a `display:none` ancestor
+    // (e.g. an inactive tab). A single synchronous measurement in either
+    // case would permanently pin the textarea's height to 0px, since
+    // nothing re-triggers refresh() later on its own.
+    //
+    // `isRendered()` covers both cases at once: a disconnected node and a
+    // node inside `display:none` both report zero client rects. Retry on
+    // the next animation frame until it's actually rendered, so this can't
+    // recur regardless of *why* the element wasn't ready yet (off-screen
+    // rebuild, deferred insertion, etc.).
+    function isRendered() {
+      return textarea.getClientRects().length > 0;
+    }
+    function measureAndSetHeight() {
       textarea.style.height = "auto";
       var h = Math.min(420, textarea.scrollHeight);
       textarea.style.height = h + "px";
       textarea.style.overflowY = textarea.scrollHeight > 420 ? "auto" : "hidden";
+    }
+    var pendingMeasure = 0;
+    function scheduleMeasure() {
+      if (pendingMeasure) return;
+      pendingMeasure = requestAnimationFrame(function () {
+        pendingMeasure = 0;
+        if (!isRendered()) { scheduleMeasure(); return; }
+        measureAndSetHeight();
+      });
+    }
+
+    function refresh() {
+      var count = api.lineCount();
+      gutter.textContent = makeGutter(startLine, count);
+      if (isRendered()) measureAndSetHeight();
+      else scheduleMeasure();
       if (api.onLineCountChange) api.onLineCountChange(count);
     }
-    function syncScroll() { gutter.scrollTop = textarea.scrollTop; }
+    function syncScroll() {
+      gutter.scrollTop = textarea.scrollTop;
+      highlightLayer.scrollTop = textarea.scrollTop;
+      highlightLayer.scrollLeft = textarea.scrollLeft;
+    }
 
+    updateHighlight();
     refresh();
     var autocomplete = createAutocomplete(textarea, wrap);
 
@@ -727,7 +883,9 @@
       var code = textarea.value;
       if (partIndex == null) stepData.code = code; else stepData.code[partIndex] = code;
       persist();
+      updateHighlight();
       refresh();
+      syncScroll();
       autocomplete.onInput();
     });
     textarea.addEventListener("scroll", syncScroll);
