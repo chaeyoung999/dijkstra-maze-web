@@ -65,6 +65,40 @@
 
   function linesOf(x) { return Array.isArray(x) ? x.join("\n") : String(x || ""); }
 
+  // Small hand-rolled "rich text" renderer for instructional prose (step
+  // leads, hints, banners, instructions) - NOT a general markdown parser,
+  // just the handful of things teacher-written copy needs:
+  //   **bold**, `code`, blank-line-separated paragraphs, and "- " bullet
+  //   lists (a block where every line starts with "- " becomes a <ul>).
+  // Used with el(..., {html: richTextToHtml(text)}) instead of {text:}.
+  function escapeHtmlLite(s) {
+    return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  function inlineRichText(s) {
+    var escaped = escapeHtmlLite(s);
+    escaped = escaped.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+    escaped = escaped.replace(/`([^`]+)`/g, "<code>$1</code>");
+    return escaped;
+  }
+  function richTextToHtml(text) {
+    var raw = String(text == null ? "" : text);
+    var blocks = raw.split(/\n\s*\n/);
+    var out = [];
+    blocks.forEach(function (block) {
+      var trimmed = block.trim();
+      if (!trimmed) return;
+      var lines = trimmed.split("\n").map(function (l) { return l.trim(); }).filter(function (l) { return l.length > 0; });
+      var isList = lines.length > 0 && lines.every(function (l) { return /^-\s+/.test(l); });
+      if (isList) {
+        var items = lines.map(function (l) { return "<li>" + inlineRichText(l.replace(/^-\s+/, "")) + "</li>"; });
+        out.push("<ul>" + items.join("") + "</ul>");
+      } else {
+        out.push("<p>" + inlineRichText(lines.join(" ")) + "</p>");
+      }
+    });
+    return out.join("");
+  }
+
   function toBase64Utf8(str) {
     return btoa(unescape(encodeURIComponent(String(str == null ? "" : str))));
   }
@@ -463,20 +497,23 @@
     if (pyState.status === "loading") {
       banner.hidden = false;
       banner.className = "banner banner-info";
-      banner.innerHTML = '<span class="spinner" aria-hidden="true"></span> Loading the Python grading engine (Pyodide) for the first time — this can take a little while on a slow connection...';
+      banner.innerHTML = '<span class="spinner" aria-hidden="true"></span> Loading the Python engine (Pyodide) — first load only, can take a little while on a slow connection.';
     } else if (pyState.status === "error") {
       banner.hidden = false;
       banner.className = "banner banner-error";
-      banner.textContent = "Could not load the Python grading engine. Check your internet connection and reload the page. Grading is disabled until this succeeds.";
+      banner.textContent = "Could not load the Python engine. Check your internet connection and reload the page — running code is disabled until this succeeds.";
     } else {
       banner.hidden = true;
     }
   }
 
+  // One consistent "Run my code" action for every step, syntax-mode or
+  // behaviour-mode alike (see runGrading()) - the RESULT panel is what
+  // communicates correct/incorrect/ran-cleanly, not the button label.
   function gradeButtonLabel() {
-    if (pyState.status === "loading") return "Loading Python engine...";
-    if (pyState.status === "error") return "Grading unavailable";
-    return "Grade my code";
+    if (pyState.status === "loading") return "Loading Python engine…";
+    if (pyState.status === "error") return "Can't run right now";
+    return "Run my code";
   }
 
   function refreshGradeButtonAvailability() {
@@ -535,11 +572,16 @@
         ok: !!obj.ok,
         passed: obj.passed || [],
         failed: obj.failed || [],
+        // `warnings`: non-blocking, informational notes (heads-up style, not
+        // pass/fail). Currently only used by the relaxed syntax-mode
+        // harnesses (open-ended TODOs 1/7/8/9/10) to flag something that
+        // looks off WITHOUT gating completion on it - see runGrading().
+        warnings: obj.warnings || [],
         error: obj.error || null,
         traceback: obj.traceback || null,
       };
     } catch (e) {
-      return { ok: false, passed: [], failed: [], error: "Internal grading error: could not parse the result (" + e.message + ").", traceback: null };
+      return { ok: false, passed: [], failed: [], warnings: [], error: "Internal grading error: could not parse the result (" + e.message + ").", traceback: null };
     }
   }
 
@@ -1012,11 +1054,26 @@
     return null;
   }
 
-  function renderFeedback(feedback) {
+  // `step` is optional (older call sites / synthetic error feedback may
+  // omit it) - when present and the step is syntax-mode (an open-ended
+  // TODO with no single right answer), the header/subtitle read as "ran
+  // cleanly" rather than "passed all checks", matching what's actually
+  // being checked (see runGrading()'s relaxed syntax-mode criteria).
+  function renderFeedback(feedback, step) {
+    var isSyntax = !!(step && step.grading && step.grading.mode === "syntax");
     var box = el("div", { class: "feedback " + (feedback.ok ? "feedback-pass" : "feedback-fail") });
-    box.appendChild(el("div", { class: "feedback-title", text: feedback.ok ? "✓ All checks passed — nice work!" : "Not quite yet — here's what to fix:" }));
+    var title;
+    if (feedback.ok) title = isSyntax ? "✓ Ran with no errors — nice work!" : "✓ All checks passed — nice work!";
+    else title = "Not quite yet — here's what to fix:";
+    box.appendChild(el("div", { class: "feedback-title", text: title }));
+    if (feedback.ok && isSyntax) {
+      box.appendChild(el("div", { class: "feedback-subtitle", text: "This is an open-ended step — there's no single right answer, so this only checks that your code runs without a Python error." }));
+    }
     feedback.passed.forEach(function (p) {
       box.appendChild(el("div", { class: "feedback-line" }, [el("span", { class: "feedback-mark ok", text: "✓" }), el("span", {}, [p])]));
+    });
+    (feedback.warnings || []).forEach(function (w) {
+      box.appendChild(el("div", { class: "feedback-line" }, [el("span", { class: "feedback-mark warn", text: "!" }), el("span", {}, [w])]));
     });
     feedback.failed.forEach(function (f) {
       box.appendChild(el("div", { class: "feedback-line" }, [el("span", { class: "feedback-mark bad", text: "✗" }), el("span", {}, [f])]));
@@ -1048,17 +1105,17 @@
     ]));
     card.appendChild(el("div", { class: "step-title", text: "TODO " + step.id + " — " + step.title }));
     card.appendChild(el("div", { class: "step-file-tag", text: "File: " + step.file }));
-    card.appendChild(el("p", { class: "step-lead", text: step.lead }));
+    card.appendChild(el("div", { class: "step-lead rich-text", html: richTextToHtml(step.lead) }));
 
     if (step.required) {
       card.appendChild(el("div", { class: "flow-banner" }, [
         svgIcon('<path d="M4 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'),
-        el("span", {}, ["Required steps are a sequence. This is step " + (REQUIRED_ORDER.indexOf(step.id) + 1) + " of " + REQUIRED_ORDER.length + " Required steps — finish or Skip it to unlock the next one. You cannot jump ahead."]),
+        el("span", {}, ["Required step " + (REQUIRED_ORDER.indexOf(step.id) + 1) + " of " + REQUIRED_ORDER.length + ". Finish or Skip it to unlock the next one — Required steps go in order, you can't jump ahead."]),
       ]));
     } else {
       card.appendChild(el("div", { class: "flow-banner bonus" }, [
         svgIcon('<path d="M4 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'),
-        el("span", {}, ["Bonus steps are unlocked and may be done in ANY order — pick whichever looks interesting."]),
+        el("span", {}, ["Bonus step — all Bonus steps are unlocked together and can be done in any order. Pick whichever looks interesting."]),
       ]));
     }
 
@@ -1087,7 +1144,7 @@
 
     card.appendChild(el("div", { class: "editor-toolbar" }, [
       el("kbd", { text: "Tab" }), " = 4 spaces  ·  ",
-      el("kbd", { text: "Ctrl" }), "+", el("kbd", { text: "Enter" }), " = Grade  ·  autocomplete: ",
+      el("kbd", { text: "Ctrl" }), "+", el("kbd", { text: "Enter" }), " = Run  ·  autocomplete: ",
       el("kbd", { text: "↑" }), el("kbd", { text: "↓" }), " choose, ",
       el("kbd", { text: "Tab" }), "/", el("kbd", { text: "Enter" }), " accept, ", el("kbd", { text: "Esc" }), " dismiss",
     ]));
@@ -1118,14 +1175,14 @@
       resetBtn,
     ]));
 
-    if (stepData.lastFeedback) card.appendChild(renderFeedback(stepData.lastFeedback));
+    if (stepData.lastFeedback) card.appendChild(renderFeedback(stepData.lastFeedback, step));
 
     if (stepData.hintsRevealed > 0) {
       var hintsBlock = el("div", { class: "hints-block" });
       for (var i = 0; i < stepData.hintsRevealed; i++) {
         hintsBlock.appendChild(el("div", { class: "hint-item" }, [
           el("div", { class: "hint-tier", text: "Hint " + (i + 1) + " of 3" }),
-          el("div", { text: step.hints[i] }),
+          el("div", { class: "rich-text", html: richTextToHtml(step.hints[i]) }),
         ]));
       }
       card.appendChild(hintsBlock);
@@ -1174,7 +1231,7 @@
       if (typeof PlayEngine !== "undefined") PlayEngine.refresh();
     }).catch(function (err) {
       stepData.lastFeedback = {
-        ok: false, passed: [], failed: [],
+        ok: false, passed: [], failed: [], warnings: [],
         error: "The grading engine could not run: " + (err && err.message ? err.message : String(err)),
         traceback: null,
       };
@@ -1196,7 +1253,7 @@
   }
 
   function noHarnessFeedback() {
-    return { ok: false, passed: [], failed: ["No grading harness is registered for this step yet."], error: null, traceback: null };
+    return { ok: false, passed: [], failed: ["No grading harness is registered for this step yet."], warnings: [], error: null, traceback: null };
   }
 
   // ---------------------------------------- 10. behaviour harnesses
@@ -1899,15 +1956,30 @@
 
   // ------------------------------------------------- 11. syntax harnesses
   //
-  // These check *shape* only (types, ranges, required names) via ast/compile
-  // + exec into an isolated namespace. There is no single "expected value"
-  // for these open-ended TODOs, so nothing here can leak a solution.
+  // These are the open-ended TODOs (1, 7, 8, 9, 10): there is no single
+  // "correct" value, so passing only requires two things:
+  //   1. the code compiles and executes without a Python error, and
+  //   2. every name in mustDefine actually got defined (so nothing crashes
+  //      later when the real game imports this file).
+  // Anything beyond that (types, ranges, "did you change it from the
+  // starter") is reported as a non-blocking `warnings` note (a friendly
+  // heads-up, shown with a ! mark) rather than a `failed` gate — it never
+  // affects `ok` / step completion. This intentionally does NOT check for
+  // a specific value anywhere, so nothing here can leak a solution.
 
   function pySyntaxPrelude(code, starter) {
     return [
       "import json, base64, traceback",
       b64Line("CODE", code),
       b64Line("STARTER", starter || ""),
+      // Safe, length-capped repr for echoing back "here's what you wrote"
+      // notes without ever risking an exception from a surprising type.
+      "def _short_repr(v):",
+      "    try:",
+      "        r = repr(v)",
+      "    except Exception:",
+      "        r = '<value of type %s>' % type(v).__name__",
+      "    return r if len(r) <= 70 else r[:67] + '...'",
     ].join("\n");
   }
 
@@ -1916,7 +1988,7 @@
     return [
       pySyntaxPrelude(code, starter),
       "def _run():",
-      "    result = {'ok': False, 'passed': [], 'failed': [], 'error': None, 'traceback': None}",
+      "    result = {'ok': False, 'passed': [], 'failed': [], 'warnings': [], 'error': None, 'traceback': None}",
       "    try:",
       "        compile(CODE, '<student>', 'exec')",
       "    except SyntaxError as e:",
@@ -1925,33 +1997,21 @@
       "    try:",
       "        ns = {}",
       "        exec(compile(CODE, '<student>', 'exec'), {}, ns)",
-      "        starter_ns = {}",
-      "        exec(compile(STARTER, '<starter>', 'exec'), {}, starter_ns)",
       "        names = ['TITLE', 'GAME_SUBTITLE', 'MISSION_RULES', 'HOW_TO_PLAY_RULES']",
       "        missing = [n for n in names if n not in ns]",
       "        if missing:",
       "            result['failed'].append('Missing definition(s): %s. Keep the variable names exactly as given.' % ', '.join(missing))",
       "        else:",
-      "            if not isinstance(ns['TITLE'], str) or not ns['TITLE'].strip():",
-      "                result['failed'].append('TITLE must be a non-empty string.')",
-      "            else:",
-      "                result['passed'].append('TITLE is a non-empty string.')",
-      "            if not isinstance(ns['GAME_SUBTITLE'], str) or not ns['GAME_SUBTITLE'].strip():",
-      "                result['failed'].append('GAME_SUBTITLE must be a non-empty string.')",
-      "            else:",
-      "                result['passed'].append('GAME_SUBTITLE is a non-empty string.')",
-      "            for name in ('MISSION_RULES', 'HOW_TO_PLAY_RULES'):",
-      "                val = ns[name]",
-      "                if not isinstance(val, list) or len(val) == 0 or not all(isinstance(x, str) and x.strip() for x in val):",
-      "                    result['failed'].append('%s must be a non-empty list of non-empty strings.' % name)",
-      "                else:",
-      "                    result['passed'].append('%s is a list of %d string(s).' % (name, len(val)))",
-      "            if not result['failed']:",
-      "                same = all(ns[n] == starter_ns.get(n) for n in names)",
-      "                if same:",
-      "                    result['failed'].append('This still looks identical to the starter text — write your own title and rules.')",
-      "                else:",
-      "                    result['passed'].append('Text has been customized from the starter.')",
+      "            result['passed'].append('All four are defined: TITLE=%s, GAME_SUBTITLE=%s, MISSION_RULES (%s item(s)), HOW_TO_PLAY_RULES (%s item(s)).' % (",
+      "                _short_repr(ns['TITLE']), _short_repr(ns['GAME_SUBTITLE']),",
+      "                len(ns['MISSION_RULES']) if isinstance(ns['MISSION_RULES'], (list, tuple)) else '?',",
+      "                len(ns['HOW_TO_PLAY_RULES']) if isinstance(ns['HOW_TO_PLAY_RULES'], (list, tuple)) else '?',",
+      "            ))",
+      "            if not isinstance(ns['TITLE'], str) or not isinstance(ns['GAME_SUBTITLE'], str):",
+      "                result['warnings'].append('Heads up: TITLE and GAME_SUBTITLE are usually plain strings — this still counts as complete, but double-check it looks right in the title-screen preview.')",
+      "            for rn in ('MISSION_RULES', 'HOW_TO_PLAY_RULES'):",
+      "                if not isinstance(ns[rn], list) or len(ns[rn]) == 0:",
+      "                    result['warnings'].append('Heads up: %s is usually a non-empty list of strings — this still counts as complete, but double-check it looks right in the preview.' % rn)",
       "    except Exception as e:",
       "        result['error'] = '%s: %s' % (type(e).__name__, e)",
       "        result['traceback'] = traceback.format_exc()",
@@ -1966,7 +2026,7 @@
     return [
       pySyntaxPrelude(code, starter),
       "def _run():",
-      "    result = {'ok': False, 'passed': [], 'failed': [], 'error': None, 'traceback': None}",
+      "    result = {'ok': False, 'passed': [], 'failed': [], 'warnings': [], 'error': None, 'traceback': None}",
       "    try:",
       "        compile(CODE, '<student>', 'exec')",
       "    except SyntaxError as e:",
@@ -1981,50 +2041,33 @@
       "            result['failed'].append('Missing definition: ROUND_CONFIGS.')",
       "            result['ok'] = False",
       "            return json.dumps(result)",
+      "        result['passed'].append('ROUND_CONFIGS is defined.')",
       "        rc = ns['ROUND_CONFIGS']",
       "        ref_keys = set(starter_ns['ROUND_CONFIGS'][0].keys())",
-      "        if not isinstance(rc, list):",
-      "            result['failed'].append('ROUND_CONFIGS must be a list.')",
-      "        elif len(rc) != 3:",
-      "            result['failed'].append('ROUND_CONFIGS must contain exactly 3 rounds, found %d.' % len(rc))",
+      "        if not isinstance(rc, list) or len(rc) != 3:",
+      "            result['warnings'].append('Heads up: ROUND_CONFIGS is usually a list of exactly 3 round dictionaries — this still counts as complete, but the real game may not run correctly with this shape. Try it in the Play tab or your local pygame window to check.')",
       "        else:",
-      "            result['passed'].append('ROUND_CONFIGS has exactly 3 rounds.')",
       "            for i, round_dict in enumerate(rc):",
       "                label = 'round %d' % (i + 1)",
       "                if not isinstance(round_dict, dict):",
-      "                    result['failed'].append('%s is not a dictionary.' % label)",
+      "                    result['warnings'].append('Heads up: %s is not a dictionary.' % label)",
       "                    continue",
       "                keys = set(round_dict.keys())",
       "                if keys != ref_keys:",
       "                    missing = ref_keys - keys",
       "                    extra = keys - ref_keys",
-      "                    msg = '%s has the wrong keys.' % label",
+      "                    msg = 'Heads up: %s has different keys than the starter.' % label",
       "                    if missing:",
       "                        msg += ' Missing: %s.' % ', '.join(sorted(missing))",
       "                    if extra:",
-      "                        msg += ' Unexpected: %s.' % ', '.join(sorted(extra))",
-      "                    result['failed'].append(msg)",
+      "                        msg += ' Extra: %s.' % ', '.join(sorted(extra))",
+      "                    result['warnings'].append(msg + ' Removing a key the engine expects can crash the game — double-check this is intentional.')",
       "                    continue",
       "                bad_types = [k for k, v in round_dict.items() if type(v) is not int]",
       "                if bad_types:",
-      "                    result['failed'].append('%s: these values must be plain integers: %s.' % (label, ', '.join(bad_types)))",
+      "                    result['warnings'].append('Heads up: %s has non-integer value(s) for %s — the engine expects plain integers here.' % (label, ', '.join(bad_types)))",
       "                    continue",
-      "                if round_dict['rows'] < 5 or round_dict['cols'] < 5:",
-      "                    result['failed'].append('%s: rows and cols must each be at least 5.' % label)",
-      "                    continue",
-      "                if round_dict['time_limit_seconds'] <= 0:",
-      "                    result['failed'].append('%s: time_limit_seconds must be greater than 0.' % label)",
-      "                    continue",
-      "                count_keys = ['item_count', 'swamp_count', 'bomb_count', 'custom_item_count', 'custom_terrain_count']",
-      "                if any(round_dict[k] < 0 for k in count_keys):",
-      "                    result['failed'].append('%s: object counts cannot be negative.' % label)",
-      "                    continue",
-      "                capacity = round_dict['rows'] * round_dict['cols']",
-      "                needed = sum(round_dict[k] for k in count_keys) + 2",
-      "                if needed > capacity:",
-      "                    result['failed'].append('%s: a %dx%d grid is too small to fit the start, goal, and %d objects.' % (label, round_dict['rows'], round_dict['cols'], needed - 2))",
-      "                    continue",
-      "                result['passed'].append('%s: shape and ranges look good.' % label)",
+      "                result['passed'].append('%s: %s' % (label, _short_repr(round_dict)))",
       "    except Exception as e:",
       "        result['error'] = '%s: %s' % (type(e).__name__, e)",
       "        result['traceback'] = traceback.format_exc()",
@@ -2046,7 +2089,7 @@
       "IMAGE_EXT = ('.png', '.jpg', '.jpeg', '.gif', '.bmp')",
       "SOUND_EXT = ('.wav', '.mp3', '.ogg')",
       "def _run():",
-      "    result = {'ok': False, 'passed': [], 'failed': [], 'error': None, 'traceback': None}",
+      "    result = {'ok': False, 'passed': [], 'failed': [], 'warnings': [], 'error': None, 'traceback': None}",
       "    try:",
       "        compile(CODE, '<student>', 'exec')",
       "    except SyntaxError as e:",
@@ -2061,26 +2104,21 @@
       "            result['failed'].append('Missing definition(s): %s.' % ', '.join(missing))",
       "            result['ok'] = False",
       "            return json.dumps(result)",
+      "        result['passed'].append('All %d asset variables are defined.' % len(all_vars))",
       "        def check(name, folder, exts, known):",
       "            val = ns[name]",
       "            if val is None:",
-      "                result['passed'].append('%s is None (using the built-in fallback).' % name)",
       "                return",
       "            if not isinstance(val, str):",
-      "                result['failed'].append('%s must be None or a string path, got %s.' % (name, type(val).__name__))",
+      "                result['warnings'].append('Heads up: %s should be None or a string path, got %s — this still counts as complete, but the real game will likely error when it tries to load this.' % (name, type(val).__name__))",
       "                return",
       "            norm = val.replace(chr(92), '/')",
-      "            if not norm.startswith(folder):",
-      "                result['failed'].append('%s should be a path under %s (got %r).' % (name, folder, val))",
-      "                return",
-      "            if not norm.lower().endswith(exts):",
-      "                result['failed'].append('%s does not have a valid extension (%s).' % (name, ', '.join(exts)))",
+      "            if not norm.startswith(folder) or not norm.lower().endswith(exts):",
+      "                result['warnings'].append('Heads up: %s = %s doesn\\'t look like a path under %s with a valid extension — double-check it, though this still counts as complete.' % (name, _short_repr(val), folder))",
       "                return",
       "            base = norm.rsplit('/', 1)[-1]",
       "            if base not in known:",
-      "                result['passed'].append('%s = %r (this file is not one of the bundled assets — it will still work once you add your own file at that path).' % (name, val))",
-      "            else:",
-      "                result['passed'].append('%s = %r' % (name, val))",
+      "                result['warnings'].append('%s = %s — this isn\\'t one of the bundled files, but it will work once you add your own file at that path.' % (name, _short_repr(val)))",
       "        for n in IMAGE_VARS:",
       "            check(n, 'assets/images/', IMAGE_EXT, KNOWN_IMAGES)",
       "        for n in SOUND_VARS:",
@@ -2099,7 +2137,7 @@
     return [
       pySyntaxPrelude(code, starter),
       "def _run():",
-      "    result = {'ok': False, 'passed': [], 'failed': [], 'error': None, 'traceback': None}",
+      "    result = {'ok': False, 'passed': [], 'failed': [], 'warnings': [], 'error': None, 'traceback': None}",
       "    try:",
       "        compile(CODE, '<student>', 'exec')",
       "    except SyntaxError as e:",
@@ -2108,34 +2146,18 @@
       "    try:",
       "        ns = {}",
       "        exec(compile(CODE, '<student>', 'exec'), {}, ns)",
-      "        starter_ns = {}",
-      "        exec(compile(STARTER, '<starter>', 'exec'), {}, starter_ns)",
       "        names = ['CUSTOM_ITEM_NAME', 'CUSTOM_ITEM_COLOR', 'CUSTOM_ITEM_SCORE', 'CUSTOM_ITEM_HINT_BONUS', 'CUSTOM_ITEM_ROUTE_WEIGHT']",
       "        missing = [n for n in names if n not in ns]",
       "        if missing:",
       "            result['failed'].append('Missing definition(s): %s.' % ', '.join(missing))",
       "        else:",
-      "            if not isinstance(ns['CUSTOM_ITEM_NAME'], str) or not ns['CUSTOM_ITEM_NAME'].strip():",
-      "                result['failed'].append('CUSTOM_ITEM_NAME must be a non-empty string.')",
-      "            else:",
-      "                result['passed'].append('CUSTOM_ITEM_NAME is a non-empty string.')",
+      "            result['passed'].append('All five are defined: NAME=%s, COLOR=%s, SCORE=%s, HINT_BONUS=%s, ROUTE_WEIGHT=%s.' % tuple(_short_repr(ns[n]) for n in names))",
       "            color = ns['CUSTOM_ITEM_COLOR']",
-      "            if not isinstance(color, tuple) or len(color) != 3 or not all(isinstance(v, int) and 0 <= v <= 255 for v in color):",
-      "                result['failed'].append('CUSTOM_ITEM_COLOR must be a 3-tuple of ints 0-255, e.g. (255, 215, 0).')",
-      "            else:",
-      "                result['passed'].append('CUSTOM_ITEM_COLOR is a valid RGB tuple.')",
+      "            if not (isinstance(color, tuple) and len(color) == 3 and all(isinstance(v, int) and 0 <= v <= 255 for v in color)):",
+      "                result['warnings'].append('Heads up: CUSTOM_ITEM_COLOR is usually a 3-tuple of ints 0-255, e.g. (255, 215, 0) — this still counts as complete, but double-check it renders correctly.')",
       "            for n in ('CUSTOM_ITEM_SCORE', 'CUSTOM_ITEM_HINT_BONUS', 'CUSTOM_ITEM_ROUTE_WEIGHT'):",
-      "                v = ns[n]",
-      "                if type(v) is not int:",
-      "                    result['failed'].append('%s must be a plain integer.' % n)",
-      "                else:",
-      "                    result['passed'].append('%s = %d' % (n, v))",
-      "            if not result['failed']:",
-      "                same = all(ns[n] == starter_ns.get(n) for n in names)",
-      "                if same:",
-      "                    result['failed'].append('This still looks identical to the starter values — customize your item.')",
-      "                else:",
-      "                    result['passed'].append('Values have been customized from the starter.')",
+      "                if type(ns[n]) is not int:",
+      "                    result['warnings'].append('Heads up: %s is usually a plain integer — this still counts as complete, but double-check it behaves as expected.' % n)",
       "    except Exception as e:",
       "        result['error'] = '%s: %s' % (type(e).__name__, e)",
       "        result['traceback'] = traceback.format_exc()",
@@ -2150,7 +2172,7 @@
     return [
       pySyntaxPrelude(code, starter),
       "def _run():",
-      "    result = {'ok': False, 'passed': [], 'failed': [], 'error': None, 'traceback': None}",
+      "    result = {'ok': False, 'passed': [], 'failed': [], 'warnings': [], 'error': None, 'traceback': None}",
       "    try:",
       "        compile(CODE, '<student>', 'exec')",
       "    except SyntaxError as e:",
@@ -2159,39 +2181,20 @@
       "    try:",
       "        ns = {}",
       "        exec(compile(CODE, '<student>', 'exec'), {}, ns)",
-      "        starter_ns = {}",
-      "        exec(compile(STARTER, '<starter>', 'exec'), {}, starter_ns)",
       "        names = ['CUSTOM_TERRAIN_NAME', 'CUSTOM_TERRAIN_COLOR', 'CUSTOM_TERRAIN_SCORE_CHANGE', 'CUSTOM_TERRAIN_ROUTE_WEIGHT', 'CUSTOM_TERRAIN_DISAPPEARS']",
       "        missing = [n for n in names if n not in ns]",
       "        if missing:",
       "            result['failed'].append('Missing definition(s): %s.' % ', '.join(missing))",
       "        else:",
-      "            if not isinstance(ns['CUSTOM_TERRAIN_NAME'], str) or not ns['CUSTOM_TERRAIN_NAME'].strip():",
-      "                result['failed'].append('CUSTOM_TERRAIN_NAME must be a non-empty string.')",
-      "            else:",
-      "                result['passed'].append('CUSTOM_TERRAIN_NAME is a non-empty string.')",
+      "            result['passed'].append('All five are defined: NAME=%s, COLOR=%s, SCORE_CHANGE=%s, ROUTE_WEIGHT=%s, DISAPPEARS=%s.' % tuple(_short_repr(ns[n]) for n in names))",
       "            color = ns['CUSTOM_TERRAIN_COLOR']",
-      "            if not isinstance(color, tuple) or len(color) != 3 or not all(isinstance(v, int) and 0 <= v <= 255 for v in color):",
-      "                result['failed'].append('CUSTOM_TERRAIN_COLOR must be a 3-tuple of ints 0-255.')",
-      "            else:",
-      "                result['passed'].append('CUSTOM_TERRAIN_COLOR is a valid RGB tuple.')",
+      "            if not (isinstance(color, tuple) and len(color) == 3 and all(isinstance(v, int) and 0 <= v <= 255 for v in color)):",
+      "                result['warnings'].append('Heads up: CUSTOM_TERRAIN_COLOR is usually a 3-tuple of ints 0-255 — this still counts as complete, but double-check it renders correctly.')",
       "            for n in ('CUSTOM_TERRAIN_SCORE_CHANGE', 'CUSTOM_TERRAIN_ROUTE_WEIGHT'):",
-      "                v = ns[n]",
-      "                if type(v) is not int:",
-      "                    result['failed'].append('%s must be a plain integer.' % n)",
-      "                else:",
-      "                    result['passed'].append('%s = %d' % (n, v))",
-      "            d = ns['CUSTOM_TERRAIN_DISAPPEARS']",
-      "            if type(d) is not bool:",
-      "                result['failed'].append('CUSTOM_TERRAIN_DISAPPEARS must be exactly True or False, not %r.' % (d,))",
-      "            else:",
-      "                result['passed'].append('CUSTOM_TERRAIN_DISAPPEARS = %r' % d)",
-      "            if not result['failed']:",
-      "                same = all(ns[n] == starter_ns.get(n) for n in names)",
-      "                if same:",
-      "                    result['failed'].append('This still looks identical to the starter values — customize your terrain.')",
-      "                else:",
-      "                    result['passed'].append('Values have been customized from the starter.')",
+      "                if type(ns[n]) is not int:",
+      "                    result['warnings'].append('Heads up: %s is usually a plain integer — this still counts as complete, but double-check it behaves as expected.' % n)",
+      "            if type(ns['CUSTOM_TERRAIN_DISAPPEARS']) is not bool:",
+      "                result['warnings'].append('Heads up: CUSTOM_TERRAIN_DISAPPEARS is usually exactly True or False — this still counts as complete, but double-check it behaves as expected.')",
       "    except Exception as e:",
       "        result['error'] = '%s: %s' % (type(e).__name__, e)",
       "        result['traceback'] = traceback.format_exc()",
@@ -3590,8 +3593,9 @@
           onSpeed: function (s) { playback.setSpeed(s); },
         });
         container.appendChild(bar.node);
-        var runCodeBtn = el("button", { class: "btn btn-small btn-secondary mt-8", type: "button", text: "Run my code", onclick: runFresh });
+        var runCodeBtn = el("button", { class: "btn btn-small btn-secondary mt-8", type: "button", text: "↻ Replay animation", onclick: runFresh });
         container.appendChild(runCodeBtn);
+        container.appendChild(el("p", { class: "small muted", text: "Replays your last-saved code here without submitting an attempt — press \"Run my code\" above (in the editor) to check your answer." }));
         var readout = buildReadout([
           { key: "current", label: "Backtrack stack depth" },
           { key: "visited", label: "Visited cells" },
@@ -3702,8 +3706,9 @@
           onSpeed: function (s) { playback.setSpeed(s); },
         });
         container.appendChild(bar.node);
-        var runCodeBtn = el("button", { class: "btn btn-small btn-secondary mt-8", type: "button", text: "Run my code", onclick: runFresh });
+        var runCodeBtn = el("button", { class: "btn btn-small btn-secondary mt-8", type: "button", text: "↻ Replay animation", onclick: runFresh });
         container.appendChild(runCodeBtn);
+        container.appendChild(el("p", { class: "small muted", text: "Replays your last-saved code here without submitting an attempt — press \"Run my code\" above (in the editor) to check your answer." }));
         var readout = buildReadout([
           { key: "pathLen", label: "Reconstructed path length" },
           { key: "optimalLen", label: "Optimal length" },
@@ -3804,9 +3809,10 @@
         var actions = el("div", { class: "viz-controlbar" }, [
           el("button", { class: "btn btn-small", type: "button", text: "Step", onclick: stepOnce }),
           el("button", { class: "btn btn-small btn-primary", type: "button", text: "Run", onclick: runAll }),
-          el("button", { class: "btn btn-small btn-secondary", type: "button", text: "Run my code", onclick: runFresh }),
+          el("button", { class: "btn btn-small btn-secondary", type: "button", text: "↻ Replay animation", onclick: runFresh }),
         ]);
         container.appendChild(actions);
+        container.appendChild(el("p", { class: "small muted", text: "\"Replay animation\" re-plays your last-saved code here without submitting an attempt — press \"Run my code\" above (in the editor) to check your answer." }));
         var readout = buildReadout([{ key: "score", label: "Running score" }]);
         container.appendChild(readout.node);
         var verdict = buildVerdict();
@@ -3954,7 +3960,7 @@
     return {
       mount: function (container) {
         container.innerHTML = "";
-        container.appendChild(el("p", { class: "small muted", text: "Click a tile to cycle its weight (1→2→3→5→9), then Run my code." }));
+        container.appendChild(el("p", { class: "small muted", text: "Click a tile to cycle its weight (1→2→3→5→9), then press \"Run my code\" above (in the editor) to see the animation." }));
         var width = fitWidth(container, 320);
         CELL = Math.max(30, Math.floor(width / COLS));
         weights = defaultWeights();
@@ -3971,10 +3977,11 @@
         });
         container.appendChild(bar.node);
         var presetBar = el("div", { class: "viz-controlbar" }, [
-          el("button", { class: "btn btn-small btn-secondary", type: "button", text: "Run my code", onclick: runFresh }),
+          el("button", { class: "btn btn-small btn-secondary", type: "button", text: "↻ Replay animation", onclick: runFresh }),
           el("button", { class: "btn btn-small", type: "button", text: "Negative-weight preset", onclick: function () { negativePreset = !negativePreset; weights = negativePreset ? negativeWeights() : defaultWeights(); draw(); } }),
         ]);
         container.appendChild(presetBar);
+        container.appendChild(el("p", { class: "small muted", text: "\"Replay animation\" re-plays your last-saved code here without submitting an attempt — press \"Run my code\" above (in the editor) to check your answer." }));
         var readout = buildReadout([{ key: "shift", label: "Weight offset (min → +1)" }]);
         container.appendChild(readout.node);
         var pqBox = el("div", { class: "viz-pq-box" }, [
@@ -4743,7 +4750,7 @@
         brushRow.appendChild(undoBtn); brushRow.appendChild(redoBtn);
         container.appendChild(brushRow);
 
-        container.appendChild(el("p", { class: "small muted", text: "Click the board then use Arrow keys + Enter to paint without a mouse. Right-click (or the Eraser tool) reverts to floor." }));
+        container.appendChild(el("p", { class: "small muted", text: "Keyboard: click the board, then Arrow keys + Enter to paint. Right-click (or the Eraser tool) reverts a tile to floor." }));
         var boardWrap = el("div", { class: "viz-board-wrap" });
         container.appendChild(boardWrap);
         var verdictLine = el("div", { class: "small mt-8" });
@@ -4752,7 +4759,7 @@
         container.appendChild(parseNotice);
         var conflictBox = el("div", { class: "viz-verdict verdict-info", hidden: "hidden" });
         container.appendChild(conflictBox);
-        container.appendChild(el("p", { class: "small muted mt-8", text: "Once TODO 7 is completed, this round's Play tab layout uses your painted map instead of random generation." }));
+        container.appendChild(el("p", { class: "small muted mt-8", text: "Once TODO 7 is complete, this round uses your painted map in the Play tab instead of a randomly-generated one." }));
 
         refs = {
           container: container, boardWrap: boardWrap, palette: palette,
@@ -4917,6 +4924,13 @@
     var activeSlotKey = ASSET_SLOTS[0].key;
     var dirHandle = null;
     var dirStatus = "unchecked"; // unchecked | none | granted | denied | unsupported
+    // The custom-upload flow (folder connect + drag/drop + uploaded list)
+    // is collapsed behind a toggle by default - most students only ever
+    // use the bundled picker above it. `connectSectionNode` is built once
+    // and cached (not rebuilt on every slot switch) so re-opening it never
+    // re-triggers the folder-permission check unnecessarily.
+    var customSectionExpanded = false;
+    var connectSectionNode = null;
 
     function slotByKey(key) { return ASSET_SLOTS.filter(function (s) { return s.key === key; })[0]; }
 
@@ -4940,7 +4954,7 @@
 
     function renderInstructions(container) {
       var box = el("div", { class: "asset-instructions" });
-      box.appendChild(el("div", { class: "sidebar-group-title", text: "How custom uploads work (read this first)" }));
+      box.appendChild(el("div", { class: "sidebar-group-title", text: "How custom uploads work" }));
       var diagram = el("div", { class: "asset-folder-diagram", html:
         '<svg viewBox="0 0 20 20" class="icon"><path d="M2 5a1 1 0 0 1 1-1h4l1.5 2H17a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5z" fill="currentColor" opacity="0.85"/></svg> dijkstra_maze/<br>' +
         '&nbsp;&nbsp;<svg viewBox="0 0 20 20" class="icon"><path d="M2 5a1 1 0 0 1 1-1h4l1.5 2H17a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5z" fill="currentColor" opacity="0.85"/></svg> student/  ← select THIS folder<br>' +
@@ -4951,14 +4965,14 @@
       });
       box.appendChild(diagram);
       var steps = el("ol", { class: "asset-steps" }, [
-        el("li", {}, ["Click \"Connect my project folder\" below. Your browser will show a permission dialog — this is normal; the site is asking to read and write files only inside the folder you choose."]),
-        el("li", {}, ["When the file picker opens, navigate to and select your ", el("code", { text: "dijkstra_maze/student" }), " folder (the one with ", el("code", { text: "settings.py" }), " directly inside it — see the diagram above)."]),
-        el("li", {}, ["Click \"Allow\" / \"View files\" in the permission dialog. If you click \"Deny\" by mistake, just press \"Connect my project folder\" again."]),
-        el("li", {}, ["After that, drag an image/sound file onto a slot below, or use its \"Upload\" button. The file is copied straight into your ", el("code", { text: "assets/" }), " folder and its path is written into your code automatically."]),
-        el("li", {}, ["Next time you open this page, click \"Reconnect\" (one click) instead of choosing the folder again."]),
+        el("li", {}, ["Click \"Connect my project folder\" below. Your browser will ask for permission — that's normal. The site can only read/write inside the one folder you pick."]),
+        el("li", {}, ["Select your ", el("code", { text: "dijkstra_maze/student" }), " folder — the one with ", el("code", { text: "settings.py" }), " directly inside (see the diagram above)."]),
+        el("li", {}, ["Click \"Allow\" in the dialog. Clicked \"Deny\" by mistake? Just press \"Connect my project folder\" again."]),
+        el("li", {}, ["Drag a file onto a slot below, or use its \"Upload\" button. It's copied into your ", el("code", { text: "assets/" }), " folder and the path is written into your code automatically."]),
+        el("li", {}, ["Next time, one click on \"Reconnect\" — no need to pick the folder again."]),
       ]);
       box.appendChild(steps);
-      box.appendChild(el("p", { class: "small muted", text: "If your browser doesn't support this (or you're on file://), uploads still work: the site prepares a correctly-renamed download for you and tells you exactly which folder to drop it in." }));
+      box.appendChild(el("p", { class: "small muted", text: "Browser doesn't support this (or you're on file://)? Uploads still work — the site prepares a renamed download and tells you exactly where to put it." }));
       container.appendChild(box);
     }
 
@@ -5229,8 +5243,42 @@
         ]));
       });
       box.appendChild(ul);
-      box.appendChild(el("p", { class: "small muted", text: "This list is metadata only, saved with your progress. The actual files live on your disk — keep them! Exporting progress.json does not back up the images/sounds themselves." }));
+      box.appendChild(el("p", { class: "small muted", text: "Metadata only, saved with your progress — the actual files live on your disk, so keep them. Exporting progress.json does not back up the images/sounds themselves." }));
       container.appendChild(box);
+    }
+
+    // Built once and cached (see customSectionExpanded/connectSectionNode
+    // above) so switching slots or re-rendering doesn't re-run the
+    // permission/IndexedDB check inside renderConnectBar every time.
+    function ensureConnectSectionBuilt() {
+      if (connectSectionNode) return connectSectionNode;
+      var wrap = el("div", { class: "asset-connect-wrap" });
+      renderInstructions(wrap);
+      renderConnectBar(wrap);
+      connectSectionNode = wrap;
+      return wrap;
+    }
+
+    // Most students only ever use the bundled picker above - the whole
+    // custom-upload flow (walkthrough, folder connect, drag/drop, uploaded
+    // list) lives behind this one toggle, collapsed by default, so the
+    // panel stays uncluttered for everyone else.
+    function renderCustomUploadSection(container, slot) {
+      var section = el("div", { class: "asset-custom-section" });
+      section.appendChild(el("button", {
+        class: "btn btn-small btn-secondary asset-custom-toggle", type: "button",
+        "aria-expanded": customSectionExpanded ? "true" : "false",
+        onclick: function () { customSectionExpanded = !customSectionExpanded; renderAllPanels(); },
+      }, [customSectionExpanded ? "− Hide custom upload" : "+ Add my own image or sound instead"]));
+      if (customSectionExpanded) {
+        var inner = el("div", { class: "asset-custom-inner" });
+        inner.appendChild(el("p", { class: "small muted", text: "Most students don't need this — the bundled options above already cover most games. This is only for adding your own picture or sound file." }));
+        inner.appendChild(ensureConnectSectionBuilt());
+        renderUploadArea(inner, slot);
+        renderUploadedList(inner);
+        section.appendChild(inner);
+      }
+      container.appendChild(section);
     }
 
     function renderAllPanels() {
@@ -5240,15 +5288,12 @@
       var slot = slotByKey(activeSlotKey);
       renderPreview(refs.body, slot);
       renderBundledGrid(refs.body, slot);
-      renderUploadArea(refs.body, slot);
-      renderUploadedList(refs.body);
+      renderCustomUploadSection(refs.body, slot);
     }
 
     return {
       mount: function (container) {
         container.innerHTML = "";
-        renderInstructions(container);
-        renderConnectBar(container);
         var body = el("div", { class: "asset-body" });
         container.appendChild(body);
         refs = { container: container, body: body };

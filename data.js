@@ -44,7 +44,7 @@ const COURSE_STEPS = [
   {
     id: "1", step: 1, kind: "Required", required: true, file: "settings.py",
     title: "Rewrite the game title and rules to match your game.",
-    lead: "Every game needs an identity. In this file, four variables define what players see before they even move: the window title, subtitle, and two rule lists shown on the title and how-to-play screens. This is a design task, not an algorithm — there is no single correct answer, only valid Python that matches the required shape.",
+    lead: "Every game needs an identity. Four variables in this file control what players see before they even move:\n\n- **`TITLE`** and **`GAME_SUBTITLE`** — single strings shown in the window and on the title screen.\n- **`MISSION_RULES`** and **`HOW_TO_PLAY_RULES`** — lists of strings shown on the mission and how-to-play screens.\n\nThis is a design task, not an algorithm: rewrite the text so it describes **your** game, not the example maze. There's no single correct answer — just valid Python that keeps the same shape.",
     codeReference: [
       ["TITLE", "The string shown in the window title bar and on the title screen."],
       ["GAME_SUBTITLE", "A one-line description shown under the title."],
@@ -71,17 +71,15 @@ const COURSE_STEPS = [
       "]",
     ],
     hints: [
-      "Change the strings so they describe YOUR game, not the example maze.",
-      "TITLE and GAME_SUBTITLE are single strings. MISSION_RULES and HOW_TO_PLAY_RULES are lists of strings, so every item needs its own quotes and a comma.",
+      "You're editing four existing lines — don't add new variables or remove the brackets/quotes already there. Start with `TITLE` and `GAME_SUBTITLE`, then edit the two rule lists.",
+      "`TITLE` and `GAME_SUBTITLE` are single strings. `MISSION_RULES` and `HOW_TO_PLAY_RULES` are lists of strings — give each item its own quotes and comma.",
       'TITLE = "your title"   /   MISSION_RULES = ["rule one.", "rule two."] — keep the variable names exactly as they are, change only the text inside the quotes.',
     ],
     visualizer: "titleCard",
     grading: {
       mode: "syntax",
       mustDefine: ["TITLE", "GAME_SUBTITLE", "MISSION_RULES", "HOW_TO_PLAY_RULES"],
-      typeChecks: { TITLE: "str", GAME_SUBTITLE: "str", MISSION_RULES: "list[str]", HOW_TO_PLAY_RULES: "list[str]" },
-      mustDifferFromStarter: true,
-      notes: "Reject empty strings and empty lists. Require at least one rule in each list.",
+      notes: "Open-ended: passes once the code runs with no Python error and all four names are defined. Type/shape issues surface as non-blocking warnings, not failures.",
     },
   },
 
@@ -89,7 +87,7 @@ const COURSE_STEPS = [
   {
     id: "2-1", step: 2, kind: "Required", required: true, file: "game.py",
     title: "Connect the arrow keys or WASD keys to maze movement.",
-    lead: 'Right now your maze ignores the keyboard entirely. Each frame, update_player() checks which arrow/WASD key is held down and must call self.player.try_move(direction, self.maze) with the matching direction string, storing the result in moved. Using if/elif (not four separate ifs) guarantees the player moves at most one cell per frame, even if two keys are pressed together.',
+    lead: "Right now your maze ignores the keyboard entirely. Each frame, `update_player()` checks which arrow/WASD key is held down, and inside that branch you need to:\n\n- call **`self.player.try_move(direction, self.maze)`** with the matching direction string, then\n- store the result in **`moved`**.\n\nBecause the branches use `if`/`elif` (not four separate `if`s), the player moves at most one cell per frame — even if two keys are pressed together.",
     codeReference: [
       ["self.player.try_move(direction, self.maze)", "Attempts to move the player one cell in direction. Returns True if the move succeeded, False if it was blocked."],
       ["moved", "A boolean you set to the result of try_move. The code right after your TODO reads it to decide whether to reset the movement timer."],
@@ -113,8 +111,8 @@ const COURSE_STEPS = [
       '            pass  # Write your code here. Hint: the direction string is "bottom"',
     ],
     hints: [
-      "Inside each branch, call self.player.try_move(direction, self.maze) and store the result in moved.",
-      'The line is the same in all four branches; only the direction string changes: "left", "right", "top", "bottom". Replace each `pass` with one assignment.',
+      'The line is nearly identical in all four branches — only the direction string changes: "left", "right", "top", "bottom". Replace each `pass` with one assignment.',
+      'Assign the result of the `try_move` call to `moved`. The direction string must exactly match the branch you\'re in — note the vertical directions are "top"/"bottom", not "up"/"down".',
       'moved = self.player.try_move("left", self.maze)  — this exact shape goes in the first branch. Repeat it in the other three with the matching direction string.',
     ],
     visualizer: "playerMove",
@@ -129,7 +127,7 @@ const COURSE_STEPS = [
   {
     id: "2-2", step: 3, kind: "Required", required: true, file: "player.py",
     title: "Stop movement when there is no cell or a wall blocks the direction.",
-    lead: "try_move looks up the cell the player is standing in, then must decide whether moving is even possible before touching any coordinates. Two things can block a move: there is no cell in that direction (current is None) or a wall stands in the way (current.walls[direction] is True). This is a classic guard clause — check the bad cases first and bail out early with return False, so the rest of the function can assume the move is legal.",
+    lead: "`try_move` first looks up the cell the player is standing on, then must decide whether the move is even possible before touching any coordinates. Two things can block it: there's no cell in that direction (**`current is None`**), or a wall stands in the way (**`current.walls[direction]`** is `True`). Join both checks with `or` and `return False` inside the `if` — this is a classic guard clause: handle the bad cases first and bail out early, so the rest of the function can assume the move is legal.",
     codeReference: [
       ["current", "The Cell the player currently stands on, looked up just above. May be None if there is no cell there."],
       ["current.walls[direction]", "True when a wall blocks movement in direction from the current cell."],
@@ -147,8 +145,8 @@ const COURSE_STEPS = [
       "        pass  # Write your code here.",
     ],
     hints: [
-      "current can be None, and current.walls[direction] is True when a wall exists. Join the two conditions with or, then return False inside the if block.",
-      "You need one `if` line with two conditions joined by `or`, and a `return False` indented under it. Use `is None` for the first check, not `== None`.",
+      "Write one `if` line with both conditions joined by `or`, and a `return False` indented under it. Use `is None` for the first check, not `== None`.",
+      "The `if` line goes above the `dr, dc = {...}` line shown below. Both conditions live on that same line — don't split them into two separate `if` statements.",
       "if current is None or current.walls[???]:  →  return False on the next line, indented once more.",
     ],
     visualizer: "playerMove",
@@ -163,7 +161,7 @@ const COURSE_STEPS = [
   {
     id: "2-3", step: 4, kind: "Required", required: true, file: "player.py",
     title: "Update the player's row and column.",
-    lead: "Once try_move knows the move is legal, dr and dc already tell it how far to shift on each axis. All that remains is applying that shift to the player's own position, self.row and self.col, using the += compound-assignment operator.",
+    lead: "Once `try_move` knows the move is legal, **`dr`** and **`dc`** already tell it how far to shift on each axis. Apply that shift to the player's own position — add `dr` to **`self.row`** and `dc` to **`self.col`**, using the `+=` compound-assignment operator.",
     codeReference: [
       ["dr, dc", "The row and column change for the chosen direction, already looked up on the line above."],
       ["self.row, self.col", "The player's current grid position; update both in place."],
@@ -181,8 +179,8 @@ const COURSE_STEPS = [
       "        pass  # Write your code here.",
     ],
     hints: [
-      "dr is the row change and dc is the column change. Add dr to self.row and dc to self.col with +=.",
-      "Two separate lines, one for the row and one for the column. Both use the += operator.",
+      "Two separate lines: one updates the row, one updates the column. Both use `+=`.",
+      "`self.row` takes `dr`; `self.col` takes `dc` — don't mix them up, and don't reassign the whole position at once.",
       "self.row += ???   and on the next line   self.col += ???",
     ],
     visualizer: "playerMove",
@@ -197,7 +195,7 @@ const COURSE_STEPS = [
   {
     id: "3-1", step: 5, kind: "Required", required: true, file: "maze.py",
     title: "Randomly choose one unvisited neighbor.",
-    lead: "This is the heart of randomized depth-first-search maze generation: when the current cell still has unvisited neighbours, the algorithm must pick one at random to carve into next. neighbors is a list of (direction, cell) pairs, so random.choice gives you back one pair, and Python's tuple unpacking splits it into two names in a single line.",
+    lead: "This is the heart of randomized depth-first-search maze generation: when the current cell still has unvisited neighbours, pick one at random to carve into next. **`neighbors`** is a list of `(direction, cell)` pairs, so **`random.choice(neighbors)`** returns one pair — Python's tuple unpacking then splits it into two names, **`direction`** and **`next_cell`**, on a single line.",
     codeReference: [
       ["neighbors", "A list of (direction, cell) pairs — every unvisited neighbour of the current cell, from the line above."],
       ["random.choice(...)", "Returns one random element from a non-empty sequence."],
@@ -215,8 +213,8 @@ const COURSE_STEPS = [
       "            pass  # Write your code here.",
     ],
     hints: [
-      "neighbors contains pairs in the form (direction, next_cell). Use random.choice(neighbors) and unpack the result into two variables.",
-      "One line. On the left, two names separated by a comma. On the right, random.choice(neighbors). The names must be `direction` and `next_cell` because the next two TODOs use them.",
+      "One line: two names separated by a comma on the left, `random.choice(neighbors)` on the right. The names must be exactly `direction` and `next_cell` — the next two TODOs depend on them.",
+      "This replaces the single `pass` line, at the same indent level, right after `if neighbors:`.",
       "direction, next_cell = random.choice(???)",
     ],
     visualizer: "dfsGenerate",
@@ -232,7 +230,7 @@ const COURSE_STEPS = [
   {
     id: "3-2", step: 6, kind: "Required", required: true, file: "maze.py",
     title: "Open the wall between the current cell and the next cell.",
-    lead: "Choosing a neighbour is only half the job — until the wall between the two cells is removed, they are still sealed off from each other on both sides. self.remove_wall_between already knows how to open both sides of a shared wall at once; it just needs to be told which two cells and which direction connects them.",
+    lead: "Choosing a neighbour is only half the job — until the wall between the two cells is removed, they're still sealed off from each other. Call **`self.remove_wall_between(self.current, next_cell, direction)`**: it already knows how to open both sides of a shared wall at once, it just needs the two cells and the direction connecting them.",
     codeReference: [
       ["self.remove_wall_between(a, b, direction)", "Given code (not a TODO): opens the wall on both cells at once, given the two cells and the direction from a to b."],
       ["self.current", "The cell the search is currently standing on, before moving."],
@@ -251,8 +249,8 @@ const COURSE_STEPS = [
       "            pass  # Write your code here.",
     ],
     hints: [
-      "Call self.remove_wall_between with self.current, next_cell, direction.",
-      "One line, one function call, three arguments in that exact order. No assignment needed.",
+      "One line, one function call, three arguments in that exact order — no assignment needed.",
+      "The three arguments are, in order: the cell you're leaving, the cell you're entering, and the direction between them.",
       "self.remove_wall_between(self.current, ???, ???)",
     ],
     visualizer: "dfsGenerate",
@@ -267,7 +265,7 @@ const COURSE_STEPS = [
   {
     id: "3-3", step: 7, kind: "Required", required: true, file: "maze.py",
     title: "Move to the chosen cell and mark it as visited.",
-    lead: "With the wall open, the algorithm 'steps into' the new cell: self.current is reassigned to point at next_cell, and that cell is marked visited so the search never revisits it. Get the order right — reassign self.current first, then mark it visited, otherwise you would be marking the cell you just left.",
+    lead: "With the wall open, the algorithm 'steps into' the new cell: reassign **`self.current`** to **`next_cell`**, then mark that cell **`.visited = True`** so the search never revisits it. Get the order right — reassign `self.current` first, then mark it visited, or you'd end up marking the cell you just left.",
     codeReference: [
       ["self.current", "Reassign this to move the search's position to the new cell."],
       ["next_cell", "The neighbour chosen and connected to in the two TODOs above."],
@@ -283,8 +281,8 @@ const COURSE_STEPS = [
       "            pass  # Write your code here.",
     ],
     hints: [
-      "Assign next_cell to self.current. Then set self.current.visited to True.",
-      "Two lines. First move the pointer, then mark the new cell visited. Order matters: if you set visited first you would mark the old cell.",
+      "Two lines: first move the pointer, then mark the new cell visited. Order matters — marking visited before reassigning would mark the wrong cell.",
+      "Both lines use `self.current` — the first replaces what it points to, the second sets an attribute on it.",
       "self.current = ???   then   self.current.visited = True",
     ],
     visualizer: "dfsGenerate",
@@ -299,7 +297,7 @@ const COURSE_STEPS = [
   {
     id: "4", step: 8, kind: "Required", required: true, file: "pathfinding.py",
     title: "Record where this neighbor came from.",
-    lead: "Breadth-first search discovers the maze one ring of cells at a time, but discovering a cell isn't the same as remembering how you got there. parent is a dictionary that maps every newly-found neighbour to the cell it was reached from — exactly the breadcrumb trail reconstruct_path will later follow backwards from the goal to the start.",
+    lead: "Breadth-first search discovers the maze one ring of cells at a time, but discovering a cell isn't the same as remembering how you got there. **`parent`** is a dictionary that maps every newly-found **`neighbor`** to the **`current`** cell it was reached from — one line, `parent[neighbor] = current` — exactly the breadcrumb trail `reconstruct_path` will later follow backwards from the goal to the start.",
     codeReference: [
       ["parent", "A dictionary mapping every discovered cell to the cell it was reached from. reconstruct_path (given code) walks it backwards from the goal."],
       ["neighbor", "The newly-discovered cell — the dictionary key."],
@@ -314,8 +312,8 @@ const COURSE_STEPS = [
       "                pass  # Write your code here.",
     ],
     hints: [
-      "parent is a dictionary used to rebuild the final path later. Use neighbor as the key and current as the value, the same way a normal dictionary assignment works: my_dict[key] = value.",
-      "One line. The dictionary is `parent`. The key goes in square brackets, the value goes after the = sign. Ask yourself: which cell did we arrive FROM?",
+      "One line. The dictionary is `parent` — the key goes in square brackets, the value goes after the `=`. Ask yourself: which cell did we arrive from?",
+      "This goes right before the given `queue.append(neighbor)` line below — `neighbor` and `current` are both already in scope there.",
       "parent[???] = ???   — the key is the cell we just found, the value is the cell we came from.",
     ],
     visualizer: "bfsFlood",
@@ -330,7 +328,7 @@ const COURSE_STEPS = [
   {
     id: "5-1", step: 9, kind: "Required", required: true, file: "game.py",
     title: "Add the normal treasure score.",
-    lead: "Every normal treasure the player collects should nudge the score upward by a fixed amount, stored in the constant ITEM_SCORE. Add it to self.score with the += operator — always reach for the named constant, never a bare number, so the rule stays easy to tune later.",
+    lead: "Every normal treasure the player collects should nudge the score upward by a fixed amount, stored in the constant **`ITEM_SCORE`**. Add it to **`self.score`** with `+=` — reach for the named constant, never a bare number, so the rule stays easy to tune later.",
     codeReference: [
       ["self.score", "The player's running score for the current round."],
       ["ITEM_SCORE", "A constant from settings.py: the points awarded for one normal treasure."],
@@ -348,8 +346,8 @@ const COURSE_STEPS = [
       "                    pass  # Write your code here.",
     ],
     hints: [
-      "ITEM_SCORE contains the score for one normal treasure. Add it to self.score with +=.",
-      "One line using the += operator. Do not type a number; use the constant.",
+      "One line, using `+=`. Don't type a number — use the constant.",
+      "The constant is defined in `settings.py` and already available here — you don't need to import or define anything new.",
       "self.score += ???",
     ],
     visualizer: "scoreBoard",
@@ -364,7 +362,7 @@ const COURSE_STEPS = [
   {
     id: "5-2", step: 10, kind: "Required", required: true, file: "game.py",
     title: "Subtract the swamp penalty from the score.",
-    lead: "Stepping into a swamp costs the player points. SWAMP_SCORE_PENALTY already holds that cost as a positive number, so subtracting it from self.score with -= applies the penalty — no need to negate it yourself.",
+    lead: "Stepping into a swamp costs the player points. **`SWAMP_SCORE_PENALTY`** already holds that cost as a positive number, so subtract it from **`self.score`** with `-=` — no need to negate it yourself.",
     codeReference: [
       ["self.score", "The player's running score for the current round."],
       ["SWAMP_SCORE_PENALTY", "A constant from settings.py: a positive number representing the amount to lose."],
@@ -381,8 +379,8 @@ const COURSE_STEPS = [
       "        pass  # Write your code here.",
     ],
     hints: [
-      "SWAMP_SCORE_PENALTY contains the amount to lose. Subtract it from self.score with -=.",
-      "One line using the -= operator. Do not type a number; use the constant. The constant already holds a positive amount, so subtract it rather than adding a negative.",
+      "One line, using `-=`. The constant already holds a positive amount, so subtract it rather than adding a negative one.",
+      "Same pattern as TODO 5-1, just the opposite operator and the swamp constant instead of the item constant.",
       "self.score -= ???",
     ],
     visualizer: "scoreBoard",
@@ -397,7 +395,7 @@ const COURSE_STEPS = [
   {
     id: "6-1", step: 11, kind: "Bonus", required: false, file: "pathfinding.py",
     title: "Calculate the cost to reach this neighbor.",
-    lead: "This is Dijkstra's relaxation step: to know whether a neighbour is worth visiting through the current cell, you need the total cost of getting there — the cost already spent reaching current, plus the cost of this one extra step, step_cost. That sum must be stored in new_cost, because the comparison right below it (and TODO 6-2) depends on that exact name.",
+    lead: "This is Dijkstra's relaxation step: to know whether a neighbour is worth visiting through the current cell, add the cost already spent reaching it (**`cost`**) to the cost of this one extra step (**`step_cost`**). Store that sum in **`new_cost`** — the comparison right below it, and TODO 6-2, both depend on that exact name.",
     codeReference: [
       ["cost", "The total cost already spent reaching current, popped from the priority queue."],
       ["step_cost", "The (already positive, already offset) cost of the one edge from current to this neighbor."],
@@ -413,8 +411,8 @@ const COURSE_STEPS = [
       "            new_cost = 0  # Write your code here.",
     ],
     hints: [
-      'Add the cost already used to reach current (the variable "cost") and this step\'s cost (the variable "step_cost"). Store the result in new_cost.',
-      "Replace the placeholder 0 with a sum of two existing variables. This is the relaxation step: total cost so far, plus the cost of one more step.",
+      "Replace the placeholder `0` with a sum of two existing variables — total cost so far, plus the cost of one more step.",
+      "Both `cost` and `step_cost` are already defined above this line — you're combining them, not computing either one from scratch.",
       "new_cost = ??? + ???",
     ],
     visualizer: "dijkstraFrontier",
@@ -430,7 +428,7 @@ const COURSE_STEPS = [
   {
     id: "6-2", step: 12, kind: "Bonus", required: false, file: "pathfinding.py",
     title: "Save the better distance and its parent.",
-    lead: "Once new_cost turns out to be an improvement over anything seen before, two records need updating together: distance[neighbor] so future comparisons use the better number, and parent[neighbor] so the final path can be reconstructed through current — the cell that produced this improvement.",
+    lead: "Once **`new_cost`** turns out to be an improvement over anything seen before, two records need updating together: **`distance[neighbor]`**, so future comparisons use the better number, and **`parent[neighbor]`**, so the final path can be reconstructed through **`current`** — the cell that produced this improvement.",
     codeReference: [
       ["distance[neighbor]", "The best known total cost to reach neighbor so far; update it when a cheaper route is found."],
       ["parent[neighbor]", "The cell neighbor should be reached from on the cheapest known route; keep this in sync with distance."],
@@ -447,8 +445,8 @@ const COURSE_STEPS = [
       "                pass  # Write your code here.",
     ],
     hints: [
-      "Set distance[neighbor] to new_cost. Set parent[neighbor] to current.",
-      "Two lines, both dictionary assignments, both keyed by neighbor. One records the better cost, the other records how we got there.",
+      "Two lines, both dictionary assignments, both keyed by `neighbor` — one records the better cost, the other records how we got there.",
+      "This goes right after the `if` condition above, before the given `heapq.heappush(...)` line below.",
       "distance[neighbor] = ???   then   parent[neighbor] = ???",
     ],
     visualizer: "dijkstraFrontier",
@@ -463,7 +461,7 @@ const COURSE_STEPS = [
   {
     id: "7", step: 13, kind: "Bonus", required: false, file: "settings.py",
     title: "Redesign the three rounds.",
-    lead: "ROUND_CONFIGS is the difficulty curve of your whole game: one dictionary per round, read in order as the player advances. Every key already means something to the engine (grid size, item counts, time limit), so redesigning the rounds means changing values thoughtfully — bigger mazes and stricter timers raise the difficulty — never removing or renaming a key.",
+    lead: "**`ROUND_CONFIGS`** is the difficulty curve of your whole game: one dictionary per round, read in order as the player advances. You can change `rows`, `cols`, object counts, `extra_open_walls`, and `time_limit_seconds` — bigger mazes and stricter timers raise the difficulty. Every key already means something to the engine, so keep all three dictionaries, keep every key, and keep every value an integer — only change the numbers.",
     codeReference: [
       ["ROUND_CONFIGS", "A list of exactly 3 dictionaries, one per round, read in order as the player clears rounds."],
       ["rows, cols, cell_size", "Grid dimensions and pixel size of one cell; bigger rows/cols means a bigger maze."],
@@ -518,16 +516,15 @@ const COURSE_STEPS = [
       "]",
     ],
     hints: [
-      "You may change rows, cols, object counts, extra_open_walls, and time_limit_seconds. Keep every dictionary key and keep all values as integers.",
-      "Three dictionaries in a list, one per round. Deleting a key will crash the game, so change values only. Bigger rows/cols and less time make a round harder.",
+      "Three dictionaries in a list, one per round. Deleting a key will crash the game, so change values only, and keep them plain integers.",
+      "Prefer not to hand-edit the numbers? Use the map editor panel on the right instead — see the next hint.",
       "Use the map editor on the right: pick your rows and cols, paint the terrain, then press Apply to write the numbers into the code for you.",
     ],
     visualizer: "mapEditor",
     grading: {
       mode: "syntax",
       mustDefine: ["ROUND_CONFIGS"],
-      typeChecks: { ROUND_CONFIGS: "list[dict]" },
-      shape: "Exactly 3 dicts. Each must contain all original keys, all values int. rows/cols >= 5. time_limit_seconds > 0. counts >= 0 and small enough to fit the grid.",
+      notes: "Open-ended: passes once the code runs with no Python error and ROUND_CONFIGS is defined. Shape issues (wrong count, missing keys, non-int values) surface as non-blocking warnings, not failures.",
     },
   },
 
@@ -535,7 +532,7 @@ const COURSE_STEPS = [
   {
     id: "8", step: 14, kind: "Bonus", required: false, file: "settings.py",
     title: "Replace the player, goal, terrain, item, bomb images, and add sounds.",
-    lead: "Two settings blocks decide what the player sees and hears: image paths for the player, goal, terrain and items, then sound paths for pickups, hazards, and background music. Every value is either the string path to a file inside assets/, or None to fall back to the game's built-in shapes and silence — there is no third option.",
+    lead: "Two settings blocks decide what the player sees and hears: image paths for the player, goal, terrain and items, then sound paths for pickups, hazards, and background music. Every value is either **`None`** (use the game's built-in shape/silence) or a quoted path to a file already provided in `assets/images/` or `assets/sounds/` — there's no third option, and you can change as many or as few lines as you like.",
     codeReference: [
       ["PLAYER_IMAGE_PATH / GOAL_IMAGE_PATH / SWAMP_IMAGE_PATH / ITEM_IMAGE_PATH / BOMB_IMAGE_PATH / FLOOR_TILE_IMAGE_PATH", "Each is either None (use the built-in drawn shape) or a quoted path to a file under assets/images/."],
       ["SWAMP_SOUND_PATH / ITEM_SOUND_PATH / BOMB_SOUND_PATH / BACKGROUND_MUSIC_PATH", "Each is either None (silent) or a quoted path to a file under assets/sounds/."],
@@ -575,8 +572,8 @@ const COURSE_STEPS = [
       },
     ],
     hints: [
-      'Ready-to-use files are provided in assets/images/ and assets/sounds/. Put a file path in quotation marks, such as "assets/images/boy.png". Keep None to use the built-in fallback.',
-      "Every value is either None or a quoted path. Forgetting the quotes is the most common mistake here. You may change as many or as few lines as you like.",
+      "Every value is either `None` or a quoted path — forgetting the quotes is the most common mistake here.",
+      "Don't want to type paths by hand? Use the asset picker panel on the right — click a bundled image or sound and it fills in the line for you.",
       'PLAYER_IMAGE_PATH = "assets/images/boy.png"   — same pattern for every other line. Use the asset picker on the right to insert paths without typing them.',
     ],
     visualizer: "assetPicker",
@@ -587,7 +584,7 @@ const COURSE_STEPS = [
         "BOMB_IMAGE_PATH", "FLOOR_TILE_IMAGE_PATH",
         "SWAMP_SOUND_PATH", "ITEM_SOUND_PATH", "BOMB_SOUND_PATH", "BACKGROUND_MUSIC_PATH",
       ],
-      shape: "Every value must be None or a str. Any str must be a path under assets/images/ or assets/sounds/ with a valid extension, matching image vars to assets/images/ and sound vars to assets/sounds/. Warns (does not fail) if the referenced file is not in the known asset list.",
+      notes: "Open-ended: passes once the code runs with no Python error and all ten names are defined. Path/type issues surface as non-blocking warnings, not failures.",
       twoParts: true,
     },
   },
@@ -596,7 +593,7 @@ const COURSE_STEPS = [
   {
     id: "9", step: 15, kind: "Bonus", required: false, file: "settings.py",
     title: "Customize the extra collectible item.",
-    lead: "This is where your game gets its own signature collectible. Five constants describe it completely: a display name, an RGB colour, the score it awards, how many extra hints it grants, and the route weight Dijkstra will use when deciding whether the optimal path should pass through it — a very negative weight makes Dijkstra actively seek it out.",
+    lead: "This is where your game gets its own signature collectible. Five constants describe it completely: **`CUSTOM_ITEM_NAME`**, an RGB **`CUSTOM_ITEM_COLOR`**, the **`CUSTOM_ITEM_SCORE`** it awards, extra **`CUSTOM_ITEM_HINT_BONUS`** uses it grants, and the **`CUSTOM_ITEM_ROUTE_WEIGHT`** Dijkstra uses when deciding whether the optimal path should pass through it — a very negative weight makes Dijkstra actively seek it out. Keep the same variable names; just change the values.",
     codeReference: [
       ["CUSTOM_ITEM_NAME", "The display name of your collectible."],
       ["CUSTOM_ITEM_COLOR", "An (R, G, B) tuple, each 0-255, used when no image is set."],
@@ -618,16 +615,15 @@ const COURSE_STEPS = [
       "CUSTOM_ITEM_ROUTE_WEIGHT = 0",
     ],
     hints: [
-      "Change its name, RGB color, score, hint bonus, and Dijkstra route weight. Smaller route weights make Dijkstra prefer that cell. Keep the same variable names.",
-      "The name is a string, the color is a tuple of three numbers from 0 to 255, and the rest are integers. A negative score makes the item a trap.",
+      "The name is a string, the color is a tuple of three numbers from 0-255, and the rest are plain integers. A negative score makes the item a trap.",
+      "Smaller (more negative) route weights make Dijkstra prefer that cell; larger weights make it avoid it.",
       'CUSTOM_ITEM_NAME = "Magic Key"  /  CUSTOM_ITEM_COLOR = (255, 215, 0)  /  CUSTOM_ITEM_SCORE = 50  — keep the variable names, change the values.',
     ],
     visualizer: "scoreBoard",
     grading: {
       mode: "syntax",
       mustDefine: ["CUSTOM_ITEM_NAME", "CUSTOM_ITEM_COLOR", "CUSTOM_ITEM_SCORE", "CUSTOM_ITEM_HINT_BONUS", "CUSTOM_ITEM_ROUTE_WEIGHT"],
-      shape: "NAME is a non-empty str. COLOR is a 3-tuple of ints 0-255. SCORE / HINT_BONUS / ROUTE_WEIGHT are ints.",
-      mustDifferFromStarter: true,
+      notes: "Open-ended: passes once the code runs with no Python error and all five names are defined. Type/shape issues surface as non-blocking warnings, not failures.",
     },
   },
 
@@ -635,7 +631,7 @@ const COURSE_STEPS = [
   {
     id: "10", step: 16, kind: "Bonus", required: false, file: "settings.py",
     title: "Customize the extra terrain.",
-    lead: "Symmetrically to the custom item, this terrain type is entirely defined by five constants: name, colour, the score change stepping on it causes (which can be negative), the Dijkstra route weight, and whether it disappears after one use. Together they let you invent a hazard or shortcut that's entirely your own.",
+    lead: "Symmetrically to TODO 9, this terrain type is entirely defined by five constants: **`CUSTOM_TERRAIN_NAME`**, **`CUSTOM_TERRAIN_COLOR`**, the **`CUSTOM_TERRAIN_SCORE_CHANGE`** stepping on it causes (positive or negative), the **`CUSTOM_TERRAIN_ROUTE_WEIGHT`** Dijkstra uses, and **`CUSTOM_TERRAIN_DISAPPEARS`** — whether it reverts to normal after one use. Together they let you invent a hazard or shortcut that's entirely your own.",
     codeReference: [
       ["CUSTOM_TERRAIN_NAME", "The display name of your terrain."],
       ["CUSTOM_TERRAIN_COLOR", "An (R, G, B) tuple, each 0-255, used when no image is set."],
@@ -653,16 +649,15 @@ const COURSE_STEPS = [
       "CUSTOM_TERRAIN_DISAPPEARS = False",
     ],
     hints: [
-      "Change its name, RGB color, score change, route weight, and whether it disappears. Use True or False for CUSTOM_TERRAIN_DISAPPEARS.",
-      "The name is a string, the color is a tuple of three numbers, the score change may be negative, and DISAPPEARS must be exactly True or False (capital letter, no quotes).",
+      "The name is a string, the color is a tuple of three numbers, the score change may be negative, and `DISAPPEARS` must be exactly `True` or `False` (capital letter, no quotes).",
+      "Larger route weights make Dijkstra avoid this terrain; smaller (more negative) weights make it prefer this terrain — the opposite framing from TODO 9's item weight, but the same mechanism.",
       'CUSTOM_TERRAIN_NAME = "Ice"  /  CUSTOM_TERRAIN_COLOR = (150, 220, 255)  /  CUSTOM_TERRAIN_SCORE_CHANGE = -5  /  CUSTOM_TERRAIN_DISAPPEARS = False',
     ],
     visualizer: "scoreBoard",
     grading: {
       mode: "syntax",
       mustDefine: ["CUSTOM_TERRAIN_NAME", "CUSTOM_TERRAIN_COLOR", "CUSTOM_TERRAIN_SCORE_CHANGE", "CUSTOM_TERRAIN_ROUTE_WEIGHT", "CUSTOM_TERRAIN_DISAPPEARS"],
-      shape: "NAME is a non-empty str. COLOR is a 3-tuple of ints 0-255. SCORE_CHANGE / ROUTE_WEIGHT are ints. DISAPPEARS is exactly a bool.",
-      mustDifferFromStarter: true,
+      notes: "Open-ended: passes once the code runs with no Python error and all five names are defined. Type/shape issues surface as non-blocking warnings, not failures.",
     },
   },
 ];
