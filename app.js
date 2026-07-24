@@ -395,9 +395,9 @@
   //                                     // trigger field instead)
   //
   // `name` is the step's `visualizer` field from data.js (one of:
-  // titleCard, playerMove, dfsGenerate, bfsFlood, scoreBoard,
-  // dijkstraFrontier, mapEditor, assetPicker). Steps whose visualizer has no
-  // registered implementation yet fall back to a placeholder panel.
+  // titleCard, playerMove, bfsFlood, scoreBoard, dijkstraFrontier,
+  // mapEditor, assetPicker). Steps whose visualizer has no registered
+  // implementation yet fall back to a placeholder panel.
   var Visualizer = (function () {
     var registry = {};
     var activeName = null;
@@ -1442,239 +1442,6 @@
     ].join("\n");
   }
 
-  function harness_dfsGenerate_3_1(code) {
-    var fnSrc = buildFnSource("neighbors", code, "    ");
-    return [
-      PY_PRELUDE + "import random",
-      b64Line("FN_SRC", fnSrc),
-      "def _run():",
-      "    result = {'ok': False, 'passed': [], 'failed': [], 'error': None, 'traceback': None}",
-      "    class Cell:",
-      "        def __init__(self, row, col):",
-      "            self.row = row; self.col = col",
-      "    ns = {}",
-      "    try:",
-      "        exec(compile(FN_SRC, '<student>', 'exec'), {'random': random}, ns)",
-      "    except SyntaxError as e:",
-      "        line = max(1, (e.lineno or 1) - 1)",
-      "        result['error'] = 'Python syntax error on line %s: %s.' % (line, e.msg)",
-      "        return json.dumps(result)",
-      "    _fn = ns['_fn']",
-      "    try:",
-      "        a, b, c = Cell(0, 1), Cell(1, 0), Cell(0, -1)",
-      "        neighbors = [('top', a), ('left', b), ('right', c)]",
-      "        seen_directions = set()",
-      "        broke = False",
-      "        for i in range(60):",
-      "            out = _fn(list(neighbors))",
-      "            if not isinstance(out, dict) or 'direction' not in out or 'next_cell' not in out:",
-      "                result['failed'].append('Your code must create two variables named exactly `direction` and `next_cell` (later TODOs depend on these exact names).')",
-      "                broke = True",
-      "                break",
-      "            direction, next_cell = out['direction'], out['next_cell']",
-      "            match = [nc for d, nc in neighbors if d == direction and nc is next_cell]",
-      "            if not match:",
-      "                result['failed'].append('direction=%r and next_cell do not correspond to the same entry in neighbors. Use tuple unpacking on ONE chosen pair, not two separate picks.' % (direction,))",
-      "                broke = True",
-      "                break",
-      "            seen_directions.add(direction)",
-      "        if not broke:",
-      "            result['passed'].append('direction and next_cell are always a matching pair from neighbors')",
-      "            if len(seen_directions) >= 2:",
-      "                result['passed'].append('the choice is actually random (multiple different neighbors were chosen across 60 trials)')",
-      "            else:",
-      "                result['failed'].append('The same neighbor was chosen on every one of 60 random trials — use random.choice(neighbors), not a fixed index like neighbors[0].')",
-      "    except Exception as e:",
-      "        result['error'] = '%s: %s' % (type(e).__name__, e)",
-      "        result['traceback'] = traceback.format_exc()",
-      "    result['ok'] = result['error'] is None and len(result['failed']) == 0",
-      "    return json.dumps(result)",
-      "_run()",
-    ].join("\n");
-  }
-
-  function harness_dfsGenerate_3_2(code) {
-    var fnSrc = buildFnSource("self, next_cell, direction", code, "    ");
-    return [
-      PY_PRELUDE,
-      b64Line("FN_SRC", fnSrc),
-      "def _run():",
-      "    result = {'ok': False, 'passed': [], 'failed': [], 'error': None, 'traceback': None}",
-      "    class Cell:",
-      "        def __init__(self):",
-      "            self.walls = {'top': True, 'right': True, 'bottom': True, 'left': True}",
-      "    opposite = {'top': 'bottom', 'right': 'left', 'bottom': 'top', 'left': 'right'}",
-      "    class MazeObj:",
-      "        def remove_wall_between(self, current, next_cell, direction):",
-      "            current.walls[direction] = False",
-      "            next_cell.walls[opposite[direction]] = False",
-      "    ns = {}",
-      "    try:",
-      "        exec(compile(FN_SRC, '<student>', 'exec'), {}, ns)",
-      "    except SyntaxError as e:",
-      "        line = max(1, (e.lineno or 1) - 1)",
-      "        result['error'] = 'Python syntax error on line %s: %s.' % (line, e.msg)",
-      "        return json.dumps(result)",
-      "    _fn = ns['_fn']",
-      "    try:",
-      "        for direction in ('top', 'right', 'bottom', 'left'):",
-      "            self = MazeObj()",
-      "            self.current = Cell()",
-      "            next_cell = Cell()",
-      "            _fn(self, next_cell, direction)",
-      "            ok_a = self.current.walls[direction] is False",
-      "            ok_b = next_cell.walls[opposite[direction]] is False",
-      "            if ok_a and ok_b:",
-      "                result['passed'].append('direction %s: both walls opened correctly' % direction)",
-      "            elif not ok_a and ok_b:",
-      "                result['failed'].append('direction %s: the neighbor side opened, but self.current.walls[%r] is still True.' % (direction, direction))",
-      "            elif ok_a and not ok_b:",
-      "                result['failed'].append('direction %s: self.current side opened, but next_cell.walls[%r] is still True (the opposite side).' % (direction, opposite[direction]))",
-      "            else:",
-      "                result['failed'].append('direction %s: neither wall was opened.' % direction)",
-      "    except Exception as e:",
-      "        result['error'] = '%s: %s' % (type(e).__name__, e)",
-      "        result['traceback'] = traceback.format_exc()",
-      "    result['ok'] = result['error'] is None and len(result['failed']) == 0",
-      "    return json.dumps(result)",
-      "_run()",
-    ].join("\n");
-  }
-
-  function harness_dfsGenerate_3_3(code, ctx) {
-    var fnSrc = buildFnSource("self, next_cell", code, "    ");
-    var todo31 = ctx && ctx.sibling31 ? buildFnSource("self, neighbors", ctx.sibling31, "    ") : null;
-    var todo32 = ctx && ctx.sibling32 ? buildFnSource("self, next_cell, direction", ctx.sibling32, "    ") : null;
-    var lines = [
-      PY_PRELUDE + "import random",
-      b64Line("FN_SRC", fnSrc),
-      todo31 ? b64Line("TODO31_SRC", todo31) : "TODO31_SRC = None",
-      todo32 ? b64Line("TODO32_SRC", todo32) : "TODO32_SRC = None",
-      "def _run():",
-      "    result = {'ok': False, 'passed': [], 'failed': [], 'error': None, 'traceback': None}",
-      "    class Cell:",
-      "        def __init__(self, row=0, col=0):",
-      "            self.row = row; self.col = col",
-      "            self.visited = False",
-      "            self.is_current = False",
-      "            self.walls = {'top': True, 'right': True, 'bottom': True, 'left': True}",
-      "    ns = {}",
-      "    try:",
-      "        exec(compile(FN_SRC, '<student>', 'exec'), {}, ns)",
-      "    except SyntaxError as e:",
-      "        line = max(1, (e.lineno or 1) - 1)",
-      "        result['error'] = 'Python syntax error on line %s: %s.' % (line, e.msg)",
-      "        return json.dumps(result)",
-      "    _fn = ns['_fn']",
-      "    try:",
-      "        class SelfObj:",
-      "            pass",
-      "        self = SelfObj()",
-      "        old_cell = Cell(0, 0); old_cell.visited = True",
-      "        next_cell = Cell(0, 1); next_cell.visited = False",
-      "        self.current = old_cell",
-      "        _fn(self, next_cell)",
-      "        if self.current is next_cell:",
-      "            result['passed'].append('self.current now points at next_cell')",
-      "        else:",
-      "            result['failed'].append('self.current should now be next_cell, but it is not. Did you reassign self.current to the neighbor you just connected to?')",
-      "        if next_cell.visited is True:",
-      "            result['passed'].append('next_cell.visited is now True')",
-      "        else:",
-      "            result['failed'].append('next_cell.visited should be True after moving there. Did you mark the NEW current cell as visited, and do that AFTER moving self.current (not before)?')",
-      "        if old_cell.visited is True:",
-      "            result['passed'].append('the previously-current cell is left untouched')",
-      "        else:",
-      "            result['failed'].append('The previously-current cell should stay visited=True, but it changed — something mutated the wrong object.')",
-      "    except Exception as e:",
-      "        result['error'] = '%s: %s' % (type(e).__name__, e)",
-      "        result['traceback'] = traceback.format_exc()",
-      "        result['ok'] = False",
-      "        return json.dumps(result)",
-      "    if TODO31_SRC is not None and TODO32_SRC is not None and not result['failed']:",
-      "        try:",
-      "            rows = cols = 5",
-      "            grid = [[Cell(r, c) for c in range(cols)] for r in range(rows)]",
-      "            def get_cell(row, col):",
-      "                if 0 <= row < rows and 0 <= col < cols:",
-      "                    return grid[row][col]",
-      "                return None",
-      "            def get_unvisited_neighbors(cell):",
-      "                candidates = [('top', cell.row - 1, cell.col), ('right', cell.row, cell.col + 1), ('bottom', cell.row + 1, cell.col), ('left', cell.row, cell.col - 1)]",
-      "                out = []",
-      "                for d, r, c in candidates:",
-      "                    nb = get_cell(r, c)",
-      "                    if nb is not None and not nb.visited:",
-      "                        out.append((d, nb))",
-      "                return out",
-      "            opp = {'top': 'bottom', 'right': 'left', 'bottom': 'top', 'left': 'right'}",
-      "            def remove_wall_between(a, b, direction):",
-      "                a.walls[direction] = False",
-      "                b.walls[opp[direction]] = False",
-      "            class MazeObj:",
-      "                pass",
-      "            m = MazeObj()",
-      "            m.stack = []",
-      "            m.current = grid[0][0]",
-      "            m.current.visited = True",
-      "            m.generation_complete = False",
-      "            m.remove_wall_between = remove_wall_between",
-      "            budget = rows * cols * 8",
-      "            steps = 0",
-      "            ns31 = {}",
-      "            exec(compile(TODO31_SRC, '<t31>', 'exec'), {'random': random}, ns31)",
-      "            t31 = ns31['_fn']",
-      "            ns32 = {}",
-      "            exec(compile(TODO32_SRC, '<t32>', 'exec'), {}, ns32)",
-      "            t32 = ns32['_fn']",
-      "            def generate_step():",
-      "                nonlocal steps",
-      "                steps += 1",
-      "                if steps > budget:",
-      "                    raise RuntimeError('BUDGET_EXCEEDED')",
-      "                if m.generation_complete:",
-      "                    return",
-      "                neighbors = get_unvisited_neighbors(m.current)",
-      "                if neighbors:",
-      "                    out31 = t31(m, list(neighbors))",
-      "                    if not isinstance(out31, dict) or 'direction' not in out31 or 'next_cell' not in out31:",
-      "                        raise RuntimeError('TODO_3_1_INCOMPLETE')",
-      "                    direction, nxt = out31['direction'], out31['next_cell']",
-      "                    m.current.is_current = False",
-      "                    m.stack.append(m.current)",
-      "                    t32(m, nxt, direction)",
-      "                    _fn(m, nxt)",
-      "                    m.current.is_current = True",
-      "                elif m.stack:",
-      "                    m.current.is_current = False",
-      "                    m.current = m.stack.pop()",
-      "                    m.current.is_current = True",
-      "                else:",
-      "                    m.generation_complete = True",
-      "            while not m.generation_complete:",
-      "                generate_step()",
-      "            from collections import deque",
-      "            seen = {(0, 0)}",
-      "            dq = deque([(0, 0)])",
-      "            while dq:",
-      "                r, c = dq.popleft()",
-      "                cell = grid[r][c]",
-      "                for direction, dr, dc in (('top', -1, 0), ('right', 0, 1), ('bottom', 1, 0), ('left', 0, -1)):",
-      "                    if not cell.walls[direction]:",
-      "                        nr, nc = r + dr, c + dc",
-      "                        if 0 <= nr < rows and 0 <= nc < cols and (nr, nc) not in seen:",
-      "                            seen.add((nr, nc)); dq.append((nr, nc))",
-      "            if len(seen) == rows * cols:",
-      "                result['passed'].append('bonus: ran the full maze generator with your 3-1/3-2/3-3 code together and every cell is reachable')",
-      "        except Exception:",
-      "            pass",
-      "    result['ok'] = result['error'] is None and len(result['failed']) == 0",
-      "    return json.dumps(result)",
-      "_run()",
-    ];
-    return lines.join("\n");
-  }
-
   function harness_bfsFlood_4(code) {
     var fnSrc = buildFnSource("parent, neighbor, current", code, "    ");
     return [
@@ -1937,16 +1704,6 @@
     playerMove_2_1: harness_playerMove_2_1,
     playerMove_2_2: harness_playerMove_2_2,
     playerMove_2_3: harness_playerMove_2_3,
-    dfsGenerate_3_1: harness_dfsGenerate_3_1,
-    dfsGenerate_3_2: harness_dfsGenerate_3_2,
-    dfsGenerate_3_3: function (code) {
-      var s31 = state.steps["3-1"], s32 = state.steps["3-2"];
-      var ctx = {
-        sibling31: (s31 && isRequiredDone("3-1")) ? s31.code : null,
-        sibling32: (s32 && isRequiredDone("3-2")) ? s32.code : null,
-      };
-      return harness_dfsGenerate_3_3(code, ctx);
-    },
     bfsFlood_4: harness_bfsFlood_4,
     scoreBoard_5_1: harness_scoreBoard_5_1,
     scoreBoard_5_2: harness_scoreBoard_5_2,
@@ -2312,12 +2069,14 @@
   //   {type:"path", cells:[[r,c],...]}                             (BFS/Dijkstra)
   //   {type:"score", kind, label, delta, total}                    (scoreboard)
   //
-  // Every harness that runs a loop (DFS generation, BFS, Dijkstra) enforces
-  // a hard step budget AND a hard cap on trace length, and reports a
+  // Every harness that runs a student-code loop (BFS, Dijkstra) enforces a
+  // hard step budget AND a hard cap on trace length, and reports a
   // `stopped_reason` so the UI can say "Stopped after N steps..." instead of
-  // hanging the tab or exhausting memory on a runaway trace.
+  // hanging the tab or exhausting memory on a runaway trace. (Maze
+  // generation used to be one of these too, back when it was a student
+  // TODO - see student/maze.py and TEACHER_TODO_GUIDE.md for why it's now
+  // given code, generated directly in JS by jsGenerateMazeWalls().)
 
-  var GEN_BUDGET = 2000;    // DFS generation step budget
   var FLOOD_BUDGET = 5000;  // BFS / Dijkstra step budget
   var TRACE_CAP = 4000;     // hard cap on captured events per run
 
@@ -2695,118 +2454,6 @@
       "                exp_row, exp_col = old_row + dr, old_col + dc",
       "                if player.row != exp_row or player.col != exp_col:",
       "                    result['unexpected_delta'] = True",
-      "    except Exception as e:",
-      "        result['ok'] = False",
-      "        result['error'] = '%s: %s' % (type(e).__name__, e)",
-      "        result['traceback'] = traceback.format_exc()",
-      "    return json.dumps(result)",
-      "_run()",
-    ].join("\n");
-  }
-
-  function traceHarness_dfsGenerate(code31, code32, code33, rows, cols) {
-    var fn31 = buildFnSource("self, neighbors", code31, "    ");
-    var fn32 = buildFnSource("self, next_cell, direction", code32, "    ");
-    var fn33 = buildFnSource("self, next_cell", code33, "    ");
-    return [
-      "import json, base64, random, traceback",
-      b64Line("FN31_SRC", fn31),
-      b64Line("FN32_SRC", fn32),
-      b64Line("FN33_SRC", fn33),
-      "ROWS = " + Number(rows),
-      "COLS = " + Number(cols),
-      "BUDGET = " + GEN_BUDGET,
-      "TRACE_CAP = " + TRACE_CAP,
-      "def _run():",
-      "    result = {'ok': True, 'error': None, 'traceback': None, 'trace': [], 'stopped_reason': None, 'connected_count': 0, 'total_cells': ROWS * COLS}",
-      "    ns31 = {}",
-      "    try:",
-      "        exec(compile(FN31_SRC, '<t31>', 'exec'), {'random': random}, ns31)",
-      "        exec(compile(FN32_SRC, '<t32>', 'exec'), {}, {})",
-      "        exec(compile(FN33_SRC, '<t33>', 'exec'), {}, {})",
-      "    except SyntaxError as e:",
-      "        result['ok'] = False",
-      "        result['error'] = 'Python syntax error on line %s: %s.' % (e.lineno, e.msg)",
-      "        return json.dumps(result)",
-      "    t31 = ns31['_fn']",
-      "    class Cell:",
-      "        def __init__(self, r, c):",
-      "            self.row = r; self.col = c",
-      "            self.visited = False",
-      "            self.is_current = False",
-      "            self.walls = {'top': True, 'right': True, 'bottom': True, 'left': True}",
-      "    grid = [[Cell(r, c) for c in range(COLS)] for r in range(ROWS)]",
-      "    def get_cell(r, c):",
-      "        if 0 <= r < ROWS and 0 <= c < COLS:",
-      "            return grid[r][c]",
-      "        return None",
-      "    def get_unvisited_neighbors(cell):",
-      "        candidates = [('top', cell.row - 1, cell.col), ('right', cell.row, cell.col + 1), ('bottom', cell.row + 1, cell.col), ('left', cell.row, cell.col - 1)]",
-      "        out = []",
-      "        for d, r, c in candidates:",
-      "            nb = get_cell(r, c)",
-      "            if nb is not None and not nb.visited:",
-      "                out.append((d, nb))",
-      "        return out",
-      "    opposite = {'top': 'bottom', 'right': 'left', 'bottom': 'top', 'left': 'right'}",
-      "    def remove_wall_between(a, b, direction):",
-      "        a.walls[direction] = False",
-      "        b.walls[opposite[direction]] = False",
-      "    class MazeObj:",
-      "        pass",
-      "    m = MazeObj()",
-      "    m.stack = []",
-      "    m.current = grid[0][0]",
-      "    m.current.visited = True",
-      "    m.generation_complete = False",
-      "    m.remove_wall_between = remove_wall_between",
-      "    steps = 0",
-      "    try:",
-      "        while not m.generation_complete:",
-      "            steps += 1",
-      "            if steps > BUDGET:",
-      "                result['stopped_reason'] = 'budget'",
-      "                break",
-      "            neighbors = get_unvisited_neighbors(m.current)",
-      "            if neighbors:",
-      "                out31 = t31(m, list(neighbors))",
-      "                if not isinstance(out31, dict) or 'direction' not in out31 or 'next_cell' not in out31:",
-      "                    result['stopped_reason'] = 'todo_incomplete'",
-      "                    break",
-      "                direction, next_cell = out31['direction'], out31['next_cell']",
-      "                prev_current = m.current",
-      "                m.current.is_current = False",
-      "                m.stack.append(m.current)",
-      "                ns32 = {}",
-      "                exec(compile(FN32_SRC, '<t32>', 'exec'), {}, ns32)",
-      "                ns32['_fn'](m, next_cell, direction)",
-      "                ns33 = {}",
-      "                exec(compile(FN33_SRC, '<t33>', 'exec'), {}, ns33)",
-      "                ns33['_fn'](m, next_cell)",
-      "                if len(result['trace']) < TRACE_CAP:",
-      "                    result['trace'].append({'type': 'carve', 'from': [prev_current.row, prev_current.col], 'to': [next_cell.row, next_cell.col], 'direction': direction, 'stackDepth': len(m.stack)})",
-      "                m.current.is_current = True",
-      "            elif m.stack:",
-      "                m.current.is_current = False",
-      "                popped = m.stack.pop()",
-      "                m.current = popped",
-      "                m.current.is_current = True",
-      "                if len(result['trace']) < TRACE_CAP:",
-      "                    result['trace'].append({'type': 'backtrack', 'to': [popped.row, popped.col], 'stackDepth': len(m.stack)})",
-      "            else:",
-      "                m.generation_complete = True",
-      "        from collections import deque",
-      "        seen = {(0, 0)}",
-      "        dq = deque([(0, 0)])",
-      "        while dq:",
-      "            r, c = dq.popleft()",
-      "            cell = grid[r][c]",
-      "            for direction, dr, dc in (('top', -1, 0), ('right', 0, 1), ('bottom', 1, 0), ('left', 0, -1)):",
-      "                if not cell.walls[direction]:",
-      "                    nr, nc = r + dr, c + dc",
-      "                    if 0 <= nr < ROWS and 0 <= nc < COLS and (nr, nc) not in seen:",
-      "                        seen.add((nr, nc)); dq.append((nr, nc))",
-      "        result['connected_count'] = len(seen)",
       "    except Exception as e:",
       "        result['ok'] = False",
       "        result['error'] = '%s: %s' % (type(e).__name__, e)",
@@ -3470,154 +3117,6 @@
     };
   })();
   Visualizer.register("playerMove", PlayerMoveViz);
-
-  // -------------------------------------------------- 14d. dfsGenerate viz
-
-  var DfsGenerateViz = (function () {
-    var refs = null;
-    var grid = null;
-    var CELL = 0;
-    var playback = null;
-    var stackDepth = 0, visitedCount = 1, carvedCount = 0;
-    var GEN_ROWS = 6, GEN_COLS = 8;
-
-    function blankGrid() {
-      var g = [];
-      for (var r = 0; r < GEN_ROWS; r++) {
-        var row = [];
-        for (var c = 0; c < GEN_COLS; c++) row.push({ top: true, right: true, bottom: true, left: true, visited: false, current: false });
-        g.push(row);
-      }
-      g[0][0].visited = true;
-      return g;
-    }
-
-    function draw() {
-      if (!refs) return;
-      var ctx = refs.ctx;
-      ctx.clearRect(0, 0, refs.canvas.width, refs.canvas.height);
-      ctx.fillStyle = "#171310";
-      ctx.fillRect(0, 0, refs.canvas.width, refs.canvas.height);
-      drawMazeGrid(ctx, grid, CELL, function (r, c) {
-        var cell = grid[r][c];
-        if (cell.current) return "#c9971f";
-        if (cell.visited) return "rgba(186,230,253,0.18)";
-        return null;
-      }, { wallColor: "#e8dcc4" });
-    }
-
-    function applyEvent(evt) {
-      if (evt.type === "carve") {
-        var fr = evt.from[0], fc = evt.from[1], tr = evt.to[0], tc = evt.to[1];
-        var dir = evt.direction;
-        var opp = { top: "bottom", right: "left", bottom: "top", left: "right" }[dir];
-        grid[fr][fc][dir] = false;
-        grid[tr][tc][opp] = false;
-        grid[fr][fc].current = false;
-        grid[tr][tc].current = true;
-        grid[tr][tc].visited = true;
-        stackDepth = evt.stackDepth;
-        visitedCount++;
-        carvedCount++;
-      } else if (evt.type === "backtrack") {
-        for (var r = 0; r < GEN_ROWS; r++) for (var c = 0; c < GEN_COLS; c++) grid[r][c].current = false;
-        grid[evt.to[0]][evt.to[1]].current = true;
-        stackDepth = evt.stackDepth;
-      }
-      if (refs) {
-        refs.readout.set("current", stackDepth >= 0 ? "stack depth " + stackDepth : "-");
-        refs.readout.set("visited", visitedCount + " / " + (GEN_ROWS * GEN_COLS));
-        refs.readout.set("carved", String(carvedCount));
-      }
-      draw();
-    }
-
-    function runFresh() {
-      if (refs) refs.verdict.info("Running your code…");
-      var c31 = state.steps["3-1"].code, c32 = state.steps["3-2"].code, c33 = state.steps["3-3"].code;
-      ensurePyodide().then(function (py) {
-        return py.runPythonAsync(traceHarness_dfsGenerate(c31, c32, c33, GEN_ROWS, GEN_COLS));
-      }).then(function (json) {
-        var data = JSON.parse(json);
-        grid = blankGrid();
-        stackDepth = 0; visitedCount = 1; carvedCount = 0;
-        draw();
-        if (!data.ok) {
-          if (refs) refs.verdict.set(false, data.error || "Your code raised an error.");
-          return;
-        }
-        playback.setTrace(data.trace);
-        playback._lastData = data;
-        if (refs) {
-          refs.readout.set("current", "stack depth 0");
-          refs.readout.set("visited", "1 / " + (GEN_ROWS * GEN_COLS));
-          refs.readout.set("carved", "0");
-        }
-        if (data.stopped_reason === "budget") {
-          if (refs) refs.verdict.set(false, "Stopped after " + GEN_BUDGET + " steps — your code didn't finish. Look for a loop that never advances (check TODO 3-3 reassigns self.current).");
-        } else if (data.stopped_reason === "todo_incomplete") {
-          if (refs) refs.verdict.set(false, "TODO 3-1 didn't produce usable direction/next_cell values yet.");
-        } else if (refs) {
-          refs.verdict.clear();
-        }
-      }).catch(function (err) {
-        if (refs) refs.verdict.set(false, "Could not run: " + (err && err.message ? err.message : err));
-      });
-    }
-
-    function showFinalVerdict() {
-      var data = playback._lastData;
-      if (!refs || !data) return;
-      if (data.stopped_reason) return; // already shown
-      if (data.connected_count === data.total_cells) {
-        refs.verdict.set(true, "Maze fully connected — " + data.connected_count + " / " + data.total_cells + " cells reachable.");
-      } else {
-        refs.verdict.set(false, "Only " + data.connected_count + " of " + data.total_cells + " cells reachable — check TODO 3-2 (walls never open?).");
-      }
-    }
-
-    return {
-      mount: function (container) {
-        container.innerHTML = "";
-        var width = fitWidth(container, 340);
-        CELL = Math.max(20, Math.floor(width / GEN_COLS));
-        grid = blankGrid();
-        var made = makeCanvas(CELL * GEN_COLS, CELL * GEN_ROWS);
-        made.canvas.className = "viz-canvas";
-        container.appendChild(made.canvas);
-        var bar = buildControlBar({
-          onStep: function () { playback.step(); if (playback.isDone()) showFinalVerdict(); },
-          onRun: function () { playback.run(); },
-          onPause: function () { playback.pause(); },
-          onReset: function () { playback.reset(); grid = blankGrid(); stackDepth = 0; visitedCount = 1; carvedCount = 0; draw(); if (refs) { refs.readout.set("current", "stack depth 0"); refs.readout.set("visited", "1 / " + (GEN_ROWS * GEN_COLS)); refs.readout.set("carved", "0"); refs.verdict.clear(); } },
-          onSpeed: function (s) { playback.setSpeed(s); },
-        });
-        container.appendChild(bar.node);
-        var runCodeBtn = el("button", { class: "btn btn-small btn-secondary mt-8", type: "button", text: "↻ Replay animation", onclick: runFresh });
-        container.appendChild(runCodeBtn);
-        container.appendChild(el("p", { class: "small muted", text: "Replays your last-saved code here without submitting an attempt — press \"Run my code\" above (in the editor) to check your answer." }));
-        var readout = buildReadout([
-          { key: "current", label: "Backtrack stack depth" },
-          { key: "visited", label: "Visited cells" },
-          { key: "carved", label: "Walls carved" },
-        ]);
-        container.appendChild(readout.node);
-        var verdict = buildVerdict();
-        container.appendChild(verdict.node);
-        refs = { canvas: made.canvas, ctx: made.ctx, readout: readout, verdict: verdict };
-        playback = createPlaybackController({
-          onEvent: applyEvent,
-          onDone: showFinalVerdict,
-        });
-        draw();
-        runFresh();
-      },
-      show: function () { draw(); },
-      update: function () { runFresh(); },
-      unmount: function () { if (playback) playback.destroy(); refs = null; },
-    };
-  })();
-  Visualizer.register("dfsGenerate", DfsGenerateViz);
 
   // -------------------------------------------------- 14e. bfsFlood viz
 
@@ -5348,7 +4847,6 @@
       return {
         title: isDoneExact("1"),
         movement: isDoneExact("2-1") && isDoneExact("2-2") && isDoneExact("2-3"),
-        maze: isDoneExact("3-1") && isDoneExact("3-2") && isDoneExact("3-3"),
         swampPlacement: isDoneExact("4"),
         scoring: isDoneExact("5-1") && isDoneExact("5-2"),
         hint: isDoneExact("6-1") && isDoneExact("6-2"),
@@ -5372,6 +4870,46 @@
     function blankTerrain(r, c) {
       var g = [];
       for (var i = 0; i < r; i++) { var row = []; for (var j = 0; j < c; j++) row.push("NORMAL"); g.push(row); }
+      return g;
+    }
+
+    // Randomized DFS / recursive-backtracker maze generation - a direct JS
+    // port of the given (non-TODO) algorithm in maze.py's generate_step().
+    // Always produces a perfect maze (every cell reachable, no loops)
+    // before openExtraWalls() punches a few extra connections in.
+    function jsGenerateMazeWalls(rows, cols, rng) {
+      var g = emptyWalledGrid(rows, cols);
+      var visited = [];
+      for (var i = 0; i < rows; i++) { var row = []; for (var j = 0; j < cols; j++) row.push(false); visited.push(row); }
+      var opposite = { top: "bottom", right: "left", bottom: "top", left: "right" };
+      function unvisitedNeighbors(r, c) {
+        var candidates = [["top", r - 1, c], ["right", r, c + 1], ["bottom", r + 1, c], ["left", r, c - 1]];
+        var out = [];
+        candidates.forEach(function (cand) {
+          var d = cand[0], nr = cand[1], nc = cand[2];
+          if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && !visited[nr][nc]) out.push([d, nr, nc]);
+        });
+        return out;
+      }
+      var stack = [];
+      var cur = [0, 0];
+      visited[0][0] = true;
+      while (true) {
+        var nbrs = unvisitedNeighbors(cur[0], cur[1]);
+        if (nbrs.length > 0) {
+          var pick = nbrs[Math.floor(rng() * nbrs.length)];
+          var d = pick[0], nr = pick[1], nc = pick[2];
+          g[cur[0]][cur[1]][d] = false;
+          g[nr][nc][opposite[d]] = false;
+          stack.push(cur);
+          cur = [nr, nc];
+          visited[nr][nc] = true;
+        } else if (stack.length > 0) {
+          cur = stack.pop();
+        } else {
+          break;
+        }
+      }
       return g;
     }
 
@@ -5426,7 +4964,6 @@
       var items2 = [
         ["title", "Title screen shows your title/rules (TODO 1)"],
         ["movement", "Player moves & respects walls (TODO 2-1/2-2/2-3)"],
-        ["maze", "Real maze generation (TODO 3-1/3-2/3-3)"],
         ["swampPlacement", "Swamps placed along shortest path (TODO 4)"],
         ["scoring", "Treasure/swamp scoring (TODO 5-1/5-2)"],
         ["hint", "Dijkstra hint route (TODO 6-1/6-2)"],
@@ -5480,83 +5017,62 @@
       items = []; bombs = [];
       timeLeft = cfg.timeLimitSeconds;
 
-      if (!caps.maze) {
-        maze = emptyWalledGrid(rows, cols);
-        terrain = blankTerrain(rows, cols);
-        renderAllAndStatus("Finish TODO 3-1, 3-2 and 3-3 to generate a real maze. Right now this round is just an empty walled grid.");
-        return;
-      }
-
+      // Maze generation (randomized DFS / recursive backtracker) is given,
+      // complete code in maze.py, not a student TODO - see student/maze.py
+      // and TEACHER_TODO_GUIDE.md for why. It always works from round 1,
+      // no capability gate needed, and (being fixed, not student code)
+      // there's no need to round-trip it through Pyodide - jsGenerateMazeWalls
+      // reimplements the exact same algorithm directly in JS.
       statusLine("Generating your maze…");
-      var c31 = state.steps["3-1"].code, c32 = state.steps["3-2"].code, c33 = state.steps["3-3"].code;
-      ensurePyodide().then(function (py) {
-        return py.runPythonAsync(traceHarness_dfsGenerate(c31, c32, c33, rows, cols));
-      }).then(function (json) {
-        var data = JSON.parse(json);
-        if (!data.ok || data.stopped_reason || data.connected_count !== rows * cols) {
-          maze = emptyWalledGrid(rows, cols);
-          terrain = blankTerrain(rows, cols);
-          statusLine("Your maze-generation code didn't finish a valid maze this time (" + (data.error || data.stopped_reason || "not fully connected") + "). Showing an empty grid instead — try again from the TODO 3 steps.", true);
-          renderAll();
+      var rng = mulberry32(1000 + roundIndex);
+      var g = jsGenerateMazeWalls(rows, cols, rng);
+      openExtraWalls(g, cfg.extraOpenWalls, rng);
+      maze = g;
+      terrain = blankTerrain(rows, cols);
+
+      var forbidden = {}; forbidden[player.row + "," + player.col] = true; forbidden[goal.row + "," + goal.col] = true;
+
+      function placeSwamps() {
+        if (!caps.swampPlacement) {
+          placeRandom(rng, forbidden, cfg.swampCount).forEach(function (p) { terrain[p[0]][p[1]] = "SWAMP"; });
+          statusLine("Swamps placed randomly — finish TODO 4 to place them along the shortest path instead.");
+          afterSwamps();
           return;
         }
-        // Rebuild the wall grid from the carve trace (given/non-TODO bookkeeping).
-        var g = emptyWalledGrid(rows, cols);
-        var opposite = { top: "bottom", right: "left", bottom: "top", left: "right" };
-        data.trace.forEach(function (evt) {
-          if (evt.type !== "carve") return;
-          g[evt.from[0]][evt.from[1]][evt.direction] = false;
-          g[evt.to[0]][evt.to[1]][opposite[evt.direction]] = false;
-        });
-        var rng = mulberry32(1000 + roundIndex);
-        openExtraWalls(g, cfg.extraOpenWalls, rng);
-        maze = g;
-        terrain = blankTerrain(rows, cols);
-
-        var forbidden = {}; forbidden[player.row + "," + player.col] = true; forbidden[goal.row + "," + goal.col] = true;
-
-        function placeSwamps() {
-          if (!caps.swampPlacement) {
+        var c4 = state.steps["4"].code;
+        ensurePyodide().then(function (py) {
+          return py.runPythonAsync(traceHarness_bfsFlood(c4, maze, [player.row, player.col], [goal.row, goal.col], cfg.swampCount));
+        }).then(function (json2) {
+          var d2 = JSON.parse(json2);
+          if (d2.ok && d2.swamp_on_path) {
+            d2.swamp_cells.forEach(function (p) { var key = p[0] + "," + p[1]; if (!forbidden[key]) { terrain[p[0]][p[1]] = "SWAMP"; forbidden[key] = true; } });
+            statusLine("");
+          } else {
             placeRandom(rng, forbidden, cfg.swampCount).forEach(function (p) { terrain[p[0]][p[1]] = "SWAMP"; });
-            statusLine("Swamps placed randomly — finish TODO 4 to place them along the shortest path instead.");
-            afterSwamps();
-            return;
+            statusLine("TODO 4 isn't reconstructing a path yet, so swamps were placed randomly this round.");
           }
-          var c4 = state.steps["4"].code;
-          py_.runPythonAsync(traceHarness_bfsFlood(c4, maze, [player.row, player.col], [goal.row, goal.col], cfg.swampCount)).then(function (json2) {
-            var d2 = JSON.parse(json2);
-            if (d2.ok && d2.swamp_on_path) {
-              d2.swamp_cells.forEach(function (p) { var key = p[0] + "," + p[1]; if (!forbidden[key]) { terrain[p[0]][p[1]] = "SWAMP"; forbidden[key] = true; } });
-              statusLine("");
-            } else {
-              placeRandom(rng, forbidden, cfg.swampCount).forEach(function (p) { terrain[p[0]][p[1]] = "SWAMP"; });
-              statusLine("TODO 4 isn't reconstructing a path yet, so swamps were placed randomly this round.");
-            }
-            afterSwamps();
-          });
-        }
+          afterSwamps();
+        }).catch(function (err) {
+          placeRandom(rng, forbidden, cfg.swampCount).forEach(function (p) { terrain[p[0]][p[1]] = "SWAMP"; });
+          statusLine("Could not run TODO 4: " + (err && err.message ? err.message : err), true);
+          afterSwamps();
+        });
+      }
 
-        function afterSwamps() {
-          if (caps.customTerrain) {
-            placeRandom(rng, forbidden, cfg.customTerrainCount).forEach(function (p) { terrain[p[0]][p[1]] = "CUSTOM"; });
-          }
-          var treasureSpots = placeRandom(rng, forbidden, cfg.itemCount);
-          items = treasureSpots.map(function (p) { return { row: p[0], col: p[1], active: true, kind: "treasure" }; });
-          if (caps.customItem) {
-            placeRandom(rng, forbidden, cfg.customItemCount).forEach(function (p) { items.push({ row: p[0], col: p[1], active: true, kind: "custom" }); });
-          }
-          bombs = placeRandom(rng, forbidden, cfg.bombCount).map(function (p) { return { row: p[0], col: p[1], active: true }; });
-          renderAll();
+      function afterSwamps() {
+        if (caps.customTerrain) {
+          placeRandom(rng, forbidden, cfg.customTerrainCount).forEach(function (p) { terrain[p[0]][p[1]] = "CUSTOM"; });
         }
-
-        var py_ = null;
-        ensurePyodide().then(function (py) { py_ = py; placeSwamps(); });
-      }).catch(function (err) {
-        maze = emptyWalledGrid(rows, cols);
-        terrain = blankTerrain(rows, cols);
-        statusLine("Could not run your maze code: " + (err && err.message ? err.message : err), true);
+        var treasureSpots = placeRandom(rng, forbidden, cfg.itemCount);
+        items = treasureSpots.map(function (p) { return { row: p[0], col: p[1], active: true, kind: "treasure" }; });
+        if (caps.customItem) {
+          placeRandom(rng, forbidden, cfg.customItemCount).forEach(function (p) { items.push({ row: p[0], col: p[1], active: true, kind: "custom" }); });
+        }
+        bombs = placeRandom(rng, forbidden, cfg.bombCount).map(function (p) { return { row: p[0], col: p[1], active: true }; });
         renderAll();
-      });
+      }
+
+      placeSwamps();
     }
 
     function terrainColorFor(r, c) {
@@ -5611,7 +5127,6 @@
     }
 
     function renderAll() { draw(); updateStatusGrid(); refreshChecklist(); }
-    function renderAllAndStatus(msg) { renderAll(); statusLine(msg); }
 
     function tickTimer() {
       if (!running) return;

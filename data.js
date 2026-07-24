@@ -13,7 +13,7 @@
 "use strict";
 
 /** Required TODOs, in the order students must complete (or skip) them. */
-const REQUIRED_ORDER = ["1", "2-1", "2-2", "2-3", "3-1", "3-2", "3-3", "4", "5-1", "5-2"];
+const REQUIRED_ORDER = ["1", "2-1", "2-2", "2-3", "4", "5-1", "5-2"];
 
 /** Bonus TODOs. These all unlock together once Required is finished, any order. */
 const BONUS_ORDER = ["6-1", "6-2", "7", "8", "9", "10"];
@@ -44,7 +44,7 @@ const COURSE_STEPS = [
   {
     id: "1", step: 1, kind: "Required", required: true, file: "settings.py",
     title: "Rewrite the game title and rules to match your game.",
-    lead: "Every game needs an identity. Four variables in this file control what players see before they even move:\n\n- **`TITLE`** and **`GAME_SUBTITLE`** — single strings shown in the window and on the title screen.\n- **`MISSION_RULES`** and **`HOW_TO_PLAY_RULES`** — lists of strings shown on the mission and how-to-play screens.\n\nThis is a design task, not an algorithm: rewrite the text so it describes **your** game, not the example maze. There's no single correct answer — just valid Python that keeps the same shape.",
+    lead: "Every game needs an identity. Four variables in this file control what players see before they even move:\n\n- **`TITLE`** and **`GAME_SUBTITLE`** — single strings shown in the window and on the title screen.\n- **`MISSION_RULES`** and **`HOW_TO_PLAY_RULES`** — lists of strings shown on the mission and how-to-play screens.\n\nYou've built a list of strings like this before — Game AI Lab's `behaviors = [\"PATROL\", \"CHASE\", \"ATTACK\"]` is the same shape, just describing ghost AI states instead of game text. This is a design task, not an algorithm: rewrite the text so it describes **your** game, not the example maze. There's no single correct answer — just valid Python that keeps the same shape.",
     codeReference: [
       ["TITLE", "The string shown in the window title bar and on the title screen."],
       ["GAME_SUBTITLE", "A one-line description shown under the title."],
@@ -87,7 +87,7 @@ const COURSE_STEPS = [
   {
     id: "2-1", step: 2, kind: "Required", required: true, file: "game.py",
     title: "Connect the arrow keys or WASD keys to maze movement.",
-    lead: "Right now your maze ignores the keyboard entirely. Each frame, `update_player()` checks which arrow/WASD key is held down, and inside that branch you need to:\n\n- call **`self.player.try_move(direction, self.maze)`** with the matching direction string, then\n- store the result in **`moved`**.\n\nBecause the branches use `if`/`elif` (not four separate `if`s), the player moves at most one cell per frame — even if two keys are pressed together.",
+    lead: "Right now your maze ignores the keyboard entirely. Each frame, `update_player()` checks which arrow/WASD key is held down — the same `if`/`elif` dispatch pattern as Game AI Lab's ghost FSM, where a state string picked which method to call (`monster.patrol()`, `monster.chase()`, ...). Here, the key that's held down picks which direction to move. Inside that branch you need to:\n\n- call **`self.player.try_move(direction, self.maze)`** with the matching direction string, then\n- store the result in **`moved`**.\n\nBecause the branches use `if`/`elif` (not four separate `if`s), the player moves at most one cell per frame — even if two keys are pressed together.",
     codeReference: [
       ["self.player.try_move(direction, self.maze)", "Attempts to move the player one cell in direction. Returns True if the move succeeded, False if it was blocked."],
       ["moved", "A boolean you set to the result of try_move. The code right after your TODO reads it to decide whether to reset the movement timer."],
@@ -127,7 +127,7 @@ const COURSE_STEPS = [
   {
     id: "2-2", step: 3, kind: "Required", required: true, file: "player.py",
     title: "Stop movement when there is no cell or a wall blocks the direction.",
-    lead: "`try_move` first looks up the cell the player is standing on, then must decide whether the move is even possible before touching any coordinates. Two things can block it: there's no cell in that direction (**`current is None`**), or a wall stands in the way (**`current.walls[direction]`** is `True`). Join both checks with `or` and `return False` inside the `if` — this is a classic guard clause: handle the bad cases first and bail out early, so the rest of the function can assume the move is legal.",
+    lead: "`try_move` first looks up the cell the player is standing on, then must decide whether the move is even possible before touching any coordinates. Two things can block it: there's no cell in that direction (**`current is None`**), or a wall stands in the way (**`current.walls[direction]`** is `True`). Join both checks with `or` and `return False` inside the `if` — this is a classic guard clause, the same shape as Game AI Lab's `get_tile_cost` (`if tile == WALL: return None`): handle the bad cases first and bail out early, so the rest of the function can assume the move is legal.",
     codeReference: [
       ["current", "The Cell the player currently stands on, looked up just above. May be None if there is no cell there."],
       ["current.walls[direction]", "True when a wall blocks movement in direction from the current cell."],
@@ -161,7 +161,7 @@ const COURSE_STEPS = [
   {
     id: "2-3", step: 4, kind: "Required", required: true, file: "player.py",
     title: "Update the player's row and column.",
-    lead: "Once `try_move` knows the move is legal, **`dr`** and **`dc`** already tell it how far to shift on each axis. Apply that shift to the player's own position — add `dr` to **`self.row`** and `dc` to **`self.col`**, using the `+=` compound-assignment operator.",
+    lead: "Once `try_move` knows the move is legal, **`dr`** and **`dc`** already tell it how far to shift on each axis — the same delta idea as Game AI Lab's `directions = [(-1,0), (1,0), (0,-1), (0,1)]` and `get_distance()`. Apply that shift to the player's own position — add `dr` to **`self.row`** and `dc` to **`self.col`**, using the `+=` compound-assignment operator.",
     codeReference: [
       ["dr, dc", "The row and column change for the chosen direction, already looked up on the line above."],
       ["self.row, self.col", "The player's current grid position; update both in place."],
@@ -191,113 +191,11 @@ const COURSE_STEPS = [
     },
   },
 
-  // -------------------------------------------------------------- TODO 3-1
-  {
-    id: "3-1", step: 5, kind: "Required", required: true, file: "maze.py",
-    title: "Randomly choose one unvisited neighbor.",
-    lead: "This is the heart of randomized depth-first-search maze generation: when the current cell still has unvisited neighbours, pick one at random to carve into next. **`neighbors`** is a list of `(direction, cell)` pairs, so **`random.choice(neighbors)`** returns one pair — Python's tuple unpacking then splits it into two names, **`direction`** and **`next_cell`**, on a single line.",
-    codeReference: [
-      ["neighbors", "A list of (direction, cell) pairs — every unvisited neighbour of the current cell, from the line above."],
-      ["random.choice(...)", "Returns one random element from a non-empty sequence."],
-      ["direction, next_cell", "The two names your line must create by unpacking the chosen pair — later TODOs in this same function rely on these exact names."],
-    ],
-    contextBefore: [
-      "        if neighbors:",
-    ],
-    contextAfter: [
-      "            self.current.is_current = False",
-      "            self.stack.append(self.current)  # Given: push the current cell so we can backtrack to it later.",
-      "            # TODO 3-2 [Required]: Open the wall between the current cell and the next cell.",
-    ],
-    starter: [
-      "            pass  # Write your code here.",
-    ],
-    hints: [
-      "One line: two names separated by a comma on the left, `random.choice(neighbors)` on the right. The names must be exactly `direction` and `next_cell` — the next two TODOs depend on them.",
-      "This replaces the single `pass` line, at the same indent level, right after `if neighbors:`.",
-      "direction, next_cell = random.choice(???)",
-    ],
-    visualizer: "dfsGenerate",
-    grading: {
-      mode: "behaviour",
-      harness: "dfsGenerate_3_1",
-      casesDescription: "Assert `direction` and `next_cell` are bound and come together from the same entry in the neighbors list. Names are required exactly because TODO 3-2 and 3-3 consume them.",
-      requiredNames: ["direction", "next_cell"],
-    },
-  },
-
-  // -------------------------------------------------------------- TODO 3-2
-  {
-    id: "3-2", step: 6, kind: "Required", required: true, file: "maze.py",
-    title: "Open the wall between the current cell and the next cell.",
-    lead: "Choosing a neighbour is only half the job — until the wall between the two cells is removed, they're still sealed off from each other. Call **`self.remove_wall_between(self.current, next_cell, direction)`**: it already knows how to open both sides of a shared wall at once, it just needs the two cells and the direction connecting them.",
-    codeReference: [
-      ["self.remove_wall_between(a, b, direction)", "Given code (not a TODO): opens the wall on both cells at once, given the two cells and the direction from a to b."],
-      ["self.current", "The cell the search is currently standing on, before moving."],
-      ["next_cell, direction", "The neighbour and direction chosen in TODO 3-1, still available in this same block."],
-    ],
-    contextBefore: [
-      "            self.current.is_current = False",
-      "            self.stack.append(self.current)  # Given: push the current cell so we can backtrack to it later.",
-    ],
-    contextAfter: [
-      "            # TODO 3-3 [Required]: Move to the chosen cell and mark it as visited.",
-      "            # Detailed hint:",
-      "            # Assign next_cell to self.current.",
-    ],
-    starter: [
-      "            pass  # Write your code here.",
-    ],
-    hints: [
-      "One line, one function call, three arguments in that exact order — no assignment needed.",
-      "The three arguments are, in order: the cell you're leaving, the cell you're entering, and the direction between them.",
-      "self.remove_wall_between(self.current, ???, ???)",
-    ],
-    visualizer: "dfsGenerate",
-    grading: {
-      mode: "behaviour",
-      harness: "dfsGenerate_3_2",
-      casesDescription: "After running your line, assert both the current cell's wall in direction and the neighbour's opposite wall are False.",
-    },
-  },
-
-  // -------------------------------------------------------------- TODO 3-3
-  {
-    id: "3-3", step: 7, kind: "Required", required: true, file: "maze.py",
-    title: "Move to the chosen cell and mark it as visited.",
-    lead: "With the wall open, the algorithm 'steps into' the new cell: reassign **`self.current`** to **`next_cell`**, then mark that cell **`.visited = True`** so the search never revisits it. Get the order right — reassign `self.current` first, then mark it visited, or you'd end up marking the cell you just left.",
-    codeReference: [
-      ["self.current", "Reassign this to move the search's position to the new cell."],
-      ["next_cell", "The neighbour chosen and connected to in the two TODOs above."],
-      [".visited", "A boolean flag on every Cell; True once the DFS generator has stepped into it."],
-    ],
-    contextBefore: [],
-    contextAfter: [
-      "            self.current.is_current = True",
-      "        elif self.stack:",
-      "            self.current.is_current = False",
-    ],
-    starter: [
-      "            pass  # Write your code here.",
-    ],
-    hints: [
-      "Two lines: first move the pointer, then mark the new cell visited. Order matters — marking visited before reassigning would mark the wrong cell.",
-      "Both lines use `self.current` — the first replaces what it points to, the second sets an attribute on it.",
-      "self.current = ???   then   self.current.visited = True",
-    ],
-    visualizer: "dfsGenerate",
-    grading: {
-      mode: "behaviour",
-      harness: "dfsGenerate_3_3",
-      casesDescription: "Assert self.current is now next_cell and self.current.visited is True, while the previously-current cell is left untouched. When 3-1/3-2 are also already correct, additionally runs the full generator and checks the finished maze is fully connected (best-effort, skipped safely if that isn't possible yet).",
-    },
-  },
-
   // ----------------------------------------------------------------- TODO 4
   {
-    id: "4", step: 8, kind: "Required", required: true, file: "pathfinding.py",
+    id: "4", step: 5, kind: "Required", required: true, file: "pathfinding.py",
     title: "Record where this neighbor came from.",
-    lead: "Breadth-first search discovers the maze one ring of cells at a time, but discovering a cell isn't the same as remembering how you got there. **`parent`** is a dictionary that maps every newly-found **`neighbor`** to the **`current`** cell it was reached from — one line, `parent[neighbor] = current` — exactly the breadcrumb trail `reconstruct_path` will later follow backwards from the goal to the start.",
+    lead: "Breadth-first search discovers the maze one ring of cells at a time, but discovering a cell isn't the same as remembering how you got there. **`parent`** is a dictionary that maps every newly-found **`neighbor`** to the **`current`** cell it was reached from, in one line. It's the same dictionary-assignment technique as Game AI Lab's `distance[node] = new_cost`, but recording where you came from instead of a cost, so you can trace the path back later — similar to how `find_path()` gave you a path list to read with `path[1]`. That breadcrumb trail is exactly what `reconstruct_path` will follow backwards from the goal to the start.",
     codeReference: [
       ["parent", "A dictionary mapping every discovered cell to the cell it was reached from. reconstruct_path (given code) walks it backwards from the goal."],
       ["neighbor", "The newly-discovered cell — the dictionary key."],
@@ -326,7 +224,7 @@ const COURSE_STEPS = [
 
   // -------------------------------------------------------------- TODO 5-1
   {
-    id: "5-1", step: 9, kind: "Required", required: true, file: "game.py",
+    id: "5-1", step: 6, kind: "Required", required: true, file: "game.py",
     title: "Add the normal treasure score.",
     lead: "Every normal treasure the player collects should nudge the score upward by a fixed amount, stored in the constant **`ITEM_SCORE`**. Add it to **`self.score`** with `+=` — reach for the named constant, never a bare number, so the rule stays easy to tune later.",
     codeReference: [
@@ -360,7 +258,7 @@ const COURSE_STEPS = [
 
   // -------------------------------------------------------------- TODO 5-2
   {
-    id: "5-2", step: 10, kind: "Required", required: true, file: "game.py",
+    id: "5-2", step: 7, kind: "Required", required: true, file: "game.py",
     title: "Subtract the swamp penalty from the score.",
     lead: "Stepping into a swamp costs the player points. **`SWAMP_SCORE_PENALTY`** already holds that cost as a positive number, so subtract it from **`self.score`** with `-=` — no need to negate it yourself.",
     codeReference: [
@@ -393,9 +291,9 @@ const COURSE_STEPS = [
 
   // -------------------------------------------------------------- TODO 6-1
   {
-    id: "6-1", step: 11, kind: "Bonus", required: false, file: "pathfinding.py",
+    id: "6-1", step: 8, kind: "Bonus", required: false, file: "pathfinding.py",
     title: "Calculate the cost to reach this neighbor.",
-    lead: "This is Dijkstra's relaxation step: to know whether a neighbour is worth visiting through the current cell, add the cost already spent reaching it (**`cost`**) to the cost of this one extra step (**`step_cost`**). Store that sum in **`new_cost`** — the comparison right below it, and TODO 6-2, both depend on that exact name.",
+    lead: "You already did this exact calculation for the ghost AI in Game AI Lab, mission 8 — their worked example was literally `new_cost = 3 + 2`. This is Dijkstra's relaxation step, same formula and same variable name, just a different graph: to know whether a neighbour is worth visiting through the current cell, add the cost already spent reaching it (**`cost`**) to the cost of this one extra step (**`step_cost`**). Store that sum in **`new_cost`** — the comparison right below it, and TODO 6-2, both depend on that exact name.",
     codeReference: [
       ["cost", "The total cost already spent reaching current, popped from the priority queue."],
       ["step_cost", "The (already positive, already offset) cost of the one edge from current to this neighbor."],
@@ -426,9 +324,9 @@ const COURSE_STEPS = [
 
   // -------------------------------------------------------------- TODO 6-2
   {
-    id: "6-2", step: 12, kind: "Bonus", required: false, file: "pathfinding.py",
+    id: "6-2", step: 9, kind: "Bonus", required: false, file: "pathfinding.py",
     title: "Save the better distance and its parent.",
-    lead: "Once **`new_cost`** turns out to be an improvement over anything seen before, two records need updating together: **`distance[neighbor]`**, so future comparisons use the better number, and **`parent[neighbor]`**, so the final path can be reconstructed through **`current`** — the cell that produced this improvement.",
+    lead: "Once **`new_cost`** turns out to be an improvement over anything seen before, two records need updating together: **`distance[neighbor]`** — the same `distance[node] = new_cost` assignment from Game AI Lab's mission 8, so future comparisons use the better number — and **`parent[neighbor]`**, so the final path can be reconstructed through **`current`**, the cell that produced this improvement.",
     codeReference: [
       ["distance[neighbor]", "The best known total cost to reach neighbor so far; update it when a cheaper route is found."],
       ["parent[neighbor]", "The cell neighbor should be reached from on the cheapest known route; keep this in sync with distance."],
@@ -459,9 +357,9 @@ const COURSE_STEPS = [
 
   // ------------------------------------------------------------------ TODO 7
   {
-    id: "7", step: 13, kind: "Bonus", required: false, file: "settings.py",
+    id: "7", step: 10, kind: "Bonus", required: false, file: "settings.py",
     title: "Redesign the three rounds.",
-    lead: "**`ROUND_CONFIGS`** is the difficulty curve of your whole game: one dictionary per round, read in order as the player advances. You can change `rows`, `cols`, object counts, `extra_open_walls`, and `time_limit_seconds` — bigger mazes and stricter timers raise the difficulty. Every key already means something to the engine, so keep all three dictionaries, keep every key, and keep every value an integer — only change the numbers.",
+    lead: "**`ROUND_CONFIGS`** is the difficulty curve of your whole game: one dictionary per round, read in order as the player advances. You can change `rows`, `cols`, object counts, `extra_open_walls`, and `time_limit_seconds` — bigger mazes and stricter timers raise the difficulty. Every key already means something to the engine, so keep all three dictionaries, keep every key, and keep every value an integer — only change the numbers. The map editor on the right lets you hand-paint a layout the same way you built Game AI Lab's N×N matrix map (with 0/1/\"P\"/\"G1\"/\"G2\" markers) — just for a maze instead of a ghost-chase board.",
     codeReference: [
       ["ROUND_CONFIGS", "A list of exactly 3 dictionaries, one per round, read in order as the player clears rounds."],
       ["rows, cols, cell_size", "Grid dimensions and pixel size of one cell; bigger rows/cols means a bigger maze."],
@@ -530,7 +428,7 @@ const COURSE_STEPS = [
 
   // ------------------------------------------------------------------ TODO 8
   {
-    id: "8", step: 14, kind: "Bonus", required: false, file: "settings.py",
+    id: "8", step: 11, kind: "Bonus", required: false, file: "settings.py",
     title: "Replace the player, goal, terrain, item, bomb images, and add sounds.",
     lead: "Two settings blocks decide what the player sees and hears: image paths for the player, goal, terrain and items, then sound paths for pickups, hazards, and background music. Every value is either **`None`** (use the game's built-in shape/silence) or a quoted path to a file already provided in `assets/images/` or `assets/sounds/` — there's no third option, and you can change as many or as few lines as you like.",
     codeReference: [
@@ -591,7 +489,7 @@ const COURSE_STEPS = [
 
   // ------------------------------------------------------------------ TODO 9
   {
-    id: "9", step: 15, kind: "Bonus", required: false, file: "settings.py",
+    id: "9", step: 12, kind: "Bonus", required: false, file: "settings.py",
     title: "Customize the extra collectible item.",
     lead: "This is where your game gets its own signature collectible. Five constants describe it completely: **`CUSTOM_ITEM_NAME`**, an RGB **`CUSTOM_ITEM_COLOR`**, the **`CUSTOM_ITEM_SCORE`** it awards, extra **`CUSTOM_ITEM_HINT_BONUS`** uses it grants, and the **`CUSTOM_ITEM_ROUTE_WEIGHT`** Dijkstra uses when deciding whether the optimal path should pass through it — a very negative weight makes Dijkstra actively seek it out. Keep the same variable names; just change the values.",
     codeReference: [
@@ -629,7 +527,7 @@ const COURSE_STEPS = [
 
   // ----------------------------------------------------------------- TODO 10
   {
-    id: "10", step: 16, kind: "Bonus", required: false, file: "settings.py",
+    id: "10", step: 13, kind: "Bonus", required: false, file: "settings.py",
     title: "Customize the extra terrain.",
     lead: "Symmetrically to TODO 9, this terrain type is entirely defined by five constants: **`CUSTOM_TERRAIN_NAME`**, **`CUSTOM_TERRAIN_COLOR`**, the **`CUSTOM_TERRAIN_SCORE_CHANGE`** stepping on it causes (positive or negative), the **`CUSTOM_TERRAIN_ROUTE_WEIGHT`** Dijkstra uses, and **`CUSTOM_TERRAIN_DISAPPEARS`** — whether it reverts to normal after one use. Together they let you invent a hazard or shortcut that's entirely your own.",
     codeReference: [
