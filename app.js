@@ -31,6 +31,7 @@
   var STEPS = DATA.COURSE_STEPS;
   var REQUIRED_ORDER = DATA.REQUIRED_ORDER;
   var BONUS_ORDER = DATA.BONUS_ORDER;
+  var CAPSTONE_BONUS_ID = DATA.CAPSTONE_BONUS_ID;
   var KNOWN_ASSETS = DATA.KNOWN_ASSET_FILES;
   var STEP_BY_ID = {};
   STEPS.forEach(function (s) { STEP_BY_ID[s.id] = s; });
@@ -264,6 +265,15 @@
   }
   function allRequiredDone() { return REQUIRED_ORDER.every(isRequiredDone); }
 
+  // Capstone one-off exception (TODO 15, "write your game's rules"): rules
+  // only make sense once the student's actually built their custom game, so
+  // this single Bonus step stays locked until every OTHER Bonus step is
+  // completed or skipped - independent of the normal "all Bonus unlocks
+  // together" rule the rest of Bonus follows.
+  function otherBonusAllDone() {
+    return BONUS_ORDER.every(function (bid) { return bid === CAPSTONE_BONUS_ID || isRequiredDone(bid); });
+  }
+
   function computeStatus(id) {
     var saved = state.steps[id].status;
     if (saved === "completed" || saved === "skipped") return saved;
@@ -273,6 +283,9 @@
         if (!isRequiredDone(REQUIRED_ORDER[i])) return "locked";
       }
       return "available";
+    }
+    if (id === CAPSTONE_BONUS_ID) {
+      return otherBonusAllDone() ? "available" : "locked";
     }
     return allRequiredDone() ? "available" : "locked";
   }
@@ -287,7 +300,9 @@
     if (bidx === -1) return null;
     for (var i = 1; i <= BONUS_ORDER.length; i++) {
       var cand = BONUS_ORDER[(bidx + i) % BONUS_ORDER.length];
-      if (!isRequiredDone(cand)) return cand;
+      if (isRequiredDone(cand)) continue;
+      if (cand === CAPSTONE_BONUS_ID && !otherBonusAllDone()) continue; // still locked, don't auto-jump there
+      return cand;
     }
     return null;
   }
@@ -1026,7 +1041,8 @@
     nav.appendChild(el("div", { class: "sidebar-divider" }));
     nav.appendChild(renderSidebarGroup(
       "Bonus — any order",
-      allRequiredDone() ? "Unlocked! Do these in whatever order you like." : "Unlocks once every Required step is completed or skipped.",
+      (allRequiredDone() ? "Unlocked! Do these in whatever order you like." : "Unlocks once every Required step is completed or skipped.")
+        + " The last one (write your rules) stays locked until every other Bonus step is done.",
       BONUS_ORDER
     ));
     var doneCount = STEPS.filter(function (s) { return isRequiredDone(s.id); }).length;
@@ -1112,6 +1128,18 @@
         svgIcon('<path d="M4 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'),
         el("span", {}, ["Required step " + (REQUIRED_ORDER.indexOf(step.id) + 1) + " of " + REQUIRED_ORDER.length + ". Finish or Skip it to unlock the next one — Required steps go in order, you can't jump ahead."]),
       ]));
+    } else if (step.id === CAPSTONE_BONUS_ID) {
+      if (status === "locked") {
+        card.appendChild(el("div", { class: "flow-banner capstone-locked" }, [
+          svgIcon('<rect x="5" y="11" width="14" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2"/>'),
+          el("span", {}, ["Finish every other Bonus challenge first, then come back and write the rules for the game you actually built."]),
+        ]));
+      } else {
+        card.appendChild(el("div", { class: "flow-banner bonus" }, [
+          svgIcon('<path d="M4 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'),
+          el("span", {}, ["Capstone Bonus step — every other Bonus challenge is done, so it's time to write the rules for the game you actually built."]),
+        ]));
+      }
     } else {
       card.appendChild(el("div", { class: "flow-banner bonus" }, [
         svgIcon('<path d="M4 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'),
@@ -1267,7 +1295,7 @@
 
   var PY_PRELUDE = "import json, base64, traceback\n";
 
-  function harness_playerMove_2_1(code) {
+  function harness_movement_2(code) {
     var fnSrc = buildFnSource("self, pygame, keys, moved", code, "    ");
     return [
       PY_PRELUDE,
@@ -1345,7 +1373,7 @@
     ].join("\n");
   }
 
-  function harness_playerMove_2_2(code) {
+  function harness_guardClause_3(code) {
     var fnSrc = buildFnSource("current, direction", code, "    ");
     return [
       PY_PRELUDE,
@@ -1396,7 +1424,7 @@
     ].join("\n");
   }
 
-  function harness_playerMove_2_3(code) {
+  function harness_positionDelta_4(code) {
     var fnSrc = buildFnSource("self, dr, dc", code, "    ");
     return [
       PY_PRELUDE,
@@ -1442,107 +1470,7 @@
     ].join("\n");
   }
 
-  function harness_bfsFlood_4(code) {
-    var fnSrc = buildFnSource("parent, neighbor, current", code, "    ");
-    return [
-      PY_PRELUDE + "from collections import deque",
-      b64Line("FN_SRC", fnSrc),
-      "def _run():",
-      "    result = {'ok': False, 'passed': [], 'failed': [], 'error': None, 'traceback': None}",
-      "    ns = {}",
-      "    try:",
-      "        exec(compile(FN_SRC, '<student>', 'exec'), {}, ns)",
-      "    except SyntaxError as e:",
-      "        line = max(1, (e.lineno or 1) - 1)",
-      "        result['error'] = 'Python syntax error on line %s: %s.' % (line, e.msg)",
-      "        return json.dumps(result)",
-      "    _fn = ns['_fn']",
-      "    BUDGET = 5000",
-      "    def make_grid_adj(rows, cols, blocked=frozenset()):",
-      "        adj = {}",
-      "        for r in range(rows):",
-      "            for c in range(cols):",
-      "                if (r, c) in blocked:",
-      "                    continue",
-      "                nbrs = []",
-      "                for dr, dc in ((-1, 0), (1, 0), (0, -1), (0, 1)):",
-      "                    nr, nc = r + dr, c + dc",
-      "                    if 0 <= nr < rows and 0 <= nc < cols and (nr, nc) not in blocked:",
-      "                        nbrs.append((nr, nc))",
-      "                adj[(r, c)] = nbrs",
-      "        return adj",
-      "    def bfs(adj, start, end):",
-      "        queue = deque([start])",
-      "        parent = {start: None}",
-      "        visited = {start}",
-      "        steps = 0",
-      "        while queue:",
-      "            steps += 1",
-      "            if steps > BUDGET:",
-      "                raise RuntimeError('BUDGET_EXCEEDED')",
-      "            current = queue.popleft()",
-      "            if current == end:",
-      "                break",
-      "            for neighbor in adj.get(current, []):",
-      "                if neighbor not in visited:",
-      "                    visited.add(neighbor)",
-      "                    out = _fn(parent, neighbor, current)",
-      "                    if isinstance(out, dict) and 'parent' in out:",
-      "                        parent = out['parent']",
-      "                    queue.append(neighbor)",
-      "        if end not in parent:",
-      "            return []",
-      "        path = [end]",
-      "        cur = end",
-      "        while cur != start:",
-      "            nxt = parent.get(cur)",
-      "            if nxt is None:",
-      "                break",
-      "            path.append(nxt)",
-      "            cur = nxt",
-      "        path.reverse()",
-      "        return path",
-      "    cases = [",
-      "        ('short chain', make_grid_adj(1, 6), (0, 0), (0, 5), 6),",
-      "        ('open 4x4 grid', make_grid_adj(4, 4), (0, 0), (3, 3), 7),",
-      "        ('grid with a wall forcing a detour', make_grid_adj(4, 5, blocked=frozenset({(1, 0), (1, 1), (1, 2), (1, 3)})), (0, 0), (3, 0), 12),",
-      "    ]",
-      "    try:",
-      "        for label, adj, start, end, expected_len in cases:",
-      "            try:",
-      "                path = bfs(adj, start, end)",
-      "            except RuntimeError as e:",
-      "                if str(e) == 'BUDGET_EXCEEDED':",
-      "                    result['failed'].append('%s: your code did not finish within %d steps. A loop is probably not advancing — check that you record each neighbor as it is discovered.' % (label, BUDGET))",
-      "                    continue",
-      "                raise",
-      "            if not path:",
-      "                result['failed'].append('%s: no path was found at all (parent was never recorded for the discovered cells).' % label)",
-      "                continue",
-      "            if path[0] != start or path[-1] != end:",
-      "                result['failed'].append('%s: path does not start at %r and end at %r (got %r).' % (label, start, end, path))",
-      "                continue",
-      "            if len(set(path)) != len(path):",
-      "                result['failed'].append('%s: path revisits a cell.' % label)",
-      "                continue",
-      "            edges_ok = all(path[i + 1] in adj.get(path[i], []) for i in range(len(path) - 1))",
-      "            if not edges_ok:",
-      "                result['failed'].append('%s: consecutive cells in the reconstructed path are not actually adjacent.' % label)",
-      "                continue",
-      "            if len(path) != expected_len:",
-      "                result['failed'].append('%s: path length is %d cells, expected the shortest path of %d cells.' % (label, len(path), expected_len))",
-      "                continue",
-      "            result['passed'].append('%s: found a valid shortest path (%d cells)' % (label, len(path)))",
-      "    except Exception as e:",
-      "        result['error'] = '%s: %s' % (type(e).__name__, e)",
-      "        result['traceback'] = traceback.format_exc()",
-      "    result['ok'] = result['error'] is None and len(result['failed']) == 0",
-      "    return json.dumps(result)",
-      "_run()",
-    ].join("\n");
-  }
-
-  function harness_scoreBoard_5_1(code) {
+  function harness_score_6(code) {
     var fnSrc = buildFnSource("self, ITEM_SCORE", code, "    ");
     return [
       PY_PRELUDE,
@@ -1580,7 +1508,7 @@
     ].join("\n");
   }
 
-  function harness_scoreBoard_5_2(code) {
+  function harness_score_7(code) {
     var fnSrc = buildFnSource("self, SWAMP_SCORE_PENALTY", code, "    ");
     return [
       PY_PRELUDE,
@@ -1619,34 +1547,63 @@
     ].join("\n");
   }
 
-  function harness_dijkstraFrontier_6_1(code) {
-    var fnSrc = buildFnSource("cost, step_cost", code, "    ");
+  // Merged Required Dijkstra relaxation (absorbed the old Bonus 6-1/6-2 -
+  // students already learned this exact relaxation, as one unit, in Game AI
+  // Lab mission 8). The student's snippet now covers: computing new_cost,
+  // deciding whether it's an improvement, updating distance/parent, AND
+  // pushing the improved route onto the queue (heapq is exposed to the
+  // isolated scope so heapq.heappush works exactly like the real function).
+  function harness_dijkstra_5(code) {
+    var fnSrc = buildFnSource("cost, step_cost, neighbor, current, distance, parent, queue", code, "    ");
     return [
-      PY_PRELUDE,
+      PY_PRELUDE + "import heapq",
       b64Line("FN_SRC", fnSrc),
       "def _run():",
       "    result = {'ok': False, 'passed': [], 'failed': [], 'error': None, 'traceback': None}",
       "    ns = {}",
       "    try:",
-      "        exec(compile(FN_SRC, '<student>', 'exec'), {}, ns)",
+      "        exec(compile(FN_SRC, '<student>', 'exec'), {'heapq': heapq}, ns)",
       "    except SyntaxError as e:",
       "        line = max(1, (e.lineno or 1) - 1)",
       "        result['error'] = 'Python syntax error on line %s: %s.' % (line, e.msg)",
       "        return json.dumps(result)",
       "    _fn = ns['_fn']",
-      "    cases = [(0, 5), (10, 3), (0, 0), (7, 1000), (250, 1)]",
+      "    cases = [",
+      "        ('fresh neighbor', {}, {}, 'B', 'A', 0, 5),",
+      "        ('improving neighbor', {'D': 10}, {'D': 'X'}, 'D', 'C', 0, 2),",
+      "        ('non-improving neighbor', {'E': 3}, {'E': 'Y'}, 'E', 'X', 0, 10),",
+      "        ('negative-weight cost', {'Z': 40}, {'Z': 'Y'}, 'Z', 'W', -20, 5),",
+      "    ]",
       "    try:",
-      "        for cost, step_cost in cases:",
-      "            out = _fn(cost, step_cost)",
-      "            if not isinstance(out, dict) or 'new_cost' not in out:",
-      "                result['failed'].append('cost=%s, step_cost=%s: you must create a variable named exactly `new_cost` (TODO 6-2 depends on this exact name).' % (cost, step_cost))",
-      "                continue",
-      "            got = out['new_cost']",
-      "            expected = cost + step_cost",
-      "            if got == expected:",
-      "                result['passed'].append('cost=%s, step_cost=%s -> new_cost=%s' % (cost, step_cost, got))",
+      "        for label, dist0, par0, neighbor, current, cost, step_cost in cases:",
+      "            distance = dict(dist0)",
+      "            parent = dict(par0)",
+      "            queue = []",
+      "            expected_new_cost = cost + step_cost",
+      "            should_improve = (neighbor not in distance) or expected_new_cost < distance[neighbor]",
+      "            _fn(cost, step_cost, neighbor, current, distance, parent, queue)",
+      "            if should_improve:",
+      "                ok_d = distance.get(neighbor) == expected_new_cost",
+      "                ok_p = parent.get(neighbor) == current",
+      "                ok_q = any(isinstance(q, tuple) and len(q) == 2 and q[0] == expected_new_cost and q[1] == neighbor for q in queue)",
+      "                if ok_d and ok_p and ok_q:",
+      "                    result['passed'].append('%s: distance/parent updated and the improved route was pushed to the queue' % label)",
+      "                else:",
+      "                    msgs = []",
+      "                    if not ok_d:",
+      "                        msgs.append('distance[%r] is %r, expected %r' % (neighbor, distance.get(neighbor), expected_new_cost))",
+      "                    if not ok_p:",
+      "                        msgs.append('parent[%r] is %r, expected %r' % (neighbor, parent.get(neighbor), current))",
+      "                    if not ok_q:",
+      "                        msgs.append('the improved (new_cost, neighbor) tuple was not pushed to the queue with heapq.heappush')",
+      "                    result['failed'].append('%s: %s.' % (label, '; '.join(msgs)))",
       "            else:",
-      "                result['failed'].append('cost=%s, step_cost=%s: expected new_cost=%s, got %s.' % (cost, step_cost, expected, got))",
+      "                ok_d = distance.get(neighbor) == dist0[neighbor]",
+      "                ok_p = parent.get(neighbor) == par0[neighbor]",
+      "                if ok_d and ok_p:",
+      "                    result['passed'].append('%s: correctly left unchanged since it was not an improvement' % label)",
+      "                else:",
+      "                    result['failed'].append('%s: distance/parent were changed even though new_cost was not an improvement over the existing distance[%r]=%r.' % (label, neighbor, dist0[neighbor]))",
       "    except Exception as e:",
       "        result['error'] = '%s: %s' % (type(e).__name__, e)",
       "        result['traceback'] = traceback.format_exc()",
@@ -1656,41 +1613,140 @@
     ].join("\n");
   }
 
-  function harness_dijkstraFrontier_6_2(code) {
-    var fnSrc = buildFnSource("distance, parent, neighbor, current, new_cost", code, "    ");
+  // Bonus monster FSM (TODO 13): isolates just update_state's dispatch -
+  // distance in, self.state out. Boundary cases are exact-equality tests
+  // (Game AI Lab mission 3's "check the closer range first" idea): the
+  // ATTACK/CHASE boundary itself must land in CHASE, not ATTACK, since the
+  // real code uses strict `<` comparisons.
+  function harness_monsterFsm_13(code) {
+    var fnSrc = buildFnSource("self, distance", code, "    ");
     return [
       PY_PRELUDE,
+      "MONSTER_ATTACK_DISTANCE = 50",
+      "MONSTER_CHASE_DISTANCE = 200",
       b64Line("FN_SRC", fnSrc),
       "def _run():",
       "    result = {'ok': False, 'passed': [], 'failed': [], 'error': None, 'traceback': None}",
+      "    class SelfObj:",
+      "        def __init__(self):",
+      "            self.state = None",
       "    ns = {}",
       "    try:",
-      "        exec(compile(FN_SRC, '<student>', 'exec'), {}, ns)",
+      "        exec(compile(FN_SRC, '<student>', 'exec'), {'MONSTER_ATTACK_DISTANCE': MONSTER_ATTACK_DISTANCE, 'MONSTER_CHASE_DISTANCE': MONSTER_CHASE_DISTANCE}, ns)",
       "    except SyntaxError as e:",
       "        line = max(1, (e.lineno or 1) - 1)",
       "        result['error'] = 'Python syntax error on line %s: %s.' % (line, e.msg)",
       "        return json.dumps(result)",
       "    _fn = ns['_fn']",
       "    cases = [",
-      "        ('fresh neighbor', {}, {}, 'B', 'A', 5),",
-      "        ('improving neighbor', {'D': 10}, {'D': 'X'}, 'D', 'C', 2),",
-      "        ('negative-weight cost', {'Z': 40}, {'Z': 'Y'}, 'Z', 'W', -15),",
+      "        ('well inside ATTACK range', 10, 'ATTACK'),",
+      "        ('just under the ATTACK edge', 49, 'ATTACK'),",
+      "        ('exactly at the ATTACK/CHASE boundary', 50, 'CHASE'),",
+      "        ('well inside CHASE range', 120, 'CHASE'),",
+      "        ('just under the CHASE edge', 199, 'CHASE'),",
+      "        ('exactly at the CHASE/PATROL boundary', 200, 'PATROL'),",
+      "        ('far away', 500, 'PATROL'),",
       "    ]",
       "    try:",
-      "        for label, dist0, par0, neighbor, current, new_cost in cases:",
-      "            distance = dict(dist0)",
-      "            parent = dict(par0)",
-      "            _fn(distance, parent, neighbor, current, new_cost)",
-      "            ok_d = distance.get(neighbor) == new_cost",
-      "            ok_p = parent.get(neighbor) == current",
-      "            if ok_d and ok_p:",
-      "                result['passed'].append('%s: distance and parent both updated correctly' % label)",
-      "            elif not ok_d and ok_p:",
-      "                result['failed'].append('%s: parent updated but distance[%r] is %r, expected %r.' % (label, neighbor, distance.get(neighbor), new_cost))",
-      "            elif ok_d and not ok_p:",
-      "                result['failed'].append('%s: distance updated but parent[%r] is %r, expected %r.' % (label, neighbor, parent.get(neighbor), current))",
+      "        for label, distance, expected in cases:",
+      "            self = SelfObj()",
+      "            _fn(self, distance)",
+      "            if self.state == expected:",
+      "                result['passed'].append('%s (distance=%d): state=%s' % (label, distance, expected))",
       "            else:",
-      "                result['failed'].append('%s: neither distance[%r] nor parent[%r] was updated.' % (label, neighbor, neighbor))",
+      "                result['failed'].append('%s (distance=%d): expected state=%r, got %r.' % (label, distance, expected, self.state))",
+      "    except Exception as e:",
+      "        result['error'] = '%s: %s' % (type(e).__name__, e)",
+      "        result['traceback'] = traceback.format_exc()",
+      "    result['ok'] = result['error'] is None and len(result['failed']) == 0",
+      "    return json.dumps(result)",
+      "_run()",
+    ].join("\n");
+  }
+
+  // Bonus monster chase movement (TODO 14): a small open FakeMaze + a
+  // from-scratch (BFS-shaped) find_path_dijkstra ground truth, so this
+  // harness isolates "did you call find_path_dijkstra and move to path[1]"
+  // without depending on the student's OWN Required TODO 5 code at all.
+  function harness_monsterChase_14(code) {
+    var fnSrc = buildFnSource("self, maze, player_position", code, "    ");
+    return [
+      PY_PRELUDE + "from collections import deque",
+      b64Line("FN_SRC", fnSrc),
+      "def find_path_dijkstra(map_data, start, end, get_weight=None, all_weights=None):",
+      "    queue = deque([start])",
+      "    parent = {start: None}",
+      "    visited = {start}",
+      "    while queue:",
+      "        current = queue.popleft()",
+      "        if current == end:",
+      "            break",
+      "        for neighbor in map_data.get_open_neighbors(current):",
+      "            if neighbor not in visited:",
+      "                visited.add(neighbor)",
+      "                parent[neighbor] = current",
+      "                queue.append(neighbor)",
+      "    if end not in parent:",
+      "        return []",
+      "    path = [end]",
+      "    cur = end",
+      "    while cur != start:",
+      "        cur = parent[cur]",
+      "        path.append(cur)",
+      "    path.reverse()",
+      "    return path",
+      "class FakeMaze:",
+      "    def __init__(self, rows, cols):",
+      "        self.rows = rows",
+      "        self.cols = cols",
+      "    def get_open_neighbors(self, position):",
+      "        r, c = position",
+      "        out = []",
+      "        for dr, dc in ((-1, 0), (1, 0), (0, -1), (0, 1)):",
+      "            nr, nc = r + dr, c + dc",
+      "            if 0 <= nr < self.rows and 0 <= nc < self.cols:",
+      "                out.append((nr, nc))",
+      "        return out",
+      "class SelfObj:",
+      "    def __init__(self, row, col):",
+      "        self.row = row",
+      "        self.col = col",
+      "    def get_position(self):",
+      "        return (self.row, self.col)",
+      "def _run():",
+      "    result = {'ok': False, 'passed': [], 'failed': [], 'error': None, 'traceback': None}",
+      "    ns = {}",
+      "    try:",
+      "        exec(compile(FN_SRC, '<student>', 'exec'), {'find_path_dijkstra': find_path_dijkstra}, ns)",
+      "    except SyntaxError as e:",
+      "        line = max(1, (e.lineno or 1) - 1)",
+      "        result['error'] = 'Python syntax error on line %s: %s.' % (line, e.msg)",
+      "        return json.dumps(result)",
+      "    _fn = ns['_fn']",
+      "    maze = FakeMaze(6, 6)",
+      "    cases = [",
+      "        ('several tiles away', (0, 0), (0, 4)),",
+      "        ('across the grid', (5, 5), (0, 0)),",
+      "        ('already adjacent', (2, 2), (2, 3)),",
+      "    ]",
+      "    try:",
+      "        for label, start, target in cases:",
+      "            self = SelfObj(*start)",
+      "            before = self.get_position()",
+      "            _fn(self, maze, target)",
+      "            after = self.get_position()",
+      "            if after == before:",
+      "                result['failed'].append('%s: the monster did not move at all - did you call find_path_dijkstra and check len(path) > 1?' % label)",
+      "                continue",
+      "            manhattan_before = abs(before[0] - target[0]) + abs(before[1] - target[1])",
+      "            manhattan_after = abs(after[0] - target[0]) + abs(after[1] - target[1])",
+      "            is_neighbor = abs(after[0] - before[0]) + abs(after[1] - before[1]) == 1",
+      "            if not is_neighbor:",
+      "                result['failed'].append('%s: moved from %r to %r, which is not exactly one tile away - move to path[1], not further.' % (label, before, after))",
+      "            elif manhattan_after >= manhattan_before:",
+      "                result['failed'].append('%s: moved from %r to %r, which is not closer to the player at %r.' % (label, before, after, target))",
+      "            else:",
+      "                result['passed'].append('%s: moved one tile closer, from %r to %r' % (label, before, after))",
       "    except Exception as e:",
       "        result['error'] = '%s: %s' % (type(e).__name__, e)",
       "        result['traceback'] = traceback.format_exc()",
@@ -1701,19 +1757,19 @@
   }
 
   var BEHAVIOUR_HARNESSES = {
-    playerMove_2_1: harness_playerMove_2_1,
-    playerMove_2_2: harness_playerMove_2_2,
-    playerMove_2_3: harness_playerMove_2_3,
-    bfsFlood_4: harness_bfsFlood_4,
-    scoreBoard_5_1: harness_scoreBoard_5_1,
-    scoreBoard_5_2: harness_scoreBoard_5_2,
-    dijkstraFrontier_6_1: harness_dijkstraFrontier_6_1,
-    dijkstraFrontier_6_2: harness_dijkstraFrontier_6_2,
+    movement_2: harness_movement_2,
+    guardClause_3: harness_guardClause_3,
+    positionDelta_4: harness_positionDelta_4,
+    dijkstra_5: harness_dijkstra_5,
+    score_6: harness_score_6,
+    score_7: harness_score_7,
+    monsterFsm_13: harness_monsterFsm_13,
+    monsterChase_14: harness_monsterChase_14,
   };
 
   // ------------------------------------------------- 11. syntax harnesses
   //
-  // These are the open-ended TODOs (1, 7, 8, 9, 10): there is no single
+  // These are the open-ended TODOs (1, 8, 9, 10, 11, 12, 15): there is no single
   // "correct" value, so passing only requires two things:
   //   1. the code compiles and executes without a Python error, and
   //   2. every name in mustDefine actually got defined (so nothing crashes
@@ -1754,21 +1810,14 @@
       "    try:",
       "        ns = {}",
       "        exec(compile(CODE, '<student>', 'exec'), {}, ns)",
-      "        names = ['TITLE', 'GAME_SUBTITLE', 'MISSION_RULES', 'HOW_TO_PLAY_RULES']",
+      "        names = ['TITLE', 'GAME_SUBTITLE']",
       "        missing = [n for n in names if n not in ns]",
       "        if missing:",
       "            result['failed'].append('Missing definition(s): %s. Keep the variable names exactly as given.' % ', '.join(missing))",
       "        else:",
-      "            result['passed'].append('All four are defined: TITLE=%s, GAME_SUBTITLE=%s, MISSION_RULES (%s item(s)), HOW_TO_PLAY_RULES (%s item(s)).' % (",
-      "                _short_repr(ns['TITLE']), _short_repr(ns['GAME_SUBTITLE']),",
-      "                len(ns['MISSION_RULES']) if isinstance(ns['MISSION_RULES'], (list, tuple)) else '?',",
-      "                len(ns['HOW_TO_PLAY_RULES']) if isinstance(ns['HOW_TO_PLAY_RULES'], (list, tuple)) else '?',",
-      "            ))",
+      "            result['passed'].append('Both are defined: TITLE=%s, GAME_SUBTITLE=%s.' % (_short_repr(ns['TITLE']), _short_repr(ns['GAME_SUBTITLE'])))",
       "            if not isinstance(ns['TITLE'], str) or not isinstance(ns['GAME_SUBTITLE'], str):",
       "                result['warnings'].append('Heads up: TITLE and GAME_SUBTITLE are usually plain strings — this still counts as complete, but double-check it looks right in the title-screen preview.')",
-      "            for rn in ('MISSION_RULES', 'HOW_TO_PLAY_RULES'):",
-      "                if not isinstance(ns[rn], list) or len(ns[rn]) == 0:",
-      "                    result['warnings'].append('Heads up: %s is usually a non-empty list of strings — this still counts as complete, but double-check it looks right in the preview.' % rn)",
       "    except Exception as e:",
       "        result['error'] = '%s: %s' % (type(e).__name__, e)",
       "        result['traceback'] = traceback.format_exc()",
@@ -1778,8 +1827,8 @@
     ].join("\n");
   }
 
-  function harness_syntax_7(code) {
-    var starter = linesOf(STEP_BY_ID["7"].starter);
+  function harness_syntax_8(code) {
+    var starter = linesOf(STEP_BY_ID["8"].starter);
     return [
       pySyntaxPrelude(code, starter),
       "def _run():",
@@ -1834,8 +1883,8 @@
     ].join("\n");
   }
 
-  function harness_syntax_8(code) {
-    var imageVars = ["PLAYER_IMAGE_PATH", "GOAL_IMAGE_PATH", "SWAMP_IMAGE_PATH", "ITEM_IMAGE_PATH", "BOMB_IMAGE_PATH", "FLOOR_TILE_IMAGE_PATH"];
+  function harness_syntax_9(code) {
+    var imageVars = ["PLAYER_IMAGE_PATH", "GOAL_IMAGE_PATH", "SWAMP_IMAGE_PATH", "ITEM_IMAGE_PATH", "BOMB_IMAGE_PATH", "FLOOR_TILE_IMAGE_PATH", "MONSTER_IMAGE_PATH"];
     var soundVars = ["SWAMP_SOUND_PATH", "ITEM_SOUND_PATH", "BOMB_SOUND_PATH", "BACKGROUND_MUSIC_PATH"];
     return [
       pySyntaxPrelude(code, ""),
@@ -1889,10 +1938,12 @@
     ].join("\n");
   }
 
-  function harness_syntax_9(code) {
-    var starter = linesOf(STEP_BY_ID["9"].starter);
+  function harness_syntax_10(code) {
+    var starter = linesOf(STEP_BY_ID["10"].starter);
+    var itemKeys = ["name", "color", "score", "hint_bonus", "route_weight"];
     return [
       pySyntaxPrelude(code, starter),
+      "ITEM_KEYS = " + JSON.stringify(itemKeys).replace(/"/g, "'"),
       "def _run():",
       "    result = {'ok': False, 'passed': [], 'failed': [], 'warnings': [], 'error': None, 'traceback': None}",
       "    try:",
@@ -1903,18 +1954,33 @@
       "    try:",
       "        ns = {}",
       "        exec(compile(CODE, '<student>', 'exec'), {}, ns)",
-      "        names = ['CUSTOM_ITEM_NAME', 'CUSTOM_ITEM_COLOR', 'CUSTOM_ITEM_SCORE', 'CUSTOM_ITEM_HINT_BONUS', 'CUSTOM_ITEM_ROUTE_WEIGHT']",
-      "        missing = [n for n in names if n not in ns]",
-      "        if missing:",
-      "            result['failed'].append('Missing definition(s): %s.' % ', '.join(missing))",
+      "        if 'CUSTOM_ITEMS' not in ns:",
+      "            result['failed'].append('Missing definition: CUSTOM_ITEMS.')",
+      "            result['ok'] = False",
+      "            return json.dumps(result)",
+      "        items_list = ns['CUSTOM_ITEMS']",
+      "        if not isinstance(items_list, list) or len(items_list) == 0:",
+      "            result['warnings'].append('Heads up: CUSTOM_ITEMS is usually a non-empty list of item dictionaries — this still counts as complete, but double-check it in the Play tab.')",
+      "            result['passed'].append('CUSTOM_ITEMS is defined.')",
       "        else:",
-      "            result['passed'].append('All five are defined: NAME=%s, COLOR=%s, SCORE=%s, HINT_BONUS=%s, ROUTE_WEIGHT=%s.' % tuple(_short_repr(ns[n]) for n in names))",
-      "            color = ns['CUSTOM_ITEM_COLOR']",
-      "            if not (isinstance(color, tuple) and len(color) == 3 and all(isinstance(v, int) and 0 <= v <= 255 for v in color)):",
-      "                result['warnings'].append('Heads up: CUSTOM_ITEM_COLOR is usually a 3-tuple of ints 0-255, e.g. (255, 215, 0) — this still counts as complete, but double-check it renders correctly.')",
-      "            for n in ('CUSTOM_ITEM_SCORE', 'CUSTOM_ITEM_HINT_BONUS', 'CUSTOM_ITEM_ROUTE_WEIGHT'):",
-      "                if type(ns[n]) is not int:",
-      "                    result['warnings'].append('Heads up: %s is usually a plain integer — this still counts as complete, but double-check it behaves as expected.' % n)",
+      "            result['passed'].append('CUSTOM_ITEMS is defined with %d item(s).' % len(items_list))",
+      "            for i, item_def in enumerate(items_list):",
+      "                label = 'item %d' % (i + 1)",
+      "                if not isinstance(item_def, dict):",
+      "                    result['warnings'].append('Heads up: %s is not a dictionary.' % label)",
+      "                    continue",
+      "                keys = set(item_def.keys())",
+      "                missing_keys = set(ITEM_KEYS) - keys",
+      "                if missing_keys:",
+      "                    result['warnings'].append('Heads up: %s is missing key(s): %s.' % (label, ', '.join(sorted(missing_keys))))",
+      "                    continue",
+      "                color = item_def.get('color')",
+      "                if not (isinstance(color, tuple) and len(color) == 3 and all(isinstance(v, int) and 0 <= v <= 255 for v in color)):",
+      "                    result['warnings'].append('Heads up: %s color is usually a 3-tuple of ints 0-255, e.g. (255, 215, 0) — still counts as complete, but double-check it renders correctly.' % label)",
+      "                for n in ('score', 'hint_bonus', 'route_weight'):",
+      "                    if type(item_def.get(n)) is not int:",
+      "                        result['warnings'].append('Heads up: %s[\\'%s\\'] is usually a plain integer — this still counts as complete, but double-check it behaves as expected.' % (label, n))",
+      "                result['passed'].append('%s: %s' % (label, _short_repr(item_def)))",
       "    except Exception as e:",
       "        result['error'] = '%s: %s' % (type(e).__name__, e)",
       "        result['traceback'] = traceback.format_exc()",
@@ -1924,8 +1990,8 @@
     ].join("\n");
   }
 
-  function harness_syntax_10(code) {
-    var starter = linesOf(STEP_BY_ID["10"].starter);
+  function harness_syntax_11(code) {
+    var starter = linesOf(STEP_BY_ID["11"].starter);
     return [
       pySyntaxPrelude(code, starter),
       "def _run():",
@@ -1961,12 +2027,88 @@
     ].join("\n");
   }
 
+  function harness_syntax_12(code) {
+    var starter = linesOf(STEP_BY_ID["12"].starter);
+    return [
+      pySyntaxPrelude(code, starter),
+      "def _run():",
+      "    result = {'ok': False, 'passed': [], 'failed': [], 'warnings': [], 'error': None, 'traceback': None}",
+      "    try:",
+      "        compile(CODE, '<student>', 'exec')",
+      "    except SyntaxError as e:",
+      "        result['error'] = 'Python syntax error on line %s: %s.' % (e.lineno, e.msg)",
+      "        return json.dumps(result)",
+      "    try:",
+      "        ns = {}",
+      "        exec(compile(CODE, '<student>', 'exec'), {}, ns)",
+      "        names = ['MONSTER_ATTACK_DISTANCE', 'MONSTER_CHASE_DISTANCE', 'MONSTER_SPEED_NORMAL', 'MONSTER_SPEED_SWAMP', 'MONSTER_SPEED_CUSTOM', 'MONSTER_COUNT']",
+      "        missing = [n for n in names if n not in ns]",
+      "        if missing:",
+      "            result['failed'].append('Missing definition(s): %s.' % ', '.join(missing))",
+      "        else:",
+      "            result['passed'].append('All six are defined: %s.' % ', '.join('%s=%s' % (n, _short_repr(ns[n])) for n in names))",
+      "            for n in names:",
+      "                if type(ns[n]) is not int:",
+      "                    result['warnings'].append('Heads up: %s is usually a plain integer — this still counts as complete, but double-check it behaves as expected.' % n)",
+      "            attack = ns.get('MONSTER_ATTACK_DISTANCE')",
+      "            chase = ns.get('MONSTER_CHASE_DISTANCE')",
+      "            if isinstance(attack, int) and isinstance(chase, int) and not (chase > attack):",
+      "                result['warnings'].append('Heads up: MONSTER_CHASE_DISTANCE is usually greater than MONSTER_ATTACK_DISTANCE, or the monster will never notice you coming — this still counts as complete, but double-check it in the Play tab.')",
+      "            count = ns.get('MONSTER_COUNT')",
+      "            if isinstance(count, int) and count < 0:",
+      "                result['warnings'].append('Heads up: MONSTER_COUNT is usually 0 or more.')",
+      "    except Exception as e:",
+      "        result['error'] = '%s: %s' % (type(e).__name__, e)",
+      "        result['traceback'] = traceback.format_exc()",
+      "    result['ok'] = result['error'] is None and len(result['failed']) == 0",
+      "    return json.dumps(result)",
+      "_run()",
+    ].join("\n");
+  }
+
+  function harness_syntax_15(code) {
+    var starter = linesOf(STEP_BY_ID["15"].starter);
+    return [
+      pySyntaxPrelude(code, starter),
+      "def _run():",
+      "    result = {'ok': False, 'passed': [], 'failed': [], 'warnings': [], 'error': None, 'traceback': None}",
+      "    try:",
+      "        compile(CODE, '<student>', 'exec')",
+      "    except SyntaxError as e:",
+      "        result['error'] = 'Python syntax error on line %s: %s.' % (e.lineno, e.msg)",
+      "        return json.dumps(result)",
+      "    try:",
+      "        ns = {}",
+      "        exec(compile(CODE, '<student>', 'exec'), {}, ns)",
+      "        names = ['MISSION_RULES', 'HOW_TO_PLAY_RULES']",
+      "        missing = [n for n in names if n not in ns]",
+      "        if missing:",
+      "            result['failed'].append('Missing definition(s): %s. Keep the variable names exactly as given.' % ', '.join(missing))",
+      "        else:",
+      "            result['passed'].append('Both are defined: MISSION_RULES (%s item(s)), HOW_TO_PLAY_RULES (%s item(s)).' % (",
+      "                len(ns['MISSION_RULES']) if isinstance(ns['MISSION_RULES'], (list, tuple)) else '?',",
+      "                len(ns['HOW_TO_PLAY_RULES']) if isinstance(ns['HOW_TO_PLAY_RULES'], (list, tuple)) else '?',",
+      "            ))",
+      "            for rn in ('MISSION_RULES', 'HOW_TO_PLAY_RULES'):",
+      "                if not isinstance(ns[rn], list) or len(ns[rn]) == 0:",
+      "                    result['warnings'].append('Heads up: %s is usually a non-empty list of strings — this still counts as complete, but double-check it looks right in the preview.' % rn)",
+      "    except Exception as e:",
+      "        result['error'] = '%s: %s' % (type(e).__name__, e)",
+      "        result['traceback'] = traceback.format_exc()",
+      "    result['ok'] = result['error'] is None and len(result['failed']) == 0",
+      "    return json.dumps(result)",
+      "_run()",
+    ].join("\n");
+  }
+
   var SYNTAX_HARNESSES = {
     "1": harness_syntax_1,
-    "7": harness_syntax_7,
     "8": harness_syntax_8,
     "9": harness_syntax_9,
     "10": harness_syntax_10,
+    "11": harness_syntax_11,
+    "12": harness_syntax_12,
+    "15": harness_syntax_15,
   };
 
   // -------------------------------------------- 12. hints/skip/reset/io
@@ -2022,7 +2164,7 @@
     if (state.assetData && state.assetData.uploadedFiles && state.assetData.uploadedFiles.length) {
       showConfirm(
         "Remember your uploaded files",
-        "progress.json saved your code, painted maps, and the list of " + state.assetData.uploadedFiles.length + " file(s) you added in TODO 8 — but NOT the image/sound files themselves. Those live on your disk (or your connected project folder). Keep them safe, or you'll need to re-upload them next time.",
+        "progress.json saved your code, painted maps, and the list of " + state.assetData.uploadedFiles.length + " file(s) you added in TODO 9 — but NOT the image/sound files themselves. Those live on your disk (or your connected project folder). Keep them safe, or you'll need to re-upload them next time.",
         { confirmLabel: "Got it", cancelLabel: "Close" }
       );
     }
@@ -2463,12 +2605,15 @@
     ].join("\n");
   }
 
-  function traceHarness_bfsFlood(code4, mazeGrid, start, end, swampCount) {
-    var fn4 = buildFnSource("parent, neighbor, current", code4, "    ");
+  // Play tab swamp placement: the student's merged Required TODO 5 code,
+  // called with UNIFORM weights - the same "no weights passed" call maze.py
+  // itself makes in create_swamps(), which is exactly what makes Dijkstra
+  // degenerate into BFS (see TODO 5's lead / pathfinding.py's docstring).
+  function traceHarness_swampPlacement(code5, mazeGrid, start, end, swampCount) {
+    var fn5 = buildFnSource("cost, step_cost, neighbor, current, distance, parent, queue", code5, "    ");
     return [
-      "import json, base64, random, traceback",
-      "from collections import deque",
-      b64Line("FN4_SRC", fn4),
+      "import json, base64, random, heapq, traceback",
+      b64Line("FN5_SRC", fn5),
       "GRID = " + JSON.stringify(JSON.stringify(mazeGrid)),
       "START = " + JSON.stringify(start),
       "END = " + JSON.stringify(end),
@@ -2491,35 +2636,37 @@
       "                    out.append((nr, nc))",
       "        return out",
       "    try:",
-      "        exec(compile(FN4_SRC, '<t4>', 'exec'), {}, {})",
+      "        exec(compile(FN5_SRC, '<t5>', 'exec'), {'heapq': heapq}, {})",
       "    except SyntaxError as e:",
       "        result['ok'] = False",
       "        result['error'] = 'Python syntax error on line %s: %s.' % (e.lineno, e.msg)",
       "        return json.dumps(result)",
-      "    def find_path_bfs(start, end):",
-      "        queue = deque([start])",
+      "    def find_path_uniform(start, end):",
+      "        queue = [(0, start)]",
+      "        distance = {start: 0}",
       "        parent = {start: None}",
-      "        visited = {start}",
+      "        visited = set()",
       "        steps = 0",
       "        while queue:",
       "            steps += 1",
       "            if steps > BUDGET:",
       "                result['stopped_reason'] = 'budget'",
       "                break",
-      "            current = queue.popleft()",
+      "            cost, current = heapq.heappop(queue)",
+      "            if current in visited:",
+      "                continue",
+      "            visited.add(current)",
       "            if current == end:",
       "                break",
       "            for neighbor in get_open_neighbors(current):",
-      "                if neighbor not in visited:",
-      "                    visited.add(neighbor)",
-      "                    ns = {'parent': parent, 'neighbor': neighbor, 'current': current}",
-      "                    exec(compile(FN4_SRC, '<t4>', 'exec'), {}, ns)",
-      "                    out = ns['_fn'](parent, neighbor, current)",
-      "                    if isinstance(out, dict) and 'parent' in out:",
-      "                        parent = out['parent']",
-      "                    if len(result['trace']) < TRACE_CAP:",
-      "                        result['trace'].append({'type': 'visit', 'cell': list(neighbor), 'from': list(current)})",
-      "                    queue.append(neighbor)",
+      "                if neighbor in visited:",
+      "                    continue",
+      "                step_cost = 1",
+      "                ns5 = {}",
+      "                exec(compile(FN5_SRC, '<t5>', 'exec'), {'heapq': heapq}, ns5)",
+      "                ns5['_fn'](cost, step_cost, neighbor, current, distance, parent, queue)",
+      "                if neighbor in distance and len(result['trace']) < TRACE_CAP:",
+      "                    result['trace'].append({'type': 'visit', 'cell': list(neighbor), 'from': list(current)})",
       "        if end not in parent:",
       "            return []",
       "        path = [end]; cur = end; seen_back = {end}",
@@ -2531,7 +2678,7 @@
       "        path.reverse()",
       "        return path",
       "    try:",
-      "        path = find_path_bfs(start, end)",
+      "        path = find_path_uniform(start, end)",
       "        result['path'] = [list(p) for p in path]",
       "        result['path_len'] = len(path)",
       "        if len(result['trace']) < TRACE_CAP and path:",
@@ -2562,15 +2709,15 @@
     ].join("\n");
   }
 
-  function traceHarness_scoreBoard(code51, code52, code9, code10, tiles, startingScore) {
-    var fn51 = buildFnSource("self, ITEM_SCORE", code51, "    ");
-    var fn52 = buildFnSource("self, SWAMP_SCORE_PENALTY", code52, "    ");
+  function traceHarness_scoreBoard(code6, code7, code10, code11, tiles, startingScore) {
+    var fn6 = buildFnSource("self, ITEM_SCORE", code6, "    ");
+    var fn7 = buildFnSource("self, SWAMP_SCORE_PENALTY", code7, "    ");
     return [
       "import json, base64, traceback",
-      b64Line("FN51_SRC", fn51),
-      b64Line("FN52_SRC", fn52),
-      b64Line("CODE9", code9),
+      b64Line("FN6_SRC", fn6),
+      b64Line("FN7_SRC", fn7),
       b64Line("CODE10", code10),
+      b64Line("CODE11", code11),
       "TILES = " + JSON.stringify(JSON.stringify(tiles)),
       "START_SCORE = " + Number(startingScore),
       "ITEM_SCORE = 100",
@@ -2578,8 +2725,8 @@
       "def _run():",
       "    result = {'ok': True, 'error': None, 'traceback': None, 'trace': [], 'custom_item': None, 'custom_terrain': None}",
       "    try:",
-      "        exec(compile(FN51_SRC, '<t51>', 'exec'), {}, {})",
-      "        exec(compile(FN52_SRC, '<t52>', 'exec'), {}, {})",
+      "        exec(compile(FN6_SRC, '<t6>', 'exec'), {}, {})",
+      "        exec(compile(FN7_SRC, '<t7>', 'exec'), {}, {})",
       "    except SyntaxError as e:",
       "        result['ok'] = False",
       "        result['error'] = 'Python syntax error on line %s: %s.' % (e.lineno, e.msg)",
@@ -2589,38 +2736,38 @@
       "            self.score = score",
       "    self_ = SelfObj(START_SCORE)",
       "    try:",
+      "        ns10 = {}",
+      "        exec(compile(CODE10, '<t10>', 'exec'), {}, ns10)",
+      "        custom_items = ns10.get('CUSTOM_ITEMS') or [{'name': 'Custom Item', 'color': (180, 180, 180), 'score': 0, 'hint_bonus': 0, 'route_weight': 0}]",
+      "        first_item = custom_items[0]",
       "        for tile in json.loads(TILES):",
       "            kind = tile['kind']",
       "            before = self_.score",
       "            if kind == 'treasure':",
       "                ns = {}",
-      "                exec(compile(FN51_SRC, '<t51>', 'exec'), {}, ns)",
+      "                exec(compile(FN6_SRC, '<t6>', 'exec'), {}, ns)",
       "                ns['_fn'](self_, ITEM_SCORE)",
       "                label = 'Treasure'",
       "            elif kind == 'swamp':",
       "                ns = {}",
-      "                exec(compile(FN52_SRC, '<t52>', 'exec'), {}, ns)",
+      "                exec(compile(FN7_SRC, '<t7>', 'exec'), {}, ns)",
       "                ns['_fn'](self_, SWAMP_SCORE_PENALTY)",
       "                label = 'Swamp'",
       "            elif kind == 'custom_item':",
-      "                ns9 = {}",
-      "                exec(compile(CODE9, '<t9>', 'exec'), {}, ns9)",
-      "                self_.score += ns9.get('CUSTOM_ITEM_SCORE', 0)",
-      "                label = str(ns9.get('CUSTOM_ITEM_NAME', 'Custom Item'))",
+      "                self_.score += first_item.get('score', 0)",
+      "                label = str(first_item.get('name', 'Custom Item'))",
       "            elif kind == 'custom_terrain':",
-      "                ns10 = {}",
-      "                exec(compile(CODE10, '<t10>', 'exec'), {}, ns10)",
-      "                self_.score += ns10.get('CUSTOM_TERRAIN_SCORE_CHANGE', 0)",
-      "                label = str(ns10.get('CUSTOM_TERRAIN_NAME', 'Custom Terrain'))",
+      "                ns11 = {}",
+      "                exec(compile(CODE11, '<t11>', 'exec'), {}, ns11)",
+      "                self_.score += ns11.get('CUSTOM_TERRAIN_SCORE_CHANGE', 0)",
+      "                label = str(ns11.get('CUSTOM_TERRAIN_NAME', 'Custom Terrain'))",
       "            else:",
       "                label = kind",
       "            result['trace'].append({'type': 'score', 'kind': kind, 'label': label, 'delta': self_.score - before, 'total': self_.score})",
-      "        ns9b = {}",
-      "        exec(compile(CODE9, '<t9>', 'exec'), {}, ns9b)",
-      "        result['custom_item'] = {'name': str(ns9b.get('CUSTOM_ITEM_NAME', 'Custom Item')), 'color': list(ns9b.get('CUSTOM_ITEM_COLOR', (180, 180, 180))), 'score': ns9b.get('CUSTOM_ITEM_SCORE', 0), 'weight': ns9b.get('CUSTOM_ITEM_ROUTE_WEIGHT', 0)}",
-      "        ns10b = {}",
-      "        exec(compile(CODE10, '<t10>', 'exec'), {}, ns10b)",
-      "        result['custom_terrain'] = {'name': str(ns10b.get('CUSTOM_TERRAIN_NAME', 'Custom Terrain')), 'color': list(ns10b.get('CUSTOM_TERRAIN_COLOR', (180, 180, 180))), 'change': ns10b.get('CUSTOM_TERRAIN_SCORE_CHANGE', 0)}",
+      "        result['custom_item'] = {'name': str(first_item.get('name', 'Custom Item')), 'color': list(first_item.get('color', (180, 180, 180))), 'score': first_item.get('score', 0), 'weight': first_item.get('route_weight', 0)}",
+      "        ns11b = {}",
+      "        exec(compile(CODE11, '<t11>', 'exec'), {}, ns11b)",
+      "        result['custom_terrain'] = {'name': str(ns11b.get('CUSTOM_TERRAIN_NAME', 'Custom Terrain')), 'color': list(ns11b.get('CUSTOM_TERRAIN_COLOR', (180, 180, 180))), 'change': ns11b.get('CUSTOM_TERRAIN_SCORE_CHANGE', 0)}",
       "    except Exception as e:",
       "        result['ok'] = False",
       "        result['error'] = '%s: %s' % (type(e).__name__, e)",
@@ -2630,13 +2777,15 @@
     ].join("\n");
   }
 
-  function traceHarness_dijkstra(code61, code62, rows, cols, weights, start, end) {
-    var fn61 = buildFnSource("cost, step_cost", code61, "    ");
-    var fn62 = buildFnSource("distance, parent, neighbor, current, new_cost", code62, "    ");
+  // Standalone weighted-grid demo for Required TODO 5 (merged relaxation).
+  // Splices the student's ONE relaxation block (now including the queue
+  // push) fresh on every neighbor visit, same style as the other trace
+  // harnesses that animate a live student function.
+  function traceHarness_dijkstra(code5, rows, cols, weights, start, end) {
+    var fn5 = buildFnSource("cost, step_cost, neighbor, current, distance, parent, queue", code5, "    ");
     return [
       "import json, base64, heapq, traceback",
-      b64Line("FN61_SRC", fn61),
-      b64Line("FN62_SRC", fn62),
+      b64Line("FN5_SRC", fn5),
       "ROWS = " + Number(rows),
       "COLS = " + Number(cols),
       "WEIGHTS = " + JSON.stringify(JSON.stringify(weights)),
@@ -2657,8 +2806,7 @@
       "                out.append((nr, nc))",
       "        return out",
       "    try:",
-      "        exec(compile(FN61_SRC, '<t61>', 'exec'), {}, {})",
-      "        exec(compile(FN62_SRC, '<t62>', 'exec'), {}, {})",
+      "        exec(compile(FN5_SRC, '<t5>', 'exec'), {'heapq': heapq}, {})",
       "    except SyntaxError as e:",
       "        result['ok'] = False",
       "        result['error'] = 'Python syntax error on line %s: %s.' % (e.lineno, e.msg)",
@@ -2686,35 +2834,17 @@
       "            visited.add(current)",
       "            if current == end:",
       "                break",
-      "            stop_now = False",
       "            for neighbor in get_open_neighbors(current):",
       "                if neighbor in visited:",
       "                    continue",
       "                step_cost = get_positive_weight(neighbor)",
       "                if step_cost <= 0:",
       "                    continue",
-      "                ns61 = {'cost': cost, 'step_cost': step_cost}",
-      "                exec(compile(FN61_SRC, '<t61>', 'exec'), {}, ns61)",
-      "                out61 = ns61['_fn'](cost, step_cost)",
-      "                new_cost = out61.get('new_cost') if isinstance(out61, dict) else None",
-      "                if new_cost is None:",
-      "                    result['stopped_reason'] = 'todo_incomplete'",
-      "                    stop_now = True",
-      "                    break",
-      "                if neighbor not in distance or new_cost < distance[neighbor]:",
-      "                    ns62 = {'distance': distance, 'parent': parent, 'neighbor': neighbor, 'current': current, 'new_cost': new_cost}",
-      "                    exec(compile(FN62_SRC, '<t62>', 'exec'), {}, ns62)",
-      "                    out62 = ns62['_fn'](distance, parent, neighbor, current, new_cost)",
-      "                    if isinstance(out62, dict):",
-      "                        if 'distance' in out62:",
-      "                            distance = out62['distance']",
-      "                        if 'parent' in out62:",
-      "                            parent = out62['parent']",
-      "                    heapq.heappush(queue, (new_cost, neighbor))",
-      "                    if len(result['trace']) < TRACE_CAP:",
-      "                        result['trace'].append({'type': 'visit', 'cell': list(neighbor), 'cost': new_cost, 'from': list(current), 'queue': [[q[0], list(q[1])] for q in sorted(queue)[:8]]})",
-      "            if stop_now:",
-      "                break",
+      "                ns5 = {}",
+      "                exec(compile(FN5_SRC, '<t5>', 'exec'), {'heapq': heapq}, ns5)",
+      "                ns5['_fn'](cost, step_cost, neighbor, current, distance, parent, queue)",
+      "                if neighbor in distance and len(result['trace']) < TRACE_CAP:",
+      "                    result['trace'].append({'type': 'visit', 'cell': list(neighbor), 'cost': distance[neighbor], 'from': list(current), 'queue': [[q[0], list(q[1])] for q in sorted(queue)[:8]]})",
       "        if end in parent:",
       "            path = [end]; cur = end; seen = {end}",
       "            while cur != start:",
@@ -2737,20 +2867,27 @@
 
   // Extracts CUSTOM_ITEM_*/CUSTOM_TERRAIN_* values without grading anything -
   // used by the Play tab to show the student's own custom item/terrain.
-  function traceHarness_customValues(code9, code10) {
+  // NOTE: CUSTOM_ITEMS (TODO 10) is a LIST - the real pygame game spawns
+  // every entry randomly per-instance (see items.py's CustomItem.item_def),
+  // but this Play-tab mini-preview simplifies to showing just the FIRST
+  // entry's stats/color (a deliberate, disclosed scope simplification -
+  // the full multi-item behaviour is only in the real exported game).
+  function traceHarness_customValues(code10, code11) {
     return [
       "import json, base64, traceback",
-      b64Line("CODE9", code9),
       b64Line("CODE10", code10),
+      b64Line("CODE11", code11),
       "def _run():",
       "    result = {'ok': True, 'error': None, 'item': None, 'terrain': None}",
       "    try:",
-      "        ns9 = {}",
-      "        exec(compile(CODE9, '<t9>', 'exec'), {}, ns9)",
-      "        result['item'] = {'name': str(ns9.get('CUSTOM_ITEM_NAME', 'Custom Item')), 'color': list(ns9.get('CUSTOM_ITEM_COLOR', (180, 180, 180))), 'score': ns9.get('CUSTOM_ITEM_SCORE', 0), 'weight': ns9.get('CUSTOM_ITEM_ROUTE_WEIGHT', 0)}",
       "        ns10 = {}",
       "        exec(compile(CODE10, '<t10>', 'exec'), {}, ns10)",
-      "        result['terrain'] = {'name': str(ns10.get('CUSTOM_TERRAIN_NAME', 'Custom Terrain')), 'color': list(ns10.get('CUSTOM_TERRAIN_COLOR', (180, 180, 180))), 'change': ns10.get('CUSTOM_TERRAIN_SCORE_CHANGE', 0), 'weight': ns10.get('CUSTOM_TERRAIN_ROUTE_WEIGHT', 0)}",
+      "        items = ns10.get('CUSTOM_ITEMS') or [{'name': 'Custom Item', 'color': (180, 180, 180), 'score': 0, 'hint_bonus': 0, 'route_weight': 0}]",
+      "        first_item = items[0]",
+      "        result['item'] = {'name': str(first_item.get('name', 'Custom Item')), 'color': list(first_item.get('color', (180, 180, 180))), 'score': first_item.get('score', 0), 'weight': first_item.get('route_weight', 0)}",
+      "        ns11 = {}",
+      "        exec(compile(CODE11, '<t11>', 'exec'), {}, ns11)",
+      "        result['terrain'] = {'name': str(ns11.get('CUSTOM_TERRAIN_NAME', 'Custom Terrain')), 'color': list(ns11.get('CUSTOM_TERRAIN_COLOR', (180, 180, 180))), 'change': ns11.get('CUSTOM_TERRAIN_SCORE_CHANGE', 0), 'weight': ns11.get('CUSTOM_TERRAIN_ROUTE_WEIGHT', 0)}",
       "    except Exception as e:",
       "        result['ok'] = False",
       "        result['error'] = '%s: %s' % (type(e).__name__, e)",
@@ -2759,7 +2896,7 @@
     ].join("\n");
   }
 
-  // One real scoring step (treasure via TODO 5-1 / swamp via TODO 5-2) for
+  // One real scoring step (treasure via TODO 6 / swamp via TODO 7) for
   // the Play tab, applied to the CURRENT running score.
   function traceHarness_scoreDelta(code, paramName, constValue, currentScore) {
     var fn = buildFnSource("self, " + paramName, code, "    ");
@@ -2793,14 +2930,13 @@
   }
 
   // Dijkstra's hint route drawn on the REAL round maze (walls + terrain),
-  // using the student's TODO 6-1/6-2 code and terrain-based route weights.
-  function traceHarness_dijkstraOnMaze(code61, code62, mazeGrid, weightsByTerrain, terrainGrid, start, end) {
-    var fn61 = buildFnSource("cost, step_cost", code61, "    ");
-    var fn62 = buildFnSource("distance, parent, neighbor, current, new_cost", code62, "    ");
+  // using the student's Required TODO 5 code (the same merged function) and
+  // terrain-based route weights.
+  function traceHarness_dijkstraOnMaze(code5, mazeGrid, weightsByTerrain, terrainGrid, start, end) {
+    var fn5 = buildFnSource("cost, step_cost, neighbor, current, distance, parent, queue", code5, "    ");
     return [
       "import json, heapq, base64, traceback",
-      b64Line("FN61_SRC", fn61),
-      b64Line("FN62_SRC", fn62),
+      b64Line("FN5_SRC", fn5),
       "GRID = " + JSON.stringify(JSON.stringify(mazeGrid)),
       "TERRAIN = " + JSON.stringify(JSON.stringify(terrainGrid)),
       "WEIGHTS_BY_TERRAIN = " + JSON.stringify(JSON.stringify(weightsByTerrain)),
@@ -2825,8 +2961,7 @@
       "    def get_route_weight(pos):",
       "        return wbt.get(terrain[pos[0]][pos[1]], 0)",
       "    try:",
-      "        exec(compile(FN61_SRC, '<t61>', 'exec'), {}, {})",
-      "        exec(compile(FN62_SRC, '<t62>', 'exec'), {}, {})",
+      "        exec(compile(FN5_SRC, '<t5>', 'exec'), {'heapq': heapq}, {})",
       "    except SyntaxError as e:",
       "        result['ok'] = False",
       "        result['error'] = 'Python syntax error on line %s: %s.' % (e.lineno, e.msg)",
@@ -2852,22 +2987,9 @@
       "                step_cost = get_route_weight(neighbor) + shift",
       "                if step_cost <= 0:",
       "                    continue",
-      "                ns61 = {'cost': cost, 'step_cost': step_cost}",
-      "                exec(compile(FN61_SRC, '<t61>', 'exec'), {}, ns61)",
-      "                out61 = ns61['_fn'](cost, step_cost)",
-      "                new_cost = out61.get('new_cost') if isinstance(out61, dict) else None",
-      "                if new_cost is None:",
-      "                    continue",
-      "                if neighbor not in distance or new_cost < distance[neighbor]:",
-      "                    ns62 = {'distance': distance, 'parent': parent, 'neighbor': neighbor, 'current': current, 'new_cost': new_cost}",
-      "                    exec(compile(FN62_SRC, '<t62>', 'exec'), {}, ns62)",
-      "                    out62 = ns62['_fn'](distance, parent, neighbor, current, new_cost)",
-      "                    if isinstance(out62, dict):",
-      "                        if 'distance' in out62:",
-      "                            distance = out62['distance']",
-      "                        if 'parent' in out62:",
-      "                            parent = out62['parent']",
-      "                    heapq.heappush(queue, (new_cost, neighbor))",
+      "                ns5 = {}",
+      "                exec(compile(FN5_SRC, '<t5>', 'exec'), {'heapq': heapq}, ns5)",
+      "                ns5['_fn'](cost, step_cost, neighbor, current, distance, parent, queue)",
       "        if end in parent:",
       "            path = [end]; cur = end; seen = {end}",
       "            while cur != start:",
@@ -2987,9 +3109,9 @@
 
     function currentCode() {
       return {
-        code21: state.steps["2-1"].code,
-        code22: state.steps["2-2"].code,
-        code23: state.steps["2-3"].code,
+        code21: state.steps["2"].code,
+        code22: state.steps["3"].code,
+        code23: state.steps["4"].code,
       };
     }
 
@@ -3042,7 +3164,7 @@
       }).then(function (json) {
         busy = false;
         var data = JSON.parse(json);
-        lastKeyLabel = pressedName.replace("K_", "") + " → " + (data.direction_requested || "(no branch matched — check TODO 2-1)");
+        lastKeyLabel = pressedName.replace("K_", "") + " → " + (data.direction_requested || "(no branch matched — check TODO 2)");
         if (!data.ok) {
           if (refs) refs.verdict.set(false, data.error || "Your code raised an error while moving.");
           updateReadout();
@@ -3051,11 +3173,11 @@
         pos.row = data.row; pos.col = data.col;
         if (data.wall_violation) {
           violations++;
-          if (refs) refs.verdict.set(false, "The player just walked straight through a wall (violation #" + violations + "). Check TODO 2-2's guard clause.");
+          if (refs) refs.verdict.set(false, "The player just walked straight through a wall (violation #" + violations + "). Check TODO 3's guard clause.");
         } else if (data.unexpected_delta) {
-          if (refs) refs.verdict.set(false, "The player moved to an unexpected cell — not a single step in the requested direction. Check TODO 2-3.");
+          if (refs) refs.verdict.set(false, "The player moved to an unexpected cell — not a single step in the requested direction. Check TODO 4.");
         } else if (data.calls.length === 0) {
-          if (refs) refs.verdict.info("No branch matched this key in TODO 2-1 — moved: " + data.moved + ".");
+          if (refs) refs.verdict.info("No branch matched this key in TODO 2 — moved: " + data.moved + ".");
         } else {
           if (refs) refs.verdict.set(true, "try_move(\"" + data.direction_requested + "\") → " + data.try_move_returned);
         }
@@ -3118,116 +3240,6 @@
   })();
   Visualizer.register("playerMove", PlayerMoveViz);
 
-  // -------------------------------------------------- 14e. bfsFlood viz
-
-  var BfsFloodViz = (function () {
-    var refs = null;
-    var CELL = 0;
-    var visitedCells = [];
-    var pathCells = [];
-    var playback = null;
-    var START = [0, 0], END = [NAV_ROWS - 1, NAV_COLS - 1];
-
-    function draw() {
-      if (!refs) return;
-      var ctx = refs.ctx;
-      ctx.clearRect(0, 0, refs.canvas.width, refs.canvas.height);
-      ctx.fillStyle = "#171310";
-      ctx.fillRect(0, 0, refs.canvas.width, refs.canvas.height);
-      var visitedSet = {};
-      visitedCells.forEach(function (p) { visitedSet[p[0] + "," + p[1]] = true; });
-      var pathSet = {};
-      pathCells.forEach(function (p) { pathSet[p[0] + "," + p[1]] = true; });
-      drawMazeGrid(ctx, NAV_MAZE, CELL, function (r, c) {
-        var key = r + "," + c;
-        if (pathSet[key]) return "#8b5cf6";
-        if (visitedSet[key]) return "rgba(186,230,253,0.35)";
-        return null;
-      }, { wallColor: "#e8dcc4" });
-      ctx.fillStyle = "#57c084";
-      ctx.beginPath(); ctx.arc((START[1] + 0.5) * CELL, (START[0] + 0.5) * CELL, CELL * 0.2, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = "#c9971f";
-      ctx.beginPath(); ctx.arc((END[1] + 0.5) * CELL, (END[0] + 0.5) * CELL, CELL * 0.22, 0, Math.PI * 2); ctx.fill();
-    }
-
-    function applyEvent(evt) {
-      if (evt.type === "visit") { visitedCells.push(evt.cell); }
-      else if (evt.type === "path") { pathCells = evt.cells; }
-      draw();
-    }
-
-    function runFresh() {
-      var code4 = state.steps["4"].code;
-      if (refs) refs.verdict.info("Running your code…");
-      ensurePyodide().then(function (py) {
-        return py.runPythonAsync(traceHarness_bfsFlood(code4, NAV_MAZE, START, END, 3));
-      }).then(function (json) {
-        var data = JSON.parse(json);
-        visitedCells = []; pathCells = [];
-        draw();
-        if (!data.ok) { if (refs) refs.verdict.set(false, data.error || "Your code raised an error."); return; }
-        playback.setTrace(data.trace);
-        playback._lastData = data;
-        if (refs) {
-          refs.readout.set("pathLen", data.path_len ? (data.path_len + " cells") : "no path found");
-          refs.readout.set("optimalLen", data.optimal_len + " cells");
-          refs.readout.set("swampDemo", data.swamp_on_path === true ? "placed along the shortest path ✓" : (data.swamp_on_path === false ? "placed randomly ✗ (path was broken)" : "—"));
-        }
-      }).catch(function (err) { if (refs) refs.verdict.set(false, "Could not run: " + (err && err.message ? err.message : err)); });
-    }
-
-    function showFinalVerdict() {
-      var data = playback._lastData;
-      if (!refs || !data) return;
-      if (data.stopped_reason === "budget") { refs.verdict.set(false, "Stopped after " + FLOOD_BUDGET + " steps."); return; }
-      if (data.path_len && data.path_len === data.optimal_len) {
-        refs.verdict.set(true, "Path length " + data.path_len + " (optimal " + data.optimal_len + ")");
-      } else if (data.path_len) {
-        refs.verdict.set(false, "Path length " + data.path_len + " (optimal " + data.optimal_len + ") — not the shortest path.");
-      } else {
-        refs.verdict.set(false, "No path reconstructed — TODO 4 isn't recording where each neighbor was reached from yet.");
-      }
-    }
-
-    return {
-      mount: function (container) {
-        container.innerHTML = "";
-        var width = fitWidth(container, 340);
-        CELL = Math.max(20, Math.floor(width / NAV_COLS));
-        var made = makeCanvas(CELL * NAV_COLS, CELL * NAV_ROWS);
-        made.canvas.className = "viz-canvas";
-        container.appendChild(made.canvas);
-        var bar = buildControlBar({
-          onStep: function () { playback.step(); if (playback.isDone()) showFinalVerdict(); },
-          onRun: function () { playback.run(); },
-          onPause: function () { playback.pause(); },
-          onReset: function () { playback.reset(); visitedCells = []; pathCells = []; draw(); if (refs) refs.verdict.clear(); },
-          onSpeed: function (s) { playback.setSpeed(s); },
-        });
-        container.appendChild(bar.node);
-        var runCodeBtn = el("button", { class: "btn btn-small btn-secondary mt-8", type: "button", text: "↻ Replay animation", onclick: runFresh });
-        container.appendChild(runCodeBtn);
-        container.appendChild(el("p", { class: "small muted", text: "Replays your last-saved code here without submitting an attempt — press \"Run my code\" above (in the editor) to check your answer." }));
-        var readout = buildReadout([
-          { key: "pathLen", label: "Reconstructed path length" },
-          { key: "optimalLen", label: "Optimal length" },
-          { key: "swampDemo", label: "Swamp placement demo" },
-        ]);
-        container.appendChild(readout.node);
-        var verdict = buildVerdict();
-        container.appendChild(verdict.node);
-        refs = { canvas: made.canvas, ctx: made.ctx, readout: readout, verdict: verdict };
-        playback = createPlaybackController({ onEvent: applyEvent, onDone: showFinalVerdict });
-        draw();
-        runFresh();
-      },
-      show: function () { draw(); },
-      update: function () { runFresh(); },
-      unmount: function () { if (playback) playback.destroy(); refs = null; },
-    };
-  })();
-  Visualizer.register("bfsFlood", BfsFloodViz);
-
   // -------------------------------------------------- 14f. scoreBoard viz
 
   var ScoreBoardViz = (function () {
@@ -3260,11 +3272,11 @@
     }
 
     function runFresh() {
-      var c51 = state.steps["5-1"].code, c52 = state.steps["5-2"].code;
-      var c9 = state.steps["9"].code, c10 = state.steps["10"].code;
+      var c6 = state.steps["6"].code, c7 = state.steps["7"].code;
+      var c10 = state.steps["10"].code, c11 = state.steps["11"].code;
       if (refs) refs.verdict.info("Running your code…");
       ensurePyodide().then(function (py) {
-        return py.runPythonAsync(traceHarness_scoreBoard(c51, c52, c9, c10, TILES, 0));
+        return py.runPythonAsync(traceHarness_scoreBoard(c6, c7, c10, c11, TILES, 0));
       }).then(function (json) {
         var data = JSON.parse(json);
         idx = 0; total = 0;
@@ -3409,10 +3421,10 @@
     }
 
     function runFresh() {
-      var c61 = state.steps["6-1"].code, c62 = state.steps["6-2"].code;
+      var c5 = state.steps["5"].code;
       if (refs) refs.verdict.info("Running your code…");
       ensurePyodide().then(function (py) {
-        return py.runPythonAsync(traceHarness_dijkstra(c61, c62, ROWS, COLS, weights, START, END));
+        return py.runPythonAsync(traceHarness_dijkstra(c5, ROWS, COLS, weights, START, END));
       }).then(function (json) {
         var data = JSON.parse(json);
         visited = []; pathCells = []; pqSnapshot = [];
@@ -3428,7 +3440,7 @@
       var data = playback._lastData;
       if (!refs || !data) return;
       if (data.stopped_reason === "budget") { refs.verdict.set(false, "Stopped after " + FLOOD_BUDGET + " steps."); return; }
-      if (data.stopped_reason === "todo_incomplete") { refs.verdict.set(false, "TODO 6-1 isn't producing a new_cost value yet."); return; }
+      if (data.stopped_reason === "todo_incomplete") { refs.verdict.set(false, "TODO 5 isn't producing a route yet."); return; }
       // Ground truth optimum for verdict comparison: computed with a plain
       // generic JS Dijkstra over the CURRENT weights (comparison-only, not
       // Python, not shown as a stand-in for any TODO).
@@ -3560,7 +3572,7 @@
   // to WARN the student that cells will look cramped, never to block them.
   var MAP_WINDOW_PIXEL_W = 976, MAP_WINDOW_PIXEL_H = 542;
   var MAP_MIN_COMFY_CELL = 16;
-  var ROUND_CONFIG_KEY_ORDER = ["rows", "cols", "cell_size", "extra_open_walls", "item_count", "swamp_count", "bomb_count", "custom_item_count", "custom_terrain_count", "time_limit_seconds"];
+  var ROUND_CONFIG_KEY_ORDER = ["rows", "cols", "cell_size", "extra_open_walls", "item_count", "swamp_count", "bomb_count", "custom_item_count", "custom_terrain_count", "monster_count", "time_limit_seconds"];
 
   function makeGrid(rows, cols, fill) {
     var g = [];
@@ -3621,14 +3633,15 @@
     return grid.map(function (row) { return row.map(function (t) { return (t === "SWAMP" || t === "CUSTOM") ? t : "NORMAL"; }); });
   }
   function paintedItemsAndBombs(grid) {
-    var items = [], bombs = [];
+    var items = [], bombs = [], monsters = [];
     for (var r = 0; r < grid.length; r++) {
       for (var c = 0; c < grid[r].length; c++) {
         if (grid[r][c] === "TREASURE") items.push([r, c]);
         else if (grid[r][c] === "BOMB") bombs.push([r, c]);
+        else if (grid[r][c] === "MONSTER") monsters.push([r, c]);
       }
     }
-    return { items: items, bombs: bombs };
+    return { items: items, bombs: bombs, monsters: monsters };
   }
 
   function pickEligibleSeed(grid, rng, predicate, avoid) {
@@ -3743,13 +3756,14 @@
     }
     scatterSmallClusters("TREASURE", opts.itemCount != null ? opts.itemCount : Math.max(3, Math.round(area * 0.03)));
     scatterSmallClusters("BOMB", opts.bombCount != null ? opts.bombCount : Math.max(2, Math.round(area * 0.015)));
+    scatterSmallClusters("MONSTER", opts.monsterCount != null ? opts.monsterCount : 1);
 
     return { grid: grid, start: start, goal: goal };
   }
 
   function derivedCountsFromGrid(grid, existingDict, timeLimitSeconds) {
     var rows = grid.length, cols = grid[0].length;
-    var swamp = 0, treasure = 0, bomb = 0, custom = 0;
+    var swamp = 0, treasure = 0, bomb = 0, custom = 0, monster = 0;
     for (var r = 0; r < rows; r++) {
       for (var c = 0; c < cols; c++) {
         var t = grid[r][c];
@@ -3757,12 +3771,13 @@
         else if (t === "TREASURE") treasure++;
         else if (t === "BOMB") bomb++;
         else if (t === "CUSTOM") custom++;
+        else if (t === "MONSTER") monster++;
       }
     }
     var out = {};
     ROUND_CONFIG_KEY_ORDER.forEach(function (k) { out[k] = existingDict && existingDict[k] != null ? existingDict[k] : 0; });
     out.rows = rows; out.cols = cols;
-    out.swamp_count = swamp; out.item_count = treasure; out.bomb_count = bomb; out.custom_terrain_count = custom;
+    out.swamp_count = swamp; out.item_count = treasure; out.bomb_count = bomb; out.custom_terrain_count = custom; out.monster_count = monster;
     if (!out.cell_size) out.cell_size = Math.max(MAP_MIN_COMFY_CELL, Math.floor(Math.min(MAP_WINDOW_PIXEL_W / cols, MAP_WINDOW_PIXEL_H / rows)));
     if (!out.time_limit_seconds) out.time_limit_seconds = timeLimitSeconds || 60;
     if (!out.extra_open_walls) out.extra_open_walls = 0;
@@ -3856,6 +3871,7 @@
       SWAMP: { label: "Swamp", color: "rgba(134,180,146,0.65)", desc: "Route weight 100 · score penalty." },
       TREASURE: { label: "Treasure", color: "#22c55e", desc: "Normal treasure score." },
       BOMB: { label: "Bomb", color: "#e0685f", desc: "Hazard." },
+      MONSTER: { label: "Monster", color: "#be1e3c", desc: "Chasing enemy start position (Bonus)." },
       GOAL: { label: "Goal", color: "#f0c04a", desc: "Round exit (exactly one)." },
       START: { label: "Start", color: "#4fa3e3", desc: "Player start (exactly one)." },
     };
@@ -3866,11 +3882,11 @@
     }
 
     function customTerrainAvailable() {
-      return state.steps["10"] && state.steps["10"].status === "completed";
+      return state.steps["11"] && state.steps["11"].status === "completed";
     }
 
     function paletteTypes() {
-      var types = ["WALL", "NORMAL", "SWAMP", "TREASURE", "BOMB", "GOAL", "START"];
+      var types = ["WALL", "NORMAL", "SWAMP", "TREASURE", "BOMB", "MONSTER", "GOAL", "START"];
       if (customTerrainAvailable()) types.splice(3, 0, "CUSTOM");
       return types;
     }
@@ -3952,7 +3968,7 @@
     function loadCustomTerrainColor() {
       if (!customTerrainAvailable()) { customValuesCache = null; return; }
       ensurePyodide().then(function (py) {
-        return py.runPythonAsync(traceHarness_customValues(state.steps["9"].code, state.steps["10"].code));
+        return py.runPythonAsync(traceHarness_customValues(state.steps["10"].code, state.steps["11"].code));
       }).then(function (json) {
         var data = JSON.parse(json);
         if (data.ok) { customValuesCache = data; draw(); renderPalette(); }
@@ -3989,7 +4005,7 @@
       var d = ad.round;
       if (!d || !refs) return;
       var ta = document.querySelector("#mainPanel .code-textarea");
-      var code = ta ? ta.value : (state.steps["7"].code || "");
+      var code = ta ? ta.value : (state.steps["8"].code || "");
       var parsed = parseRoundConfigsSource(code);
       var derived = derivedCountsFromGrid(d.grid, parsed ? parsed[ad.idx] : null, parsed ? parsed[ad.idx] && parsed[ad.idx].time_limit_seconds : null);
       if (!force && parsed && d.lastSyncedDict && !dictsRoughlyEqual(parsed[ad.idx], d.lastSyncedDict)) {
@@ -4003,17 +4019,17 @@
       rounds3[ad.idx] = derived;
       var newCode = buildRoundConfigsSource(rounds3);
       d.lastSyncedDict = derived;
-      writeStep7Code(newCode);
+      writeStep8Code(newCode);
       persist();
     }
 
-    function writeStep7Code(newCode) {
+    function writeStep8Code(newCode) {
       var ta = document.querySelector("#mainPanel .code-textarea");
       if (ta) {
         ta.value = newCode;
         ta.dispatchEvent(new Event("input"));
       } else {
-        state.steps["7"].code = newCode;
+        state.steps["8"].code = newCode;
         persist();
       }
     }
@@ -4258,7 +4274,7 @@
         container.appendChild(parseNotice);
         var conflictBox = el("div", { class: "viz-verdict verdict-info", hidden: "hidden" });
         container.appendChild(conflictBox);
-        container.appendChild(el("p", { class: "small muted mt-8", text: "Once TODO 7 is complete, this round uses your painted map in the Play tab instead of a randomly-generated one." }));
+        container.appendChild(el("p", { class: "small muted mt-8", text: "Once TODO 8 is complete, this round uses your painted map in the Play tab instead of a randomly-generated one." }));
 
         refs = {
           container: container, boardWrap: boardWrap, palette: palette,
@@ -4337,6 +4353,7 @@
     { key: "ITEM_IMAGE_PATH", kind: "image", partIndex: 0, label: "Treasure item" },
     { key: "BOMB_IMAGE_PATH", kind: "image", partIndex: 0, label: "Bomb" },
     { key: "FLOOR_TILE_IMAGE_PATH", kind: "image", partIndex: 0, label: "Floor tile" },
+    { key: "MONSTER_IMAGE_PATH", kind: "image", partIndex: 0, label: "Monster" },
     { key: "SWAMP_SOUND_PATH", kind: "sound", partIndex: 1, label: "Swamp step sound" },
     { key: "ITEM_SOUND_PATH", kind: "sound", partIndex: 1, label: "Item pickup sound" },
     { key: "BOMB_SOUND_PATH", kind: "sound", partIndex: 1, label: "Bomb explosion sound" },
@@ -4434,18 +4451,18 @@
     function slotByKey(key) { return ASSET_SLOTS.filter(function (s) { return s.key === key; })[0]; }
 
     function currentPaths() {
-      var code = state.steps["8"].code;
+      var code = state.steps["9"].code;
       return parseAssetPaths(code[0], code[1]);
     }
 
     function writeAssetSlot(slot, valueLiteral) {
       var textareas = document.querySelectorAll("#mainPanel .code-textarea");
       var ta = textareas[slot.partIndex];
-      var code = ta ? ta.value : state.steps["8"].code[slot.partIndex];
+      var code = ta ? ta.value : state.steps["9"].code[slot.partIndex];
       var re = new RegExp("(" + slot.key + "\\s*=\\s*)(None|\"[^\"]*\"|'[^']*')");
       var newCode = re.test(code) ? code.replace(re, "$1" + valueLiteral) : (code + "\n" + slot.key + " = " + valueLiteral);
       if (ta) { ta.value = newCode; ta.dispatchEvent(new Event("input")); }
-      else { state.steps["8"].code[slot.partIndex] = newCode; persist(); }
+      else { state.steps["9"].code[slot.partIndex] = newCode; persist(); }
       renderAllPanels();
     }
 
@@ -4816,13 +4833,14 @@
   // here is faked either.
 
   var PLAY_ROUND_CONFIGS = [
-    { rows: 11, cols: 15, cellSize: 30, extraOpenWalls: 5, itemCount: 8, swampCount: 3, bombCount: 2, customItemCount: 2, customTerrainCount: 2, timeLimitSeconds: 70 },
-    { rows: 15, cols: 21, cellSize: 24, extraOpenWalls: 6, itemCount: 10, swampCount: 5, bombCount: 4, customItemCount: 3, customTerrainCount: 3, timeLimitSeconds: 55 },
-    { rows: 17, cols: 25, cellSize: 20, extraOpenWalls: 8, itemCount: 12, swampCount: 7, bombCount: 6, customItemCount: 4, customTerrainCount: 4, timeLimitSeconds: 45 },
+    { rows: 11, cols: 15, cellSize: 30, extraOpenWalls: 5, itemCount: 8, swampCount: 3, bombCount: 2, customItemCount: 2, customTerrainCount: 2, monsterCount: 1, timeLimitSeconds: 70 },
+    { rows: 15, cols: 21, cellSize: 24, extraOpenWalls: 6, itemCount: 10, swampCount: 5, bombCount: 4, customItemCount: 3, customTerrainCount: 3, monsterCount: 1, timeLimitSeconds: 55 },
+    { rows: 17, cols: 25, cellSize: 20, extraOpenWalls: 8, itemCount: 12, swampCount: 7, bombCount: 6, customItemCount: 4, customTerrainCount: 4, monsterCount: 2, timeLimitSeconds: 45 },
   ];
   var PLAY_ITEM_SCORE = 100;
   var PLAY_SWAMP_PENALTY = 100;
   var PLAY_BOMB_PENALTY = 150;
+  var PLAY_MONSTER_PENALTY = 60;
   var PLAY_MOVE_DELAY_MS = 100;
 
   var PlayEngine = (function () {
@@ -4830,8 +4848,9 @@
     var roundIndex = 0;
     var maze = null, terrain = null, rows = 0, cols = 0, cellSize = 0;
     var player = { row: 0, col: 0 };
+    var playerStart = { row: 0, col: 0 };
     var goal = { row: 0, col: 0 };
-    var items = [], bombs = [];
+    var items = [], bombs = [], monsters = [];
     var score = 0, timeLeft = 0, timerId = null;
     var running = false;
     var soundOn = false;
@@ -4846,14 +4865,18 @@
     function capabilities() {
       return {
         title: isDoneExact("1"),
-        movement: isDoneExact("2-1") && isDoneExact("2-2") && isDoneExact("2-3"),
-        swampPlacement: isDoneExact("4"),
-        scoring: isDoneExact("5-1") && isDoneExact("5-2"),
-        hint: isDoneExact("6-1") && isDoneExact("6-2"),
-        mapEditor: isDoneExact("7"),
-        assets: isDoneExact("8"),
-        customItem: isDoneExact("9"),
-        customTerrain: isDoneExact("10"),
+        movement: isDoneExact("2") && isDoneExact("3") && isDoneExact("4"),
+        swampPlacement: isDoneExact("5"),
+        scoring: isDoneExact("6") && isDoneExact("7"),
+        hint: isDoneExact("5"),
+        mapEditor: isDoneExact("8"),
+        assets: isDoneExact("9"),
+        customItem: isDoneExact("10"),
+        customTerrain: isDoneExact("11"),
+        monsterTuning: isDoneExact("12"),
+        monsterFsm: isDoneExact("13"),
+        monsterChase: isDoneExact("13") && isDoneExact("14"),
+        rules: isDoneExact("15"),
       };
     }
     function allRequiredCompleteExact() { return REQUIRED_ORDER.every(isDoneExact); }
@@ -4951,6 +4974,43 @@
       return out;
     }
 
+    // Monster wander/catch (Bonus feature, simplified for the browser
+    // preview): this is a plain JS random-walk each tick, standing in for
+    // monster.py's given patrol_step - the real, graded FSM/CHASE-toward-
+    // player behaviour (TODO 13/14) only runs inside the actual pygame
+    // project, not in this in-browser mini preview. Disclosed scope cut.
+    function openNeighborsFor(r, c) {
+      var cell = maze[r][c];
+      var out = [];
+      if (!cell.top && r - 1 >= 0) out.push([r - 1, c]);
+      if (!cell.right && c + 1 < cols) out.push([r, c + 1]);
+      if (!cell.bottom && r + 1 < rows) out.push([r + 1, c]);
+      if (!cell.left && c - 1 >= 0) out.push([r, c - 1]);
+      return out;
+    }
+
+    function wanderMonsters() {
+      monsters.forEach(function (m) {
+        var nbrs = openNeighborsFor(m.row, m.col);
+        if (nbrs.length) {
+          var pick = nbrs[Math.floor(Math.random() * nbrs.length)];
+          m.row = pick[0]; m.col = pick[1];
+        }
+      });
+    }
+
+    function checkMonsterCatch() {
+      var caught = monsters.some(function (m) { return m.row === player.row && m.col === player.col; });
+      if (caught) {
+        player.row = playerStart.row; player.col = playerStart.col;
+        score -= PLAY_MONSTER_PENALTY;
+        statusLine("The monster caught you! -" + PLAY_MONSTER_PENALTY + ", back to start.", true);
+        updateStatusGrid();
+        draw();
+      }
+      return caught;
+    }
+
     function statusLine(text, isError) {
       if (!refs) return;
       refs.notice.hidden = !text;
@@ -4962,15 +5022,19 @@
       if (!refs) return;
       var caps = capabilities();
       var items2 = [
-        ["title", "Title screen shows your title/rules (TODO 1)"],
-        ["movement", "Player moves & respects walls (TODO 2-1/2-2/2-3)"],
-        ["swampPlacement", "Swamps placed along shortest path (TODO 4)"],
-        ["scoring", "Treasure/swamp scoring (TODO 5-1/5-2)"],
-        ["hint", "Dijkstra hint route (TODO 6-1/6-2)"],
-        ["mapEditor", "Your painted rounds are used instead of random generation (TODO 7)"],
-        ["assets", "Your chosen images/sounds are used (TODO 8)"],
-        ["customItem", "Custom item (TODO 9)"],
-        ["customTerrain", "Custom terrain (TODO 10)"],
+        ["title", "Title screen shows your title (TODO 1)"],
+        ["movement", "Player moves & respects walls (TODO 2/3/4)"],
+        ["swampPlacement", "Swamps placed along shortest path (TODO 5)"],
+        ["scoring", "Treasure/swamp scoring (TODO 6/7)"],
+        ["hint", "Dijkstra hint route (unlocks with TODO 5)"],
+        ["mapEditor", "Your painted rounds are used instead of random generation (TODO 8)"],
+        ["assets", "Your chosen images/sounds are used (TODO 9)"],
+        ["customItem", "Custom item(s) (TODO 10)"],
+        ["customTerrain", "Custom terrain (TODO 11)"],
+        ["monsterTuning", "Monster constants tuned (TODO 12)"],
+        ["monsterFsm", "Monster FSM (PATROL/CHASE/ATTACK) (TODO 13)"],
+        ["monsterChase", "Monster chases the player (TODO 13+14)"],
+        ["rules", "Your game's rules (TODO 15, capstone)"],
       ];
       refs.checklist.innerHTML = "";
       items2.forEach(function (pair) {
@@ -5001,10 +5065,12 @@
         var extracted = paintedItemsAndBombs(painted.grid);
         items = extracted.items.map(function (p) { return { row: p[0], col: p[1], active: true, kind: "treasure" }; });
         bombs = extracted.bombs.map(function (p) { return { row: p[0], col: p[1], active: true }; });
+        monsters = extracted.monsters.map(function (p) { return { row: p[0], col: p[1] }; });
         player = { row: painted.start[0], col: painted.start[1] };
+        playerStart = { row: painted.start[0], col: painted.start[1] };
         goal = { row: painted.goal[0], col: painted.goal[1] };
         timeLeft = cfg.timeLimitSeconds;
-        statusLine("Using your hand-painted map for this round (TODO 7).");
+        statusLine("Using your hand-painted map for this round (TODO 8).");
         renderAll();
         return;
       }
@@ -5013,8 +5079,9 @@
       var width = fitWidth(refs ? refs.container : document.body, 380);
       cellSize = Math.max(8, Math.min(cfg.cellSize, Math.floor(width / cols)));
       player = { row: 0, col: 0 };
+      playerStart = { row: 0, col: 0 };
       goal = { row: rows - 1, col: cols - 1 };
-      items = []; bombs = [];
+      items = []; bombs = []; monsters = [];
       timeLeft = cfg.timeLimitSeconds;
 
       // Maze generation (randomized DFS / recursive backtracker) is given,
@@ -5035,13 +5102,13 @@
       function placeSwamps() {
         if (!caps.swampPlacement) {
           placeRandom(rng, forbidden, cfg.swampCount).forEach(function (p) { terrain[p[0]][p[1]] = "SWAMP"; });
-          statusLine("Swamps placed randomly — finish TODO 4 to place them along the shortest path instead.");
+          statusLine("Swamps placed randomly — finish TODO 5 to place them along the shortest path instead.");
           afterSwamps();
           return;
         }
-        var c4 = state.steps["4"].code;
+        var c5 = state.steps["5"].code;
         ensurePyodide().then(function (py) {
-          return py.runPythonAsync(traceHarness_bfsFlood(c4, maze, [player.row, player.col], [goal.row, goal.col], cfg.swampCount));
+          return py.runPythonAsync(traceHarness_swampPlacement(c5, maze, [player.row, player.col], [goal.row, goal.col], cfg.swampCount));
         }).then(function (json2) {
           var d2 = JSON.parse(json2);
           if (d2.ok && d2.swamp_on_path) {
@@ -5049,12 +5116,12 @@
             statusLine("");
           } else {
             placeRandom(rng, forbidden, cfg.swampCount).forEach(function (p) { terrain[p[0]][p[1]] = "SWAMP"; });
-            statusLine("TODO 4 isn't reconstructing a path yet, so swamps were placed randomly this round.");
+            statusLine("TODO 5 isn't reconstructing a route yet, so swamps were placed randomly this round.");
           }
           afterSwamps();
         }).catch(function (err) {
           placeRandom(rng, forbidden, cfg.swampCount).forEach(function (p) { terrain[p[0]][p[1]] = "SWAMP"; });
-          statusLine("Could not run TODO 4: " + (err && err.message ? err.message : err), true);
+          statusLine("Could not run TODO 5: " + (err && err.message ? err.message : err), true);
           afterSwamps();
         });
       }
@@ -5069,6 +5136,10 @@
           placeRandom(rng, forbidden, cfg.customItemCount).forEach(function (p) { items.push({ row: p[0], col: p[1], active: true, kind: "custom" }); });
         }
         bombs = placeRandom(rng, forbidden, cfg.bombCount).map(function (p) { return { row: p[0], col: p[1], active: true }; });
+        // Monsters always spawn (same as bombs) - this mirrors game.py, where
+        // Monster objects exist every round regardless of TODO completion;
+        // an unfinished FSM/chase TODO just leaves them wandering forever.
+        monsters = placeRandom(rng, forbidden, cfg.monsterCount).map(function (p) { return { row: p[0], col: p[1] }; });
         renderAll();
       }
 
@@ -5108,6 +5179,17 @@
         else ctx.fillStyle = "#22c55e";
         ctx.beginPath(); ctx.arc((it.col + 0.5) * cellSize, (it.row + 0.5) * cellSize, cellSize * 0.18, 0, Math.PI * 2); ctx.fill();
       });
+      // monsters (Bonus) - simple triangle marker, same shape as monster.py's fallback draw
+      ctx.fillStyle = "#be1e3c";
+      monsters.forEach(function (m) {
+        var cx = (m.col + 0.5) * cellSize, top = m.row * cellSize + cellSize * 0.2, bottom = m.row * cellSize + cellSize * 0.8;
+        ctx.beginPath();
+        ctx.moveTo(cx, top);
+        ctx.lineTo(cx + cellSize * 0.28, bottom);
+        ctx.lineTo(cx - cellSize * 0.28, bottom);
+        ctx.closePath();
+        ctx.fill();
+      });
       // goal
       ctx.fillStyle = "#f0c04a";
       ctx.beginPath(); ctx.arc((goal.col + 0.5) * cellSize, (goal.row + 0.5) * cellSize, cellSize * 0.26, 0, Math.PI * 2); ctx.fill();
@@ -5131,7 +5213,9 @@
     function tickTimer() {
       if (!running) return;
       timeLeft--;
-      updateStatusGrid();
+      wanderMonsters();
+      draw();
+      if (!checkMonsterCatch()) updateStatusGrid();
       if (timeLeft <= 0) {
         running = false;
         clearInterval(timerId); timerId = null;
@@ -5162,6 +5246,7 @@
     };
 
     function checkTileEffects() {
+      if (checkMonsterCatch()) return;
       var caps = capabilities();
       var here = terrain[player.row][player.col];
       var landedItemIdx = -1;
@@ -5180,7 +5265,7 @@
           updateStatusGrid();
         } else if (caps.scoring) {
           ensurePyodide().then(function (py) {
-            return py.runPythonAsync(traceHarness_scoreDelta(state.steps["5-1"].code, "ITEM_SCORE", PLAY_ITEM_SCORE, score));
+            return py.runPythonAsync(traceHarness_scoreDelta(state.steps["6"].code, "ITEM_SCORE", PLAY_ITEM_SCORE, score));
           }).then(function (json) {
             var d = JSON.parse(json);
             if (d.ok) score = d.score;
@@ -5188,7 +5273,7 @@
             updateStatusGrid();
           });
         } else {
-          statusLine("Collected a treasure, but TODO 5-1 isn't finished yet, so it's worth nothing.");
+          statusLine("Collected a treasure, but TODO 6 isn't finished yet, so it's worth nothing.");
         }
       }
       bombs.forEach(function (b) {
@@ -5204,7 +5289,7 @@
         terrain[player.row][player.col] = "NORMAL";
         if (caps.scoring) {
           ensurePyodide().then(function (py) {
-            return py.runPythonAsync(traceHarness_scoreDelta(state.steps["5-2"].code, "SWAMP_SCORE_PENALTY", PLAY_SWAMP_PENALTY, score));
+            return py.runPythonAsync(traceHarness_scoreDelta(state.steps["7"].code, "SWAMP_SCORE_PENALTY", PLAY_SWAMP_PENALTY, score));
           }).then(function (json) {
             var d = JSON.parse(json);
             if (d.ok) score = d.score;
@@ -5212,7 +5297,7 @@
             updateStatusGrid();
           });
         } else {
-          statusLine("Stepped in a swamp, but TODO 5-2 isn't finished yet, so no penalty applied.");
+          statusLine("Stepped in a swamp, but TODO 7 isn't finished yet, so no penalty applied.");
         }
       } else if (here === "CUSTOM" && caps.customTerrain && customValues && customValues.terrain) {
         terrain[player.row][player.col] = "NORMAL";
@@ -5250,11 +5335,11 @@
       e.preventDefault();
       if (!running) return;
       var caps = capabilities();
-      if (!caps.movement) { statusLine("Finish TODO 2-1, 2-2 and 2-3 to make the player move."); return; }
+      if (!caps.movement) { statusLine("Finish TODO 2, 3 and 4 to make the player move."); return; }
       var now = performance.now();
       if (busyMove || now - lastMoveAt < PLAY_MOVE_DELAY_MS) return;
       busyMove = true;
-      var codes = { c21: state.steps["2-1"].code, c22: state.steps["2-2"].code, c23: state.steps["2-3"].code };
+      var codes = { c21: state.steps["2"].code, c22: state.steps["3"].code, c23: state.steps["4"].code };
       ensurePyodide().then(function (py) {
         var src = traceHarness_playerMove(codes.c21, codes.c22, codes.c23, maze, keyname, player.row, player.col);
         return py.runPythonAsync(src);
@@ -5274,7 +5359,7 @@
       if (!caps.hint) return;
       var weightsByTerrain = { NORMAL: 0, SWAMP: 100, CUSTOM: (customValues && customValues.terrain ? customValues.terrain.weight : 0) };
       ensurePyodide().then(function (py) {
-        return py.runPythonAsync(traceHarness_dijkstraOnMaze(state.steps["6-1"].code, state.steps["6-2"].code, maze, weightsByTerrain, terrain, [player.row, player.col], [goal.row, goal.col]));
+        return py.runPythonAsync(traceHarness_dijkstraOnMaze(state.steps["5"].code, maze, weightsByTerrain, terrain, [player.row, player.col], [goal.row, goal.col]));
       }).then(function (json) {
         var d = JSON.parse(json);
         if (d.ok && d.path && d.path.length) {
@@ -5290,7 +5375,7 @@
 
     function loadCustomValues() {
       ensurePyodide().then(function (py) {
-        return py.runPythonAsync(traceHarness_customValues(state.steps["9"].code, state.steps["10"].code));
+        return py.runPythonAsync(traceHarness_customValues(state.steps["10"].code, state.steps["11"].code));
       }).then(function (json) {
         var d = JSON.parse(json);
         if (d.ok) { customValues = { item: d.item, terrain: d.terrain }; draw(); }
@@ -5585,7 +5670,7 @@
     return step();
   }
 
-  var EXPORT_TODO_FILES = ["settings.py", "game.py", "player.py", "maze.py", "pathfinding.py"];
+  var EXPORT_TODO_FILES = ["settings.py", "game.py", "player.py", "maze.py", "pathfinding.py", "monster.py"];
 
   function validateAllFiles(py) {
     var results = {};
@@ -5666,7 +5751,7 @@
       "",
       "Your progress when this was exported: " + summary.summaryText,
       "",
-      "Custom images/sounds (TODO 8):",
+      "Custom images/sounds (TODO 9):",
       "  Bundled assets are already included in assets/images/ and",
       "  assets/sounds/. If you uploaded your OWN images/sounds on the",
       "  website, copy those same files into THIS project's assets/images/",
@@ -5769,7 +5854,7 @@
 
     getConnectedDirHandle().then(function (handle) {
       if (!handle) {
-        container.appendChild(el("p", { class: "small muted mt-8", text: "Connect your project folder from TODO 8 to write your answers directly into your files instead (with automatic .bak backups)." }));
+        container.appendChild(el("p", { class: "small muted mt-8", text: "Connect your project folder from TODO 9 to write your answers directly into your files instead (with automatic .bak backups)." }));
         return;
       }
       var willChange = EXPORT_TODO_FILES.slice();

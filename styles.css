@@ -434,6 +434,7 @@ body {
   margin-bottom: 16px;
 }
 .flow-banner.bonus { background: var(--warning-bg); border-color: color-mix(in srgb, var(--warning) 35%, transparent); }
+.flow-banner.capstone-locked { background: var(--danger-bg); border-color: color-mix(in srgb, var(--danger) 40%, transparent); }
 
 .code-reference {
   margin: 14px 0 18px;
