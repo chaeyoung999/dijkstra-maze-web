@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Dijkstra Maze — TODO Quest</title>
+<meta name="description" content="Step-by-step classroom exercise: finish the 16 TODOs of the Dijkstra Maze pygame project, graded live in your browser." />
+<link rel="icon" href="data:," />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <a class="skip-link" href="#mainPanel">Skip to step content</a>
+
+  <div id="fileProtocolBanner" class="banner banner-warning" role="alert" hidden>
+    <strong>You opened this file directly (file://).</strong>
+    Grading, Pyodide, and the "Connect my project folder" feature (TODO 8 /
+    project export) all need a local web server to work. Please close this
+    tab and double-click <code>로컬서버_실행.bat</code> instead — it starts a
+    server and opens <code>http://localhost:8000</code> automatically.
+  </div>
+
+  <div id="pyodideBanner" class="banner banner-info" role="status" hidden></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <svg class="brand-icon" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+        <rect x="4" y="4" width="40" height="40" rx="6" fill="none" stroke="currentColor" stroke-width="3"/>
+        <path d="M14 34 L14 20 L24 12 L34 20 L34 34" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/>
+        <circle cx="24" cy="26" r="3.5" fill="currentColor"/>
+      </svg>
+      <span class="brand-text">
+        <span class="brand-title">Dijkstra Maze</span>
+        <span class="brand-subtitle">TODO Quest</span>
+      </span>
+    </div>
+    <div class="topbar-actions">
+      <button id="themeToggle" class="icon-btn" type="button" aria-label="Toggle light/dark theme" title="Toggle light/dark theme">
+        <svg class="icon icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="2"/><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="1.5" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22.5"/><line x1="1.5" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22.5" y2="12"/><line x1="4.6" y1="4.6" x2="6.4" y2="6.4"/><line x1="17.6" y1="17.6" x2="19.4" y2="19.4"/><line x1="4.6" y1="19.4" x2="6.4" y2="17.6"/><line x1="17.6" y1="6.4" x2="19.4" y2="4.6"/></g></svg>
+        <svg class="icon icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+      </button>
+      <button id="saveProgressBtn" class="btn btn-accent" type="button" title="Saves your code, painted maps, and uploaded-file list — not the image/sound files themselves.">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h11l5 5v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 3v6h8V3" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M7 21v-7h10v7" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+        Save my work
+      </button>
+      <button id="loadProgressBtn" class="btn" type="button">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7 10l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 21h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        Load my work
+      </button>
+      <input type="file" id="loadProgressInput" accept="application/json" hidden />
+      <button id="downloadProjectBtn" class="btn btn-accent" type="button" title="Turns your answers into a real, runnable pygame project.">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v6H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M4 12h16v8H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 16h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        Download my project
+      </button>
+      <button id="resetAllBtn" class="btn btn-ghost-danger" type="button">Reset all</button>
+    </div>
+  </header>
+
+  <div class="layout" id="layoutRoot">
+    <nav id="sidebar" class="sidebar" aria-label="TODO steps"></nav>
+
+    <main id="mainPanel" class="main-panel" tabindex="-1"></main>
+
+    <aside id="vizPanel" class="viz-panel" aria-label="Visualization">
+      <div class="viz-tabs" role="tablist" aria-label="Visualization mode">
+        <button role="tab" id="vizTabStep" class="viz-tab is-active" data-tab="step" aria-selected="true" aria-controls="vizStepView" type="button">Step view</button>
+        <button role="tab" id="vizTabPlay" class="viz-tab" data-tab="play" aria-selected="false" aria-controls="vizPlayView" type="button">Play</button>
+      </div>
+      <div id="vizStepView" class="viz-content" role="tabpanel" aria-labelledby="vizTabStep"></div>
+      <div id="vizPlayView" class="viz-content" role="tabpanel" aria-labelledby="vizTabPlay" hidden></div>
+    </aside>
+  </div>
+
+  <div id="modalRoot" aria-live="polite"></div>
+
+  <script src="data.js"></script>
+  <script src="export-data.js"></script>
+  <script src="app.js" defer></script>
+</body>
+</html>
