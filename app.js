@@ -6097,13 +6097,96 @@
     }
   }
 
+  // ------------------------------------------------- 14h. Play popout / kiosk mode
+  //
+  // "Play in new window" opens this SAME page in a small separate window
+  // with ?mode=play in the URL. On load, if that flag is present, we skip
+  // the sidebar/editor/viz-tabs entirely and render ONLY the Play tab's
+  // content, filling the window - reusing PlayEngine's existing mount/
+  // refresh/unmount lifecycle completely unchanged (see #5 in the request:
+  // this must not be a second implementation of Play, just a second place
+  // to show the same one). State comes from the SAME localStorage under the
+  // same origin, so it reflects the student's real progress automatically -
+  // no special data-passing needed, verified below.
+
+  function isKioskMode() {
+    try {
+      return new URLSearchParams(window.location.search).get("mode") === "play";
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function showPopupBlockedNotice(anchorEl) {
+    var existing = document.getElementById("popupBlockedNotice");
+    if (existing) existing.remove();
+    var notice = el("div", { id: "popupBlockedNotice", class: "popup-blocked-notice", role: "alert" }, [
+      el("span", {}, ["Your browser blocked the popup — allow popups for this site, or right-click the button to open in a new tab."]),
+      el("button", { type: "button", "aria-label": "Dismiss", onclick: function () { notice.remove(); } }, ["×"]),
+    ]);
+    var host = (anchorEl && anchorEl.parentElement) || $("#playPopoutBtn").parentElement;
+    host.appendChild(notice);
+    setTimeout(function () { if (notice.parentElement) notice.remove(); }, 8000);
+  }
+
+  function initPlayPopoutButton() {
+    var btn = $("#playPopoutBtn");
+    if (!btn) return;
+    // `btn` is a real <a href="?mode=play" target="_blank"> on purpose:
+    // right-click -> "Open link in new tab" works via native browser
+    // behaviour with zero JS involved, even if the popup below is blocked.
+    // The click handler just upgrades a plain left-click into a nicely-
+    // sized fixed window instead of a full tab.
+    btn.addEventListener("click", function (e) {
+      e.preventDefault();
+      var url = window.location.origin + window.location.pathname + "?mode=play";
+      var win = null;
+      try {
+        win = window.open(url, "dijkstraMazePlayPopout", "noopener,width=900,height=720,menubar=no,toolbar=no,location=no,status=no");
+      } catch (err) { win = null; }
+      if (!win) showPopupBlockedNotice(btn);
+    });
+  }
+
+  function initKioskMode() {
+    document.body.classList.add("kiosk-mode");
+    document.title = "Dijkstra Maze — Play";
+    var root = $("#kioskRoot");
+    root.hidden = false;
+    var playView = $("#kioskPlayView");
+    PlayEngine.mount(playView);
+    // No code editor exists in this window to compete for focus, so (unlike
+    // the normal Play tab) there's no reason to require an extra click
+    // before arrow keys work - focus the board immediately.
+    var canvas = playView.querySelector(".viz-canvas");
+    if (canvas) canvas.focus();
+    // Nice-to-have live sync: if the student keeps this window open and
+    // then finishes a TODO / repaints a map / changes custom settings in
+    // the main tab, `storage` fires here (it does NOT fire in the tab that
+    // made the change, only in other same-origin tabs/windows - exactly
+    // what we want). Reload state fresh from localStorage and refresh the
+    // capabilities/HUD, the same "refresh" PlayEngine already does when the
+    // Play tab regains focus in the normal page.
+    window.addEventListener("storage", function (e) {
+      if (e.key && e.key !== LS_PROGRESS_KEY) return;
+      state = loadState();
+      if (computeStatus(state.currentStepId) === "locked") state.currentStepId = STEPS[0].id;
+      PlayEngine.refresh();
+    });
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     initTheme();
     state = loadState();
     if (computeStatus(state.currentStepId) === "locked") state.currentStepId = STEPS[0].id;
+    if (isKioskMode()) {
+      initKioskMode();
+      return;
+    }
     initTopbar();
     initVizTabs();
     initFileProtocolBanner();
+    initPlayPopoutButton();
     renderAll();
   });
 })();

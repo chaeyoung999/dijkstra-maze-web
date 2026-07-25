@@ -218,7 +218,57 @@ body {
 .brand-text { display: flex; flex-direction: column; line-height: 1.15; }
 .brand-title { font-weight: 700; font-size: 1.05rem; letter-spacing: 0.02em; }
 .brand-subtitle { font-size: 0.72rem; color: var(--parchment-dim); text-transform: uppercase; letter-spacing: 0.12em; }
-.topbar-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.topbar-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; position: relative; }
+
+.popup-blocked-notice {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 320px;
+  background: var(--warning-bg);
+  color: var(--text);
+  border: 1px solid color-mix(in srgb, var(--warning) 40%, transparent);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 0.82rem;
+  box-shadow: var(--shadow);
+}
+.popup-blocked-notice button { background: none; border: none; color: inherit; cursor: pointer; font-size: 1rem; line-height: 1; flex-shrink: 0; }
+
+/* ------------------------------------------------------------ kiosk mode */
+/* ?mode=play - a stripped, Play-tab-only render for the "Play in new
+   window" popout. body.kiosk-mode hides the normal editor UI; #kioskRoot
+   (hidden by default) is shown instead and PlayEngine is mounted straight
+   into #kioskPlayView, reusing its existing mount/refresh/unmount lifecycle
+   unchanged. */
+body.kiosk-mode .topbar,
+body.kiosk-mode .layout,
+body.kiosk-mode #fileProtocolBanner,
+body.kiosk-mode #pyodideBanner {
+  display: none !important;
+}
+.kiosk-root {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100vh;
+  padding: 16px;
+}
+.kiosk-header {
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.kiosk-title { font-weight: 700; font-size: 1rem; }
+.kiosk-header a { color: var(--text-dim); }
+.kiosk-play-view { width: 100%; max-width: 480px; }
 
 /* ---------------------------------------------------------------- icons */
 .icon { width: 18px; height: 18px; flex-shrink: 0; }
@@ -262,6 +312,7 @@ body {
 .btn:hover { background: rgba(255,255,255,0.16); }
 .btn:active { transform: translateY(1px); }
 .btn[disabled] { opacity: 0.5; cursor: not-allowed; }
+a.btn { text-decoration: none; cursor: pointer; }
 .btn-accent { background: var(--torch); border-color: var(--torch); color: #241300; }
 .btn-accent:hover { background: var(--torch-bright); }
 .btn-ghost-danger { background: transparent; color: #f3b3ac; border-color: rgba(224,104,95,0.5); }

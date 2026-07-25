@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Dijkstra Maze — TODO Quest</title>
-<meta name="description" content="Step-by-step classroom exercise: finish the 16 TODOs of the Dijkstra Maze pygame project, graded live in your browser." />
+<meta name="description" content="Step-by-step classroom exercise: finish the 15 TODOs of the Dijkstra Maze pygame project, graded live in your browser." />
 <link rel="icon" href="data:," />
 <link rel="stylesheet" href="styles.css" />
 </head>
@@ -38,6 +38,10 @@
         <svg class="icon icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="2"/><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="1.5" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22.5"/><line x1="1.5" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22.5" y2="12"/><line x1="4.6" y1="4.6" x2="6.4" y2="6.4"/><line x1="17.6" y1="17.6" x2="19.4" y2="19.4"/><line x1="4.6" y1="19.4" x2="6.4" y2="17.6"/><line x1="17.6" y1="6.4" x2="19.4" y2="4.6"/></g></svg>
         <svg class="icon icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
       </button>
+      <a id="playPopoutBtn" class="btn btn-accent" href="?mode=play" target="_blank" rel="noopener" title="Opens the Play tab by itself in its own window — right-click to open in a new tab instead.">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6v12l10-6z" fill="currentColor"/><rect x="3.5" y="4.5" width="17" height="15" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+        Play in new window
+      </a>
       <button id="saveProgressBtn" class="btn btn-accent" type="button" title="Saves your code, painted maps, and uploaded-file list — not the image/sound files themselves.">
         <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h11l5 5v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 3v6h8V3" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M7 21v-7h10v7" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
         Save my work
@@ -68,6 +72,20 @@
       <div id="vizStepView" class="viz-content" role="tabpanel" aria-labelledby="vizTabStep"></div>
       <div id="vizPlayView" class="viz-content" role="tabpanel" aria-labelledby="vizTabPlay" hidden></div>
     </aside>
+  </div>
+
+  <!-- Kiosk mode (?mode=play): a stripped, Play-tab-only render used by the
+       "Play in new window" popout. Hidden and empty until app.js detects the
+       mode flag and mounts PlayEngine straight into #kioskPlayView - the
+       normal .topbar/.layout (sidebar, editor, viz tabs) are hidden via
+       body.kiosk-mode instead of being removed, so no separate code path is
+       needed to build them. -->
+  <div id="kioskRoot" class="kiosk-root" hidden>
+    <div class="kiosk-header">
+      <span class="kiosk-title">Dijkstra Maze — Play</span>
+      <a class="small" href="?" title="Opens the full step-by-step editor in this window">Open full editor</a>
+    </div>
+    <div id="kioskPlayView" class="kiosk-play-view"></div>
   </div>
 
   <div id="modalRoot" aria-live="polite"></div>
