@@ -42,20 +42,38 @@
         <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6v12l10-6z" fill="currentColor"/><rect x="3.5" y="4.5" width="17" height="15" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
         Play in new window
       </a>
-      <button id="saveProgressBtn" class="btn btn-accent" type="button" title="Saves your code, painted maps, and uploaded-file list — not the image/sound files themselves.">
-        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h11l5 5v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 3v6h8V3" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M7 21v-7h10v7" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
-        Save my work
-      </button>
-      <button id="loadProgressBtn" class="btn" type="button">
-        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7 10l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 21h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-        Load my work
-      </button>
-      <input type="file" id="loadProgressInput" accept="application/json" hidden />
       <button id="downloadProjectBtn" class="btn btn-accent" type="button" title="Turns your answers into a real, runnable pygame project.">
         <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v6H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M4 12h16v8H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 16h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         Download my project
       </button>
-      <button id="resetAllBtn" class="btn btn-ghost-danger" type="button">Reset all</button>
+      <!-- Save/Load/Reset grouped behind one menu button so the toolbar
+           isn't six items wide - same native <details>/<summary> pattern
+           already used for the "Code reference" panel elsewhere on the
+           page, so no new JS-driven dropdown component was needed. -->
+      <details class="topbar-menu" id="progressMenu">
+        <summary class="btn" aria-label="Progress menu: save, load, or reset">
+          Progress
+          <svg class="icon menu-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </summary>
+        <!-- Plain buttons, not role="menu"/"menuitem": a real ARIA menu
+             implies arrow-key navigation between items, which this doesn't
+             implement - claiming that role without the behavior would be
+             misleading to screen readers. Native <details>/<summary>
+             disclosure semantics (Enter/Space to toggle, Tab through the
+             buttons normally) are already fully accessible on their own. -->
+        <div class="topbar-menu-panel">
+          <button id="saveProgressBtn" class="btn btn-accent" type="button" title="Saves your code, painted maps, and uploaded-file list — not the image/sound files themselves.">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h11l5 5v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 3v6h8V3" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M7 21v-7h10v7" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+            Save my work
+          </button>
+          <button id="loadProgressBtn" class="btn" type="button">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7 10l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 21h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            Load my work
+          </button>
+          <input type="file" id="loadProgressInput" accept="application/json" hidden />
+          <button id="resetAllBtn" class="btn btn-ghost-danger" type="button">Reset all</button>
+        </div>
+      </details>
     </div>
   </header>
 

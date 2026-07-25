@@ -220,6 +220,46 @@ body {
 .brand-subtitle { font-size: 0.72rem; color: var(--parchment-dim); text-transform: uppercase; letter-spacing: 0.12em; }
 .topbar-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; position: relative; }
 
+/* Progress menu (Save/Load/Reset) - native <details>/<summary>, same
+   collapsible pattern already used for the "Code reference" panel, just
+   styled to float as a dropdown instead of expanding inline. */
+.topbar-menu { position: relative; }
+.topbar-menu summary {
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.topbar-menu summary::-webkit-details-marker { display: none; }
+.topbar-menu .menu-caret { width: 14px; height: 14px; transition: transform 0.15s ease; }
+.topbar-menu[open] .menu-caret { transform: rotate(180deg); }
+.topbar-menu-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 200px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius, 8px);
+  padding: 10px;
+  box-shadow: var(--shadow);
+}
+.topbar-menu-panel .btn { width: 100%; justify-content: flex-start; }
+/* .btn's default colors (--parchment text, white-overlay hover) assume the
+   dark topbar it was designed for - the dropdown panel sits on the normal
+   page/panel background instead, so override for readability in both
+   themes. .btn-accent keeps its own solid-color background (already
+   self-contained regardless of surrounding background). */
+.topbar-menu-panel .btn:not(.btn-accent):not(.btn-ghost-danger) { background: transparent; color: var(--text); border-color: var(--panel-border); }
+.topbar-menu-panel .btn:not(.btn-accent):not(.btn-ghost-danger):hover { background: color-mix(in srgb, var(--text) 8%, transparent); }
+.topbar-menu-panel .btn-ghost-danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
+.topbar-menu-panel .btn-ghost-danger:hover { background: color-mix(in srgb, var(--danger) 12%, transparent); }
+
 .popup-blocked-notice {
   position: absolute;
   top: calc(100% + 8px);

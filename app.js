@@ -1182,12 +1182,13 @@
     card.appendChild(el("div", { class: "step-file-tag", text: "File: " + step.file }));
     card.appendChild(el("div", { class: "step-lead rich-text", html: richTextToHtml(step.lead) }));
 
-    if (step.required) {
-      card.appendChild(el("div", { class: "flow-banner" }, [
-        svgIcon('<path d="M4 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'),
-        el("span", {}, ["Required step " + (REQUIRED_ORDER.indexOf(step.id) + 1) + " of " + REQUIRED_ORDER.length + ". Finish or Skip it to unlock the next one — Required steps go in order, you can't jump ahead."]),
-      ]));
-    } else if (step.id === CAPSTONE_BONUS_ID) {
+    // Generic "Required steps go in order" / "Bonus unlocks together" flow
+    // banners were removed here (steps 1-14) - they duplicated the
+    // sidebar's own permanent group headers/notes (see renderSidebarGroup),
+    // which are visible at all times regardless of which step is open.
+    // TODO 15's capstone banners are NOT duplicated anywhere else, so they
+    // stay exactly as they were.
+    if (step.id === CAPSTONE_BONUS_ID) {
       if (status === "locked") {
         card.appendChild(el("div", { class: "flow-banner capstone-locked" }, [
           svgIcon('<rect x="5" y="11" width="14" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2"/>'),
@@ -1199,11 +1200,6 @@
           el("span", {}, ["Capstone Bonus step — every other Bonus challenge is done, so it's time to write the rules for the game you actually built."]),
         ]));
       }
-    } else {
-      card.appendChild(el("div", { class: "flow-banner bonus" }, [
-        svgIcon('<path d="M4 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'),
-        el("span", {}, ["Bonus step — all Bonus steps are unlocked together and can be done in any order. Pick whichever looks interesting."]),
-      ]));
     }
 
     var refDetails = el("details", { class: "code-reference" }, [
@@ -6099,6 +6095,33 @@
     });
     $("#resetAllBtn").addEventListener("click", resetAll);
     $("#downloadProjectBtn").addEventListener("click", openExportModal);
+    initProgressMenu();
+  }
+
+  // Save/Load/Reset are grouped behind a native <details> dropdown (see
+  // index.html #progressMenu) - <details> doesn't close itself on an
+  // item click, an outside click, or Escape, so add just those three
+  // small conveniences. The IDs it wraps (#saveProgressBtn etc.) are
+  // wired above exactly as before; this only manages the menu's open/
+  // closed state.
+  function initProgressMenu() {
+    var menu = $("#progressMenu");
+    if (!menu) return;
+    function closeMenu() { menu.open = false; }
+    var items = menu.querySelectorAll(".topbar-menu-panel button");
+    for (var i = 0; i < items.length; i++) {
+      items[i].addEventListener("click", closeMenu);
+    }
+    document.addEventListener("click", function (e) {
+      if (menu.open && !menu.contains(e.target)) closeMenu();
+    });
+    menu.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && menu.open) {
+        closeMenu();
+        var summary = menu.querySelector("summary");
+        if (summary) summary.focus();
+      }
+    });
   }
 
   function initFileProtocolBanner() {
