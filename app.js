@@ -165,6 +165,19 @@
     return "def _fn(" + params + "):\n" + body + "\n    return locals()\n";
   }
 
+  // Same idea as buildFnSource, but for TODO 5's two coupled parts: they
+  // are sequential statements at the SAME scope in the real file (Part 2
+  // uses new_cost, which Part 1 just set), so for a "run it for real" demo
+  // (the visualizer / Play tab, as opposed to grading, which tests each
+  // part in isolation - see harness_dijkstra_5) the two student snippets
+  // are simply reindented and concatenated in order inside one function.
+  function buildFnSourceTwoParts(params, code1, code2, targetIndent) {
+    var indent = targetIndent || "    ";
+    var body1 = reindentPython(code1, indent);
+    var body2 = reindentPython(code2, indent);
+    return "def _fn(" + params + "):\n" + body1 + "\n" + body2 + "\n    return locals()\n";
+  }
+
   function b64Line(varName, text) {
     return varName + ' = base64.b64decode("' + toBase64Utf8(text) + '").decode("utf-8")';
   }
@@ -211,6 +224,18 @@
         var saved = parsed.steps[step.id];
         if (!saved) return;
         var d = s.steps[step.id];
+        // A step whose parts-ness changed since this save was made (e.g.
+        // TODO 5 was split into two parts) leaves saved.code in the WRONG
+        // shape for what this step now expects - a plain string where a
+        // 2-element array is now needed, or vice versa. Restoring it
+        // anyway would either silently misbehave (indexing a string with
+        // [0] returns a character, not a part) or show "completed" next
+        // to starter code. Leave this ONE step at its fresh default
+        // instead - a clean redo of just that step, not a confusing
+        // half-migrated one.
+        var expectsArrayCode = !!step.parts;
+        var savedCodeIsArray = Array.isArray(saved.code);
+        if (saved.code !== undefined && expectsArrayCode !== savedCodeIsArray) return;
         if (saved.code !== undefined) d.code = saved.code;
         if (saved.status === "completed" || saved.status === "skipped") d.status = saved.status;
         // Clamp to this step's CURRENT hint count - a save made before a
@@ -859,10 +884,29 @@
   function buildContextBlock(lines, startLine, extraClass) {
     var text = linesOf(lines);
     var count = Math.max(1, text.split("\n").length);
-    return el("div", { class: "code-block context-block " + extraClass }, [
+    var block = el("div", { class: "code-block context-block " + extraClass }, [
       el("div", { class: "code-gutter", text: makeGutter(startLine, count) }),
       el("div", { class: "code-lines", html: highlightPythonToHtml(text) }),
     ]);
+    block.dataset.startLine = String(startLine);
+    return block;
+  }
+
+  // Re-renders a context block's text/highlighting in place (its own
+  // gutter numbers only - NOT the numbering of whatever comes after it).
+  // Used for TODO 5 Part 2's "before" block, which shows the student's own
+  // live Part 1 code rather than a static data.js snippet (see
+  // renderMain()) - keeps content accurate as Part 1 is edited, without
+  // needing to re-flow the whole editor shell on every keystroke.
+  function updateContextBlockContent(blockEl, lines) {
+    if (!blockEl) return;
+    var text = linesOf(lines);
+    var count = Math.max(1, text.split("\n").length);
+    var startLine = parseInt(blockEl.dataset.startLine || "1", 10);
+    var gutterEl = blockEl.querySelector(".code-gutter");
+    var linesEl = blockEl.querySelector(".code-lines");
+    if (gutterEl) gutterEl.textContent = makeGutter(startLine, count);
+    if (linesEl) linesEl.innerHTML = highlightPythonToHtml(text);
   }
 
   function buildEditableBlock(step, partIndex, startLine) {
@@ -977,14 +1021,22 @@
     return api;
   }
 
-  function buildEditorShell(step, partLike, partIndex) {
-    var beforeLines = partLike.contextBefore || [];
+  // `overrideBeforeLines`, when given, replaces partLike.contextBefore -
+  // used by TODO 5's Part 2, whose "what's above" context is the
+  // student's own live Part 1 code rather than a fixed data.js snippet
+  // (see renderMain()). Accepts the same array-or-string shapes as
+  // everywhere else (linesOf() normalizes either).
+  function buildEditorShell(step, partLike, partIndex, overrideBeforeLines) {
+    var beforeLines = overrideBeforeLines !== undefined ? overrideBeforeLines : (partLike.contextBefore || []);
+    var beforeText = linesOf(beforeLines);
     var afterLines = partLike.contextAfter || [];
     var container = el("div", { class: "editor-shell" });
     var cursorLine = 1;
-    if (beforeLines.length > 0) {
-      container.appendChild(buildContextBlock(beforeLines, cursorLine, "context-before"));
-      cursorLine += beforeLines.length;
+    var beforeBlockEl = null;
+    if (beforeText.length > 0) {
+      beforeBlockEl = buildContextBlock(beforeLines, cursorLine, "context-before");
+      container.appendChild(beforeBlockEl);
+      cursorLine += beforeText.split("\n").length;
     }
     var editableStartLine = cursorLine;
     var editable = buildEditableBlock(step, partIndex, editableStartLine);
@@ -999,7 +1051,7 @@
     editable.onLineCountChange = function (newCount) {
       if (afterGutter) afterGutter.textContent = makeGutter(editableStartLine + newCount, afterLines.length);
     };
-    return { node: container, editable: editable };
+    return { node: container, editable: editable, beforeBlockEl: beforeBlockEl };
   }
 
   // ------------------------------------------------ 8. sidebar / main
@@ -1216,10 +1268,30 @@
     card.appendChild(refDetails);
 
     if (step.parts) {
+      // TODO 5's two parts are coupled (Part 2 literally uses new_cost,
+      // which Part 1 defines) - unlike TODO 9's independent image/sound
+      // parts. Part 2's "before" context shows the STUDENT'S OWN live
+      // Part 1 code (kept in sync as they type), not the reference form -
+      // showing the reference answer here would leak Part 1's graded
+      // answer outright, and it wouldn't even match what the student
+      // just wrote if their own style/spacing differs.
+      var partShells = [];
       step.parts.forEach(function (part, i) {
         card.appendChild(el("div", { class: "editor-file-label" }, [step.file, el("span", { class: "editor-part-label", text: "Part " + part.part }), el("span", {}, [part.title || ""])]));
-        card.appendChild(buildEditorShell(step, part, i).node);
+        if (part.lead) {
+          card.appendChild(el("div", { class: "step-lead rich-text part-lead", html: richTextToHtml(part.lead) }));
+        }
+        var overrideBefore;
+        if (step.id === "5" && i === 1) overrideBefore = stepData.code[0];
+        var shell = buildEditorShell(step, part, i, overrideBefore);
+        partShells.push(shell);
+        card.appendChild(shell.node);
       });
+      if (step.id === "5" && partShells.length === 2 && partShells[1].beforeBlockEl) {
+        partShells[0].editable.textarea.addEventListener("input", function () {
+          updateContextBlockContent(partShells[1].beforeBlockEl, stepData.code[0]);
+        });
+      }
     } else {
       card.appendChild(el("div", { class: "editor-file-label" }, [step.file]));
       card.appendChild(buildEditorShell(step, step, null).node);
@@ -1335,7 +1407,12 @@
     }
     var b = BEHAVIOUR_HARNESSES[step.grading.harness];
     if (!b) return Promise.resolve(noHarnessFeedback());
-    return pyodide.runPythonAsync(b(stepData.code)).then(parseHarnessResult);
+    // twoParts behaviour steps (TODO 5) pass each part as its OWN argument,
+    // not joined into one string like syntax mode does - the harness needs
+    // to splice/grade each part separately so a mistake in one part can be
+    // attributed specifically to that part (see harness_dijkstra_5).
+    var src = step.grading.twoParts ? b(stepData.code[0], stepData.code[1]) : b(stepData.code);
+    return pyodide.runPythonAsync(src).then(parseHarnessResult);
   }
 
   function noHarnessFeedback() {
@@ -1605,65 +1682,98 @@
     ].join("\n");
   }
 
-  // Merged Required Dijkstra relaxation (absorbed the old Bonus 6-1/6-2 -
-  // students already learned this exact relaxation, as one unit, in Game AI
-  // Lab mission 8). The student's snippet now covers: computing new_cost,
-  // deciding whether it's an improvement, updating distance/parent, AND
-  // pushing the improved route onto the queue (heapq is exposed to the
-  // isolated scope so heapq.heappush works exactly like the real function).
-  function harness_dijkstra_5(code) {
-    var fnSrc = buildFnSource("cost, step_cost, neighbor, current, distance, parent, queue", code, "    ");
+  // Required Dijkstra relaxation, split into two independently-graded parts
+  // (TODO 5 Part 1/2 and Part 2/2 - the same coupling-aware split pattern
+  // TODO 9 uses for images/sounds, except these two parts genuinely depend
+  // on each other: Part 2's code uses new_cost, which Part 1 computes).
+  // Each part gets its OWN isolated test: Part 1 is graded purely on
+  // whether it computes new_cost correctly from (cost, step_cost); Part 2
+  // is graded by supplying new_cost directly as an input (NOT by running
+  // Part 1's code first), so a mistake in either part is attributed
+  // specifically to that part - a correct Part 1 + broken Part 2 fails
+  // only on Part 2's cases, and vice versa. heapq is exposed to Part 2's
+  // isolated scope so heapq.heappush works exactly like the real function.
+  function harness_dijkstra_5(code1, code2) {
+    var fn1Src = buildFnSource("cost, step_cost", code1, "    ");
+    var fn2Src = buildFnSource("new_cost, neighbor, current, distance, parent, queue", code2, "    ");
     return [
       PY_PRELUDE + "import heapq",
-      b64Line("FN_SRC", fnSrc),
+      b64Line("FN1_SRC", fn1Src),
+      b64Line("FN2_SRC", fn2Src),
       "def _run():",
       "    result = {'ok': False, 'passed': [], 'failed': [], 'error': None, 'traceback': None}",
-      "    ns = {}",
+      "    ns1 = {}",
+      "    ns2 = {}",
       "    try:",
-      "        exec(compile(FN_SRC, '<student>', 'exec'), {'heapq': heapq}, ns)",
+      "        exec(compile(FN1_SRC, '<student-part1>', 'exec'), {}, ns1)",
       "    except SyntaxError as e:",
       "        line = max(1, (e.lineno or 1) - 1)",
-      "        result['error'] = 'Python syntax error on line %s: %s.' % (line, e.msg)",
+      "        result['error'] = 'Part 1: Python syntax error on line %s: %s.' % (line, e.msg)",
       "        return json.dumps(result)",
-      "    _fn = ns['_fn']",
-      "    cases = [",
-      "        ('fresh neighbor', {}, {}, 'B', 'A', 0, 5),",
-      "        ('improving neighbor', {'D': 10}, {'D': 'X'}, 'D', 'C', 0, 2),",
-      "        ('non-improving neighbor', {'E': 3}, {'E': 'Y'}, 'E', 'X', 0, 10),",
-      "        ('negative-weight cost', {'Z': 40}, {'Z': 'Y'}, 'Z', 'W', -20, 5),",
-      "    ]",
       "    try:",
-      "        for label, dist0, par0, neighbor, current, cost, step_cost in cases:",
+      "        exec(compile(FN2_SRC, '<student-part2>', 'exec'), {'heapq': heapq}, ns2)",
+      "    except SyntaxError as e:",
+      "        line = max(1, (e.lineno or 1) - 1)",
+      "        result['error'] = 'Part 2: Python syntax error on line %s: %s.' % (line, e.msg)",
+      "        return json.dumps(result)",
+      "    _fn1 = ns1['_fn']",
+      "    _fn2 = ns2['_fn']",
+      "    try:",
+      "        cost_cases = [",
+      "            ('cost=0, step_cost=5', 0, 5),",
+      "            ('cost=10, step_cost=7', 10, 7),",
+      "            ('cost=3, step_cost=3', 3, 3),",
+      "            ('cost=-20, step_cost=5 (negative-weight case)', -20, 5),",
+      "        ]",
+      "        for label, cost, step_cost in cost_cases:",
+      "            out = _fn1(cost, step_cost)",
+      "            expected = cost + step_cost",
+      "            got = out.get('new_cost') if isinstance(out, dict) else None",
+      "            if got == expected:",
+      "                result['passed'].append('Part 1 (%s): new_cost == %r' % (label, expected))",
+      "            else:",
+      "                result['failed'].append('Part 1 (%s): expected new_cost == %r, got %r.' % (label, expected, got))",
+      "    except Exception as e:",
+      "        result['error'] = 'Part 1: %s: %s' % (type(e).__name__, e)",
+      "        result['traceback'] = traceback.format_exc()",
+      "        return json.dumps(result)",
+      "    try:",
+      "        route_cases = [",
+      "            ('fresh neighbor', {}, {}, 'B', 'A', 5),",
+      "            ('improving neighbor', {'D': 10}, {'D': 'X'}, 'D', 'C', 2),",
+      "            ('non-improving neighbor', {'E': 3}, {'E': 'Y'}, 'E', 'X', 10),",
+      "            ('negative-weight cost', {'Z': 40}, {'Z': 'Y'}, 'Z', 'W', -15),",
+      "        ]",
+      "        for label, dist0, par0, neighbor, current, new_cost in route_cases:",
       "            distance = dict(dist0)",
       "            parent = dict(par0)",
       "            queue = []",
-      "            expected_new_cost = cost + step_cost",
-      "            should_improve = (neighbor not in distance) or expected_new_cost < distance[neighbor]",
-      "            _fn(cost, step_cost, neighbor, current, distance, parent, queue)",
+      "            should_improve = (neighbor not in distance) or new_cost < distance[neighbor]",
+      "            _fn2(new_cost, neighbor, current, distance, parent, queue)",
       "            if should_improve:",
-      "                ok_d = distance.get(neighbor) == expected_new_cost",
+      "                ok_d = distance.get(neighbor) == new_cost",
       "                ok_p = parent.get(neighbor) == current",
-      "                ok_q = any(isinstance(q, tuple) and len(q) == 2 and q[0] == expected_new_cost and q[1] == neighbor for q in queue)",
+      "                ok_q = any(isinstance(q, tuple) and len(q) == 2 and q[0] == new_cost and q[1] == neighbor for q in queue)",
       "                if ok_d and ok_p and ok_q:",
-      "                    result['passed'].append('%s: distance/parent updated and the improved route was pushed to the queue' % label)",
+      "                    result['passed'].append('Part 2 (%s): distance/parent updated and the improved route was pushed to the queue' % label)",
       "                else:",
       "                    msgs = []",
       "                    if not ok_d:",
-      "                        msgs.append('distance[%r] is %r, expected %r' % (neighbor, distance.get(neighbor), expected_new_cost))",
+      "                        msgs.append('distance[%r] is %r, expected %r' % (neighbor, distance.get(neighbor), new_cost))",
       "                    if not ok_p:",
       "                        msgs.append('parent[%r] is %r, expected %r' % (neighbor, parent.get(neighbor), current))",
       "                    if not ok_q:",
       "                        msgs.append('the improved (new_cost, neighbor) tuple was not pushed to the queue with heapq.heappush')",
-      "                    result['failed'].append('%s: %s.' % (label, '; '.join(msgs)))",
+      "                    result['failed'].append('Part 2 (%s): %s.' % (label, '; '.join(msgs)))",
       "            else:",
       "                ok_d = distance.get(neighbor) == dist0[neighbor]",
       "                ok_p = parent.get(neighbor) == par0[neighbor]",
       "                if ok_d and ok_p:",
-      "                    result['passed'].append('%s: correctly left unchanged since it was not an improvement' % label)",
+      "                    result['passed'].append('Part 2 (%s): correctly left unchanged since it was not an improvement' % label)",
       "                else:",
-      "                    result['failed'].append('%s: distance/parent were changed even though new_cost was not an improvement over the existing distance[%r]=%r.' % (label, neighbor, dist0[neighbor]))",
+      "                    result['failed'].append('Part 2 (%s): distance/parent were changed even though new_cost was not an improvement over the existing distance[%r]=%r.' % (label, neighbor, dist0[neighbor]))",
       "    except Exception as e:",
-      "        result['error'] = '%s: %s' % (type(e).__name__, e)",
+      "        result['error'] = 'Part 2: %s: %s' % (type(e).__name__, e)",
       "        result['traceback'] = traceback.format_exc()",
       "    result['ok'] = result['error'] is None and len(result['failed']) == 0",
       "    return json.dumps(result)",
@@ -2668,8 +2778,8 @@
   // called with UNIFORM weights - the same "no weights passed" call maze.py
   // itself makes in create_swamps(), which is exactly what makes Dijkstra
   // degenerate into BFS (see TODO 5's lead / pathfinding.py's docstring).
-  function traceHarness_swampPlacement(code5, mazeGrid, start, end, swampCount) {
-    var fn5 = buildFnSource("cost, step_cost, neighbor, current, distance, parent, queue", code5, "    ");
+  function traceHarness_swampPlacement(code5a, code5b, mazeGrid, start, end, swampCount) {
+    var fn5 = buildFnSourceTwoParts("cost, step_cost, neighbor, current, distance, parent, queue", code5a, code5b, "    ");
     return [
       "import json, base64, random, heapq, traceback",
       b64Line("FN5_SRC", fn5),
@@ -2846,12 +2956,13 @@
     ].join("\n");
   }
 
-  // Standalone weighted-grid demo for Required TODO 5 (merged relaxation).
-  // Splices the student's ONE relaxation block (now including the queue
-  // push) fresh on every neighbor visit, same style as the other trace
-  // harnesses that animate a live student function.
-  function traceHarness_dijkstra(code5, rows, cols, weights, start, end) {
-    var fn5 = buildFnSource("cost, step_cost, neighbor, current, distance, parent, queue", code5, "    ");
+  // Standalone weighted-grid demo for Required TODO 5 (relaxation, now
+  // split into Part 1/2 + Part 2/2). Splices the student's two blocks,
+  // reassembled in their real sequential order, fresh on every neighbor
+  // visit, same style as the other trace harnesses that animate a live
+  // student function.
+  function traceHarness_dijkstra(code5a, code5b, rows, cols, weights, start, end) {
+    var fn5 = buildFnSourceTwoParts("cost, step_cost, neighbor, current, distance, parent, queue", code5a, code5b, "    ");
     return [
       "import json, base64, heapq, traceback",
       b64Line("FN5_SRC", fn5),
@@ -2999,10 +3110,10 @@
   }
 
   // Dijkstra's hint route drawn on the REAL round maze (walls + terrain),
-  // using the student's Required TODO 5 code (the same merged function) and
+  // using the student's Required TODO 5 code (both parts, reassembled) and
   // terrain-based route weights.
-  function traceHarness_dijkstraOnMaze(code5, mazeGrid, weightsByTerrain, terrainGrid, start, end) {
-    var fn5 = buildFnSource("cost, step_cost, neighbor, current, distance, parent, queue", code5, "    ");
+  function traceHarness_dijkstraOnMaze(code5a, code5b, mazeGrid, weightsByTerrain, terrainGrid, start, end) {
+    var fn5 = buildFnSourceTwoParts("cost, step_cost, neighbor, current, distance, parent, queue", code5a, code5b, "    ");
     return [
       "import json, heapq, base64, traceback",
       b64Line("FN5_SRC", fn5),
@@ -3566,7 +3677,7 @@
       var c5 = state.steps["5"].code;
       if (refs) refs.verdict.info("Running your code…");
       ensurePyodide().then(function (py) {
-        return py.runPythonAsync(traceHarness_dijkstra(c5, ROWS, COLS, weights, START, END));
+        return py.runPythonAsync(traceHarness_dijkstra(c5[0], c5[1], ROWS, COLS, weights, START, END));
       }).then(function (json) {
         var data = JSON.parse(json);
         visited = []; pathCells = []; pqSnapshot = [];
@@ -5250,7 +5361,7 @@
         }
         var c5 = state.steps["5"].code;
         ensurePyodide().then(function (py) {
-          return py.runPythonAsync(traceHarness_swampPlacement(c5, maze, [player.row, player.col], [goal.row, goal.col], cfg.swampCount));
+          return py.runPythonAsync(traceHarness_swampPlacement(c5[0], c5[1], maze, [player.row, player.col], [goal.row, goal.col], cfg.swampCount));
         }).then(function (json2) {
           var d2 = JSON.parse(json2);
           if (d2.ok && d2.swamp_on_path) {
@@ -5501,7 +5612,8 @@
       if (!caps.hint) return;
       var weightsByTerrain = { NORMAL: 0, SWAMP: 100, CUSTOM: (customValues && customValues.terrain ? customValues.terrain.weight : 0) };
       ensurePyodide().then(function (py) {
-        return py.runPythonAsync(traceHarness_dijkstraOnMaze(state.steps["5"].code, maze, weightsByTerrain, terrain, [player.row, player.col], [goal.row, goal.col]));
+        var c5 = state.steps["5"].code;
+        return py.runPythonAsync(traceHarness_dijkstraOnMaze(c5[0], c5[1], maze, weightsByTerrain, terrain, [player.row, player.col], [goal.row, goal.col]));
       }).then(function (json) {
         var d = JSON.parse(json);
         if (d.ok && d.path && d.path.length) {

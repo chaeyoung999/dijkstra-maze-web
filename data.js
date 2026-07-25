@@ -126,7 +126,7 @@ const COURSE_STEPS = [
   {
     id: "3", step: 3, kind: "Required", required: true, file: "player.py",
     title: "Stop movement when there is no cell or a wall blocks the direction.",
-    lead: "`try_move` first looks up the cell the player is standing on, then must decide whether the move is even possible before touching any coordinates. Two things can block it: there's no cell in that direction (**`current is None`**), or a wall stands in the way (**`current.walls[direction]`** is `True`). Join both checks with `or` and `return False` inside the `if` — this is a classic guard clause, the same shape as Game AI Lab's `get_tile_cost` (`if tile == WALL: return None`): handle the bad cases first and bail out early, so the rest of the function can assume the move is legal.",
+    lead: "`try_move` first looks up the cell the player is standing on, then must decide whether the move is even possible before touching any coordinates. Two things can block it:\n\n- there's no cell in that direction (**`current is None`**), or\n- a wall stands in the way (**`current.walls[direction]`** is `True`).\n\nJoin both checks with `or` and `return False` inside the `if`. This is a classic guard clause, the same shape as Game AI Lab's `get_tile_cost` (`if tile == WALL: return None`): handle the bad cases first and bail out early, so the rest of the function can assume the move is legal.",
     codeReference: [
       ["current", "The Cell the player currently stands on, looked up just above. May be None if there is no cell there."],
       ["current.walls[direction]", "True when a wall blocks movement in direction from the current cell."],
@@ -191,34 +191,52 @@ const COURSE_STEPS = [
   {
     id: "5", step: 5, kind: "Required", required: true, file: "pathfinding.py",
     title: "Calculate the cost to reach this neighbor, and record the better route.",
-    lead: "You already did this exact calculation for the ghost AI in Game AI Lab, mission 8 — their worked example was literally `new_cost = 3 + 2`. This is Dijkstra's relaxation step, same formula and same variable name, just a different graph: add the cost already spent reaching the current cell (**`cost`**) to the cost of this one extra step (**`step_cost`**), store that sum in **`new_cost`**, and — only if it's an improvement over anything seen before — record it in **`distance[neighbor]`** and **`parent[neighbor]`** (the same dictionary-assignment pattern as mission 8's `distance[node] = new_cost`, plus remembering where you came from so the route can be traced back later), then push the improved route onto the queue.\n\n**Fun fact:** this one function does triple duty in the finished game — it decides where swamps go while the maze is generated, powers the player's Hint button, and (if you build the Bonus monster) drives its chase behaviour. Called with no weights at all, every step costs the same — and Dijkstra with uniform costs *is* breadth-first search, so the exact code you write here quietly doubles as a BFS too.",
+    lead: "Dijkstra's relaxation step is really two separate ideas glued together: computing a candidate cost, then deciding whether to actually keep it. Each part below gets its own short explanation, split the same way TODO 9 splits into Part 1/2 and Part 2/2.",
     codeReference: [
       ["cost", "The total cost already spent reaching current, popped from the priority queue."],
       ["step_cost", "The (already positive, already offset) cost of the one edge from current to this neighbor."],
-      ["new_cost", "The candidate total cost of reaching neighbor through current."],
-      ["distance[neighbor], parent[neighbor]", "The best known cost to reach neighbor, and the cell it should be reached from on that route — update both together, only on improvement."],
+      ["new_cost", "The candidate total cost of reaching neighbor through current — computed in Part 1, used in Part 2."],
+      ["distance[neighbor], parent[neighbor]", "The best known cost to reach neighbor, and the cell it should be reached from on that route — update both together, only on improvement (Part 2)."],
     ],
-    contextBefore: [
-      "            step_cost = get_positive_weight(neighbor)",
-      "",
-      "            if step_cost <= 0:",
-      '                raise ValueError(',
-      '                    "Adjusted Dijkstra weight must be positive."',
-      "                )",
-    ],
-    contextAfter: [],
-    starter: [
-      "            pass  # Write your code here.",
+    parts: [
+      {
+        part: "1/2", title: "Calculate the candidate cost to reach this neighbor.",
+        lead: "You already did this exact arithmetic for the ghost AI in Game AI Lab, mission 8 — their worked example was literally `new_cost = 3 + 2`. Add the cost already spent reaching the current cell (**`cost`**) to the cost of this one extra step (**`step_cost`**), and store that sum in **`new_cost`**. That's the whole idea for this part — one line, same formula, different graph.",
+        contextBefore: [
+          "            step_cost = get_positive_weight(neighbor)",
+          "",
+          "            if step_cost <= 0:",
+          '                raise ValueError(',
+          '                    "Adjusted Dijkstra weight must be positive."',
+          "                )",
+        ],
+        contextAfter: [],
+        starter: [
+          "            new_cost = 0  # Write your code here.",
+        ],
+      },
+      {
+        part: "2/2", title: "Decide whether to keep it, and record the improved route.",
+        lead: "Not every candidate cost is worth keeping. Only update the route if **`new_cost`** is actually better than anything found before — either **`neighbor`** hasn't been seen yet, or `new_cost` beats the recorded **`distance[neighbor]`**.\n\nWhen it *is* an improvement: **`distance[neighbor]`** and **`parent[neighbor]`** update together (the best cost and the route both changed), and the improved route gets pushed onto the queue so the search actually explores it — skip that push and the better route is discovered but never followed.",
+        contextBefore: [
+          "            new_cost = 0  # Write your code here.",
+        ],
+        contextAfter: [],
+        starter: [
+          "            pass  # Write your code here.",
+        ],
+      },
     ],
     hints: [
-      "This is Dijkstra's relaxation step, the same one you wrote for the ghost AI in Game AI Lab mission 8: add the cost already spent reaching `current` (`cost`) to this one extra step (`step_cost`) to get `new_cost`, the candidate cost of reaching `neighbor` through `current`. Only keep it if it's actually an improvement — `neighbor` hasn't been seen yet, or `new_cost` beats the recorded `distance[neighbor]` — in which case update BOTH `distance[neighbor]` (the new best cost) and `parent[neighbor]` (remembering you came from `current`, so the route can be traced back later) together, then push the improved `(new_cost, neighbor)` route onto the queue so it actually gets explored.",
-      "new_cost = ??? + ???\nif neighbor not in distance or new_cost < distance[neighbor]:\n    distance[neighbor] = ???\n    parent[neighbor] = ???\n    heapq.heappush(queue, (???, neighbor))",
+      "**Fun fact:** this one function does triple duty in the finished game — it decides where swamps go while the maze is generated, powers the player's Hint button, and (if you build the Bonus monster) drives its chase behaviour. Called with no weights at all, every step costs the same — and Dijkstra with uniform costs *is* breadth-first search, so the exact code you write across both parts here quietly doubles as a BFS too.",
+      "Part 1: `new_cost = ??? + ???`\nPart 2: `if neighbor not in distance or new_cost < distance[neighbor]:` / `    distance[neighbor] = ???` / `    parent[neighbor] = ???` / `    heapq.heappush(queue, (???, neighbor))`",
     ],
     visualizer: "dijkstraFrontier",
     grading: {
       mode: "behaviour",
       harness: "dijkstra_5",
-      casesDescription: "Fresh/improving/non-improving/negative-weight neighbors; asserts new_cost, distance, and parent are all correct, that non-improvements are left untouched, and the improved route is pushed to the queue.",
+      casesDescription: "Part 1: several (cost, step_cost) pairs, asserts new_cost == cost + step_cost. Part 2: fresh/improving/non-improving/negative-weight neighbors with new_cost supplied directly, asserts distance/parent update only on improvement and the improved route is pushed to the queue. Each part is graded independently, so a mistake in one part is attributed specifically to that part.",
+      twoParts: true,
     },
   },
 
@@ -289,7 +307,7 @@ const COURSE_STEPS = [
   {
     id: "8", step: 8, kind: "Bonus", required: false, file: "settings.py",
     title: "Redesign the three rounds.",
-    lead: "**`ROUND_CONFIGS`** is the difficulty curve of your whole game: one dictionary per round, read in order as the player advances. You can change `rows`, `cols`, object counts, `extra_open_walls`, `monster_count`, and `time_limit_seconds` — bigger mazes and stricter timers raise the difficulty. Every key already means something to the engine, so keep all three dictionaries, keep every key, and keep every value an integer — only change the numbers. The map editor on the right lets you hand-paint a layout the same way you built Game AI Lab's N×N matrix map (with 0/1/\"P\"/\"G1\"/\"G2\" markers) — just for a maze instead of a ghost-chase board, now including exactly where the player starts, the goal, and (if you're doing the monster Bonus) where the monster(s) start.",
+    lead: "**`ROUND_CONFIGS`** is the difficulty curve of your whole game: one dictionary per round, read in order as the player advances. You can change `rows`, `cols`, object counts, `extra_open_walls`, `monster_count`, and `time_limit_seconds` — bigger mazes and stricter timers raise the difficulty.\n\nEvery key already means something to the engine, so keep all three dictionaries, keep every key, and keep every value an integer — only change the numbers.\n\nPrefer not to hand-edit the numbers? The map editor on the right lets you hand-paint a layout the same way you built Game AI Lab's N×N matrix map (with 0/1/\"P\"/\"G1\"/\"G2\" markers) — just for a maze instead of a ghost-chase board, now including exactly where the player starts, the goal, and (if you're doing the monster Bonus) where the monster(s) start.",
     codeReference: [
       ["ROUND_CONFIGS", "A list of exactly 3 dictionaries, one per round, read in order as the player clears rounds."],
       ["rows, cols, cell_size", "Grid dimensions and pixel size of one cell; bigger rows/cols means a bigger maze."],
@@ -362,7 +380,7 @@ const COURSE_STEPS = [
   {
     id: "9", step: 9, kind: "Bonus", required: false, file: "settings.py",
     title: "Replace the player, goal, terrain, item, bomb, monster images, and add sounds.",
-    lead: "Two settings blocks decide what the player sees and hears: image paths for the player, goal, terrain, items and monster, then sound paths for pickups, hazards, and background music. Every value is either **`None`** (use the game's built-in shape/silence) or a quoted path to a file already provided in `assets/images/` or `assets/sounds/` — there's no third option, and you can change as many or as few lines as you like.",
+    lead: "Two settings blocks decide what the player sees and hears: image paths for the player, goal, terrain, items and monster, then sound paths for pickups, hazards, and background music.\n\nEvery value is either **`None`** (use the game's built-in shape/silence) or a quoted path to a file already provided in `assets/images/` or `assets/sounds/` — there's no third option, and you can change as many or as few lines as you like.",
     codeReference: [
       ["PLAYER_IMAGE_PATH / GOAL_IMAGE_PATH / SWAMP_IMAGE_PATH / ITEM_IMAGE_PATH / BOMB_IMAGE_PATH / FLOOR_TILE_IMAGE_PATH", "Each is either None (use the built-in drawn shape) or a quoted path to a file under assets/images/."],
       ["SWAMP_SOUND_PATH / ITEM_SOUND_PATH / BOMB_SOUND_PATH / BACKGROUND_MUSIC_PATH", "Each is either None (silent) or a quoted path to a file under assets/sounds/."],
@@ -421,7 +439,7 @@ const COURSE_STEPS = [
   {
     id: "10", step: 10, kind: "Bonus", required: false, file: "settings.py",
     title: "Customize your collectible item(s).",
-    lead: "This is where your game gets its own signature collectibles. **`CUSTOM_ITEMS`** is a list — add as many dictionaries as you like, each with its own **`name`**, RGB **`color`**, **`score`**, **`hint_bonus`**, and Dijkstra **`route_weight`** (a very negative weight makes Dijkstra actively seek that item out). Every round spawns several custom items total, each randomly drawn from this list — so two or three genuinely different items can appear side by side, each with its own personality.",
+    lead: "This is where your game gets its own signature collectibles. **`CUSTOM_ITEMS`** is a list — add as many dictionaries as you like, each with its own:\n\n- **`name`** — the display name.\n- **`color`** — an RGB tuple, used when no image is set.\n- **`score`** — points added when collected.\n- **`hint_bonus`** — extra hint uses granted.\n- **`route_weight`** — a very negative value makes Dijkstra actively seek that item out.\n\nEvery round spawns several custom items total, each randomly drawn from this list — so two or three genuinely different items can appear side by side, each with its own personality.",
     codeReference: [
       ["CUSTOM_ITEMS", "A list of dictionaries — add as many as you like, each describing one distinct custom item."],
       ["name", "The display name of this collectible."],
@@ -463,7 +481,7 @@ const COURSE_STEPS = [
   {
     id: "11", step: 11, kind: "Bonus", required: false, file: "settings.py",
     title: "Customize the extra terrain.",
-    lead: "Symmetrically to TODO 10, this terrain type is entirely defined by five constants: **`CUSTOM_TERRAIN_NAME`**, **`CUSTOM_TERRAIN_COLOR`**, the **`CUSTOM_TERRAIN_SCORE_CHANGE`** stepping on it causes (positive or negative), the **`CUSTOM_TERRAIN_ROUTE_WEIGHT`** Dijkstra uses, and **`CUSTOM_TERRAIN_DISAPPEARS`** — whether it reverts to normal after one use. Together they let you invent a hazard or shortcut that's entirely your own.",
+    lead: "Symmetrically to TODO 10, this terrain type is entirely defined by five constants:\n\n- **`CUSTOM_TERRAIN_NAME`** — the display name.\n- **`CUSTOM_TERRAIN_COLOR`** — an RGB tuple, used when no image is set.\n- **`CUSTOM_TERRAIN_SCORE_CHANGE`** — the score change stepping on it causes (positive or negative).\n- **`CUSTOM_TERRAIN_ROUTE_WEIGHT`** — the weight Dijkstra uses for this terrain.\n- **`CUSTOM_TERRAIN_DISAPPEARS`** — whether it reverts to normal after one use.\n\nTogether they let you invent a hazard or shortcut that's entirely your own.",
     codeReference: [
       ["CUSTOM_TERRAIN_NAME", "The display name of your terrain."],
       ["CUSTOM_TERRAIN_COLOR", "An (R, G, B) tuple, each 0-255, used when no image is set."],
@@ -500,7 +518,7 @@ const COURSE_STEPS = [
   {
     id: "12", step: 12, kind: "Bonus", required: false, file: "settings.py",
     title: "Tune the monster's distances, speeds, and count.",
-    lead: "The monster (TODO 13/14 below) needs a few numbers tuned before its behaviour makes sense. **`MONSTER_ATTACK_DISTANCE`** and **`MONSTER_CHASE_DISTANCE`** are pixel distances — the same kind of threshold Game AI Lab's mission 3 used (check the more specific, closer range before the broader one), so `CHASE` must stay a bigger number than `ATTACK` or the monster will never notice you coming. The **`MONSTER_SPEED_*`** constants are milliseconds between moves — smaller means faster, the same idea as `PLAYER_MOVE_DELAY_MS`. **`MONSTER_COUNT`** is how many monsters spawn per round by default.",
+    lead: "The monster (TODO 13/14 below) needs a few numbers tuned before its behaviour makes sense.\n\n- **`MONSTER_ATTACK_DISTANCE`** and **`MONSTER_CHASE_DISTANCE`** are pixel distances — the same kind of threshold Game AI Lab's mission 3 used (check the more specific, closer range before the broader one), so `CHASE` must stay a bigger number than `ATTACK` or the monster will never notice you coming.\n- The **`MONSTER_SPEED_*`** constants are milliseconds between moves — smaller means faster, the same idea as `PLAYER_MOVE_DELAY_MS`.\n- **`MONSTER_COUNT`** is how many monsters spawn per round by default.",
     codeReference: [
       ["MONSTER_ATTACK_DISTANCE", "Pixel distance below which the monster switches to ATTACK."],
       ["MONSTER_CHASE_DISTANCE", "Pixel distance below which the monster switches to CHASE (must be greater than MONSTER_ATTACK_DISTANCE)."],
@@ -536,7 +554,7 @@ const COURSE_STEPS = [
   {
     id: "13", step: 13, kind: "Bonus", required: false, file: "monster.py",
     title: "Write the monster's PATROL / CHASE / ATTACK state dispatch.",
-    lead: "This is the exact same shape as Game AI Lab missions 2+3 combined: an `if`/`elif`/`elif` chain that checks the MORE specific (closer) range **first**. `distance` is already computed for you — if it's under **`MONSTER_ATTACK_DISTANCE`**, the state is `\"ATTACK\"`; otherwise if it's under **`MONSTER_CHASE_DISTANCE`**, the state is `\"CHASE\"`; otherwise it's `\"PATROL\"`.",
+    lead: "This is the exact same shape as Game AI Lab missions 2+3 combined: an `if`/`elif`/`elif` chain that checks the MORE specific (closer) range **first**.\n\n`distance` is already computed for you:\n\n- under **`MONSTER_ATTACK_DISTANCE`** → `\"ATTACK\"`\n- otherwise under **`MONSTER_CHASE_DISTANCE`** → `\"CHASE\"`\n- otherwise → `\"PATROL\"`",
     codeReference: [
       ["distance", "The Manhattan pixel distance between the monster and the player, already computed above your TODO."],
       ["self.state", "One of \"ATTACK\", \"CHASE\", or \"PATROL\" — read by update() right after this to decide what the monster does next."],
@@ -565,7 +583,7 @@ const COURSE_STEPS = [
   {
     id: "14", step: 14, kind: "Bonus", required: false, file: "monster.py",
     title: "Move the monster one tile toward the player while chasing.",
-    lead: "Same pattern as Game AI Lab missions 10/11: recalculate the path every move, check its length, then move one step. Call **`find_path_dijkstra`** — the exact function you wrote in Required TODO 5 — with the maze, the monster's position, and the player's position, then move the monster to **`path[1]`** (the cell right after where it currently is) whenever `len(path) > 1`.",
+    lead: "Same pattern as Game AI Lab missions 10/11: recalculate the path every move, check its length, then move one step.\n\nCall **`find_path_dijkstra`** — the exact function you wrote in Required TODO 5 — with the maze, the monster's position, and the player's position. Then move the monster to **`path[1]`** (the cell right after where it currently is) whenever `len(path) > 1`.",
     codeReference: [
       ["find_path_dijkstra(maze, start, end)", "The Required TODO 5 function — reused here unchanged, called fresh every move so the monster always has an up-to-date route."],
       ["path[1]", "The first step away from the monster's current cell; path[0] is always the monster's own current position."],

@@ -531,6 +531,7 @@ a.btn { text-decoration: none; cursor: pointer; }
 .pill-bonus { background: var(--warning-bg); color: var(--warning); }
 .step-title { font-size: 1.3rem; font-weight: 700; margin-bottom: 10px; }
 .step-lead { color: var(--text-dim); margin-bottom: 16px; font-size: 0.98rem; }
+.step-lead.part-lead { margin-top: -4px; font-size: 0.92rem; }
 .step-file-tag { font-size: 0.78rem; color: var(--text-faint); margin-bottom: 4px; }
 
 /* Shared styling for the small hand-rolled rich-text renderer (**bold**,
