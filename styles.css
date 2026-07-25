@@ -669,6 +669,35 @@ body {
 .step-actions .spacer { flex: 1; }
 .attempt-count { font-size: 0.78rem; color: var(--text-faint); }
 
+/* --------------------------------------------------------- next-todo cta */
+/* Deliberately secondary to the Run/Grade action above (smaller, quieter,
+   at the very bottom of the card) - a convenience for moving forward, not
+   a replacement for the sidebar. */
+.next-todo-wrap {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--panel-border);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.next-todo-btn {
+  background: transparent;
+  border: 1px solid var(--panel-border);
+  color: var(--text-dim);
+}
+.next-todo-btn:hover:not(:disabled) { color: var(--text); border-color: var(--accent-2); }
+.next-todo-btn.is-locked { opacity: 0.55; cursor: not-allowed; }
+.next-todo-reason { color: var(--text-faint); }
+.next-todo-done {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--success);
+  font-size: 0.88rem;
+}
+
 /* -------------------------------------------------------------- feedback */
 .feedback {
   border-radius: 8px;

@@ -316,6 +316,18 @@
     if (mp) mp.focus();
   }
 
+  // Full course order for the "Next TODO ->" convenience button: Required in
+  // order, then Bonus in order (the exact same order the sidebar renders in,
+  // capstone included at the end) - independent of whether steps are
+  // currently unlocked, since the button itself shows a locked/disabled
+  // state rather than skipping over locked steps.
+  function nextTodoIdInFullOrder(id) {
+    var order = REQUIRED_ORDER.concat(BONUS_ORDER);
+    var idx = order.indexOf(id);
+    if (idx === -1 || idx + 1 >= order.length) return null;
+    return order[idx + 1];
+  }
+
   // ----------------------------------------------------------- 3. theme
 
   function getStoredTheme() {
@@ -1103,6 +1115,49 @@
     return box;
   }
 
+  // "Next TODO ->" convenience button: a secondary way to move forward
+  // without going back to the sidebar. Never replaces the sidebar's own
+  // lock rules - it just surfaces them here too, with a short reason,
+  // instead of silently doing nothing when the next step isn't reachable
+  // yet.
+  function nextTodoLockReason(nextId) {
+    if (nextId === CAPSTONE_BONUS_ID) {
+      return "Finish every other Bonus challenge first, then come back and write the rules for the game you actually built.";
+    }
+    if (REQUIRED_ORDER.indexOf(nextId) !== -1) {
+      return "Complete or skip this step to continue.";
+    }
+    return "Finish every Required step (complete or skip) first - Bonus unlocks all at once after that.";
+  }
+
+  function renderNextTodoControl(currentId) {
+    var nextId = nextTodoIdInFullOrder(currentId);
+    var wrap = el("div", { class: "next-todo-wrap" });
+    if (!nextId) {
+      wrap.appendChild(el("div", { class: "next-todo-done" }, [
+        svgIcon('<path d="M4 12.5 9.5 18 20 6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>'),
+        el("span", {}, ["You've reached the last step. Nice work getting all the way through."]),
+      ]));
+      return wrap;
+    }
+    var nextStep = STEP_BY_ID[nextId];
+    var nextUnlocked = computeStatus(nextId) !== "locked";
+    var btn = el("button", {
+      class: "btn btn-small next-todo-btn" + (nextUnlocked ? "" : " is-locked"),
+      type: "button",
+      disabled: nextUnlocked ? null : "disabled",
+      "aria-disabled": nextUnlocked ? "false" : "true",
+      onclick: nextUnlocked ? function () { goToStep(nextId); } : null,
+    }, [
+      "Next: TODO " + nextId + " — " + nextStep.title + " →",
+    ]);
+    wrap.appendChild(btn);
+    if (!nextUnlocked) {
+      wrap.appendChild(el("div", { class: "small muted next-todo-reason" }, [nextTodoLockReason(nextId)]));
+    }
+    return wrap;
+  }
+
   function renderMain() {
     var step = STEP_BY_ID[state.currentStepId];
     var main = $("#mainPanel");
@@ -1215,6 +1270,8 @@
       }
       card.appendChild(hintsBlock);
     }
+
+    card.appendChild(renderNextTodoControl(step.id));
 
     main.appendChild(card);
     Visualizer.show(step.visualizer, { step: step, stepData: stepData, status: status, trigger: consumeVizTrigger() });
@@ -2709,6 +2766,16 @@
     ].join("\n");
   }
 
+  // NOTE: each tile kind below is independently branched (treasure only
+  // touches code6, swamp only code7, custom_item/custom_terrain only read
+  // CODE10/CODE11 as plain data) - unlike playerMove's strict AND-chain,
+  // there is no inherent cross-dependency here. The one real issue found on
+  // review was structural, not conceptual: a blanket up-front syntax check
+  // used to abort the ENTIRE trace (all tile kinds) if EITHER code6 or code7
+  // had a syntax error, even for tile kinds that don't use that function at
+  // all. Each branch below now catches its own errors independently, so a
+  // broken TODO 7 (say) can never block seeing TODO 6's own effect on
+  // treasure tiles, or vice versa - same isolation principle as playerMove.
   function traceHarness_scoreBoard(code6, code7, code10, code11, tiles, startingScore) {
     var fn6 = buildFnSource("self, ITEM_SCORE", code6, "    ");
     var fn7 = buildFnSource("self, SWAMP_SCORE_PENALTY", code7, "    ");
@@ -2724,49 +2791,49 @@
       "SWAMP_SCORE_PENALTY = 100",
       "def _run():",
       "    result = {'ok': True, 'error': None, 'traceback': None, 'trace': [], 'custom_item': None, 'custom_terrain': None}",
-      "    try:",
-      "        exec(compile(FN6_SRC, '<t6>', 'exec'), {}, {})",
-      "        exec(compile(FN7_SRC, '<t7>', 'exec'), {}, {})",
-      "    except SyntaxError as e:",
-      "        result['ok'] = False",
-      "        result['error'] = 'Python syntax error on line %s: %s.' % (e.lineno, e.msg)",
-      "        return json.dumps(result)",
       "    class SelfObj:",
       "        def __init__(self, score):",
       "            self.score = score",
       "    self_ = SelfObj(START_SCORE)",
+      "    def try_call(fn_src, args):",
+      "        try:",
+      "            ns = {}",
+      "            exec(compile(fn_src, '<tile>', 'exec'), {}, ns)",
+      "            ns['_fn'](*args)",
+      "        except Exception:",
+      "            pass  # this tile kind's TODO isn't finished/valid yet - no effect, but other tiles still run",
+      "    def safe_read_dict(code, filename):",
+      "        try:",
+      "            ns = {}",
+      "            exec(compile(code, filename, 'exec'), {}, ns)",
+      "            return ns",
+      "        except Exception:",
+      "            return {}",
+      "    ns10 = safe_read_dict(CODE10, '<t10>')",
+      "    custom_items = ns10.get('CUSTOM_ITEMS') or [{'name': 'Custom Item', 'color': (180, 180, 180), 'score': 0, 'hint_bonus': 0, 'route_weight': 0}]",
+      "    first_item = custom_items[0] if custom_items else {'name': 'Custom Item', 'color': (180, 180, 180), 'score': 0, 'hint_bonus': 0, 'route_weight': 0}",
       "    try:",
-      "        ns10 = {}",
-      "        exec(compile(CODE10, '<t10>', 'exec'), {}, ns10)",
-      "        custom_items = ns10.get('CUSTOM_ITEMS') or [{'name': 'Custom Item', 'color': (180, 180, 180), 'score': 0, 'hint_bonus': 0, 'route_weight': 0}]",
-      "        first_item = custom_items[0]",
       "        for tile in json.loads(TILES):",
       "            kind = tile['kind']",
       "            before = self_.score",
       "            if kind == 'treasure':",
-      "                ns = {}",
-      "                exec(compile(FN6_SRC, '<t6>', 'exec'), {}, ns)",
-      "                ns['_fn'](self_, ITEM_SCORE)",
+      "                try_call(FN6_SRC, (self_, ITEM_SCORE))",
       "                label = 'Treasure'",
       "            elif kind == 'swamp':",
-      "                ns = {}",
-      "                exec(compile(FN7_SRC, '<t7>', 'exec'), {}, ns)",
-      "                ns['_fn'](self_, SWAMP_SCORE_PENALTY)",
+      "                try_call(FN7_SRC, (self_, SWAMP_SCORE_PENALTY))",
       "                label = 'Swamp'",
       "            elif kind == 'custom_item':",
       "                self_.score += first_item.get('score', 0)",
       "                label = str(first_item.get('name', 'Custom Item'))",
       "            elif kind == 'custom_terrain':",
-      "                ns11 = {}",
-      "                exec(compile(CODE11, '<t11>', 'exec'), {}, ns11)",
+      "                ns11 = safe_read_dict(CODE11, '<t11>')",
       "                self_.score += ns11.get('CUSTOM_TERRAIN_SCORE_CHANGE', 0)",
       "                label = str(ns11.get('CUSTOM_TERRAIN_NAME', 'Custom Terrain'))",
       "            else:",
       "                label = kind",
       "            result['trace'].append({'type': 'score', 'kind': kind, 'label': label, 'delta': self_.score - before, 'total': self_.score})",
       "        result['custom_item'] = {'name': str(first_item.get('name', 'Custom Item')), 'color': list(first_item.get('color', (180, 180, 180))), 'score': first_item.get('score', 0), 'weight': first_item.get('route_weight', 0)}",
-      "        ns11b = {}",
-      "        exec(compile(CODE11, '<t11>', 'exec'), {}, ns11b)",
+      "        ns11b = safe_read_dict(CODE11, '<t11>')",
       "        result['custom_terrain'] = {'name': str(ns11b.get('CUSTOM_TERRAIN_NAME', 'Custom Terrain')), 'color': list(ns11b.get('CUSTOM_TERRAIN_COLOR', (180, 180, 180))), 'change': ns11b.get('CUSTOM_TERRAIN_SCORE_CHANGE', 0)}",
       "    except Exception as e:",
       "        result['ok'] = False",
@@ -3098,6 +3165,49 @@
   Visualizer.register("titleCard", TitleCardViz);
 
   // -------------------------------------------------- 14c. playerMove viz
+  //
+  // TODO 2 (key dispatch) -> TODO 3 (guard clause) -> TODO 4 (position delta)
+  // is a strict AND-chain: a perfectly-correct TODO 2 still produces zero
+  // visible movement if TODO 3/4 are untouched `pass` starters, because
+  // nothing yet exists to actually change self.row/self.col. Each step's own
+  // demo must be isolated to the TODO the student is actually working on, so
+  // the other two fall back to a REFERENCE implementation whenever the
+  // student hasn't completed them yet (once completed, their real code is
+  // used instead - more accurate and more satisfying).
+  //
+  // These reference bodies are intentionally NOT the literal graded answer
+  // (see REFERENCE_* below) - they're a different-shaped-but-behaviourally-
+  // equivalent stand-in, the same principle already used by
+  // harness_monsterChase_14's from-scratch ground-truth find_path_dijkstra
+  // (computes the same result via a different code shape, without
+  // reproducing the exact expected snippet a student is graded on). Verified
+  // against the REAL grading harnesses (harness_movement_2/guardClause_3/
+  // positionDelta_4) to confirm they are behaviourally correct substitutes.
+  var REFERENCE_CODE = {
+    "2": [
+      'key_to_direction = [',
+      '    (pygame.K_LEFT, "left"), (pygame.K_a, "left"),',
+      '    (pygame.K_RIGHT, "right"), (pygame.K_d, "right"),',
+      '    (pygame.K_UP, "top"), (pygame.K_w, "top"),',
+      '    (pygame.K_DOWN, "bottom"), (pygame.K_s, "bottom"),',
+      ']',
+      'moved = False',
+      'for key_const, direction in key_to_direction:',
+      '    if keys[key_const]:',
+      '        moved = self.player.try_move(direction, self.maze)',
+      '        break',
+    ].join("\n"),
+    "3": [
+      'if current is None:',
+      '    return False',
+      'if current.walls[direction]:',
+      '    return False',
+    ].join("\n"),
+    "4": [
+      'self.row = self.row + dr',
+      'self.col = self.col + dc',
+    ].join("\n"),
+  };
 
   var PlayerMoveViz = (function () {
     var refs = null;
@@ -3106,12 +3216,23 @@
     var lastKeyLabel = "—";
     var busy = false;
     var CELL = 0;
+    var viewingStepId = null;
+
+    // Real code for the step currently being viewed (always - that's the
+    // whole point of the demo); for the OTHER two steps, real code once
+    // they're completed, otherwise the reference stand-in above so an
+    // unfinished downstream step can never block seeing today's TODO work.
+    function codeFor(id) {
+      var st = state.steps[id];
+      if (id === viewingStepId || st.status === "completed") return st.code;
+      return REFERENCE_CODE[id];
+    }
 
     function currentCode() {
       return {
-        code21: state.steps["2"].code,
-        code22: state.steps["3"].code,
-        code23: state.steps["4"].code,
+        code21: codeFor("2"),
+        code22: codeFor("3"),
+        code23: codeFor("4"),
       };
     }
 
@@ -3196,7 +3317,19 @@
       ArrowDown: "K_DOWN", s: "K_s", S: "K_s",
     };
 
+    // Captured at the document level (not just the canvas) so a student who
+    // types code then presses arrow keys WITHOUT first clicking the board
+    // (the natural flow) still sees it work - the only thing that should
+    // suppress this is focus actually being inside a typing target (the
+    // code editor textarea, in particular), same rule as the Play tab uses
+    // to keep code-editing and game-piloting keys from colliding.
+    function isTypingTarget(e) {
+      var t = e.target;
+      var tag = t && t.tagName;
+      return tag === "TEXTAREA" || tag === "INPUT" || (t && t.isContentEditable);
+    }
     function onKeydown(e) {
+      if (isTypingTarget(e)) return;
       var keyname = KEY_TO_KEYNAME[e.key];
       if (!keyname) return;
       e.preventDefault();
@@ -3205,16 +3338,16 @@
 
     return {
       mount: function (container, state0) {
+        viewingStepId = state0 && state0.step ? state0.step.id : null;
         container.innerHTML = "";
-        container.appendChild(el("p", { class: "small muted", text: "Click the board, then use Arrow keys or WASD." }));
+        container.appendChild(el("p", { class: "small muted", text: "Use Arrow keys or WASD anywhere on this page (no need to click the board first)." }));
         var boardWrap = el("div", { class: "viz-board-wrap" });
         var width = fitWidth(container, 340);
         CELL = Math.max(20, Math.floor(width / NAV_COLS));
         var made = makeCanvas(CELL * NAV_COLS, CELL * NAV_ROWS);
         made.canvas.tabIndex = 0;
         made.canvas.className = "viz-canvas viz-canvas-focusable";
-        made.canvas.setAttribute("aria-label", "Maze board — click then use arrow keys or WASD to move");
-        made.canvas.addEventListener("keydown", onKeydown);
+        made.canvas.setAttribute("aria-label", "Maze board — use arrow keys or WASD to move, anywhere on this page");
         boardWrap.appendChild(made.canvas);
         container.appendChild(boardWrap);
         var readout = buildReadout([
@@ -3228,12 +3361,19 @@
         var resetBtn = el("button", { class: "btn btn-small mt-8", type: "button", text: "Reset position", onclick: resetPos });
         container.appendChild(resetBtn);
         refs = { canvas: made.canvas, ctx: made.ctx, readout: readout, verdict: verdict };
+        document.addEventListener("keydown", onKeydown);
         resetPos();
       },
-      show: function () { draw(); updateReadout(); },
-      update: function () { draw(); updateReadout(); },
+      show: function (state0) {
+        if (state0 && state0.step) viewingStepId = state0.step.id;
+        draw(); updateReadout();
+      },
+      update: function (state0) {
+        if (state0 && state0.step) viewingStepId = state0.step.id;
+        draw(); updateReadout();
+      },
       unmount: function () {
-        if (refs && refs.canvas) refs.canvas.removeEventListener("keydown", onKeydown);
+        document.removeEventListener("keydown", onKeydown);
         refs = null;
       },
     };
