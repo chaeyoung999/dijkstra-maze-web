@@ -79,11 +79,23 @@
        mode flag and mounts PlayEngine straight into #kioskPlayView - the
        normal .topbar/.layout (sidebar, editor, viz tabs) are hidden via
        body.kiosk-mode instead of being removed, so no separate code path is
-       needed to build them. -->
+       needed to build them.
+
+       The header shows the STUDENT'S OWN game title (from TODO 1), not any
+       site/teaching branding - this window is meant to be shown to other
+       students as a real, finished game, not a debug view. -->
   <div id="kioskRoot" class="kiosk-root" hidden>
     <div class="kiosk-header">
-      <span class="kiosk-title">Dijkstra Maze — Play</span>
-      <a class="small" href="?" title="Opens the full step-by-step editor in this window">Open full editor</a>
+      <div class="kiosk-title-block">
+        <span id="kioskTitle" class="kiosk-title">Your Game</span>
+        <span id="kioskSubtitle" class="kiosk-subtitle" hidden></span>
+      </div>
+      <div class="kiosk-header-actions">
+        <button id="kioskFullscreenBtn" class="icon-btn" type="button" aria-label="Enter fullscreen" title="Enter fullscreen">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H4a1 1 0 0 0-1 1v4M16 3h4a1 1 0 0 1 1 1v4M8 21H4a1 1 0 0 1-1-1v-4M16 21h4a1 1 0 0 0 1-1v-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <a class="kiosk-editor-link" href="?" title="Opens the full step-by-step editor in this window">Open full editor</a>
+      </div>
     </div>
     <div id="kioskPlayView" class="kiosk-play-view"></div>
   </div>

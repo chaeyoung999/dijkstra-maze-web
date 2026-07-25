@@ -5605,6 +5605,11 @@
         if (refs && refs.canvas) refs.canvas.removeEventListener("keydown", onKeydown);
         mounted = false; refs = null;
       },
+      // Exposed read-only, purely for display purposes outside PlayEngine
+      // (the kiosk header uses this to decide when to de-emphasize the
+      // capability checklist) - the exact same completion test the
+      // "YOUR GAME IS LIVE" banner already uses, not a new one.
+      allRequiredCompleteExact: function () { return allRequiredCompleteExact(); },
     };
 
     function refreshTitleCard() {
@@ -6148,13 +6153,91 @@
     });
   }
 
+  // Refreshes the kiosk header's title/subtitle from the student's OWN TODO
+  // 1 code - reusing the exact same traceHarness_titleCard harness (and the
+  // exact same isDoneExact-style completion gate) PlayEngine's own title
+  // card already uses, so this is never a second, divergent title concept.
+  // Falls back to a neutral placeholder (never the site's own branding)
+  // until TODO 1 is genuinely completed.
+  function refreshKioskTitle() {
+    var titleEl = $("#kioskTitle"), subtitleEl = $("#kioskSubtitle");
+    if (!titleEl) return;
+    var todo1Done = !!(state.steps["1"] && state.steps["1"].status === "completed");
+    if (!todo1Done) {
+      document.title = "Your Game";
+      titleEl.textContent = "Your Game";
+      subtitleEl.hidden = true;
+      subtitleEl.textContent = "";
+      return;
+    }
+    ensurePyodide().then(function (py) {
+      return py.runPythonAsync(traceHarness_titleCard(state.steps["1"].code));
+    }).then(function (json) {
+      var data = JSON.parse(json);
+      var title = data.ok && data.title ? data.title : "Your Game";
+      var subtitle = data.ok ? data.subtitle : "";
+      document.title = title;
+      titleEl.textContent = title;
+      if (subtitle) { subtitleEl.hidden = false; subtitleEl.textContent = subtitle; }
+      else { subtitleEl.hidden = true; subtitleEl.textContent = ""; }
+    }).catch(function () {
+      document.title = "Your Game";
+      titleEl.textContent = "Your Game";
+      subtitleEl.hidden = true;
+    });
+  }
+
+  // Once the game is actually fully playable, a homework checklist
+  // shouldn't be the first thing another student sees - de-emphasize it in
+  // favor of leading with the title screen and the game itself. Reuses
+  // PlayEngine's own "YOUR GAME IS LIVE" completion test (exposed above)
+  // rather than inventing a second definition of "done". Purely a kiosk-
+  // view CSS toggle - the normal in-page Play tab's checklist is untouched.
+  function refreshKioskCompletionChrome() {
+    var complete = typeof PlayEngine.allRequiredCompleteExact === "function" && PlayEngine.allRequiredCompleteExact();
+    document.body.classList.toggle("kiosk-required-complete", !!complete);
+  }
+
+  function refreshKioskChrome() {
+    refreshKioskTitle();
+    refreshKioskCompletionChrome();
+  }
+
+  function initKioskFullscreenButton() {
+    var btn = $("#kioskFullscreenBtn");
+    var root = $("#kioskRoot");
+    if (!btn || !root) return;
+    var ENTER_ICON = btn.innerHTML;
+    var EXIT_ICON = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3v4a1 1 0 0 1-1 1H4M15 3v4a1 1 0 0 0 1 1h4M9 21v-4a1 1 0 0 0-1-1H4M15 21v-4a1 1 0 0 1 1-1h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    function isFs() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+    function updateIcon() {
+      var fs = isFs();
+      btn.innerHTML = fs ? EXIT_ICON : ENTER_ICON;
+      var label = fs ? "Exit fullscreen" : "Enter fullscreen";
+      btn.title = label;
+      btn.setAttribute("aria-label", label);
+    }
+    btn.addEventListener("click", function () {
+      if (!isFs()) {
+        var req = root.requestFullscreen || root.webkitRequestFullscreen;
+        if (req) req.call(root).catch(function () {});
+      } else {
+        var exit = document.exitFullscreen || document.webkitExitFullscreen;
+        if (exit) exit.call(document).catch(function () {});
+      }
+    });
+    document.addEventListener("fullscreenchange", updateIcon);
+    document.addEventListener("webkitfullscreenchange", updateIcon);
+  }
+
   function initKioskMode() {
     document.body.classList.add("kiosk-mode");
-    document.title = "Dijkstra Maze — Play";
     var root = $("#kioskRoot");
     root.hidden = false;
     var playView = $("#kioskPlayView");
     PlayEngine.mount(playView);
+    refreshKioskChrome();
+    initKioskFullscreenButton();
     // No code editor exists in this window to compete for focus, so (unlike
     // the normal Play tab) there's no reason to require an extra click
     // before arrow keys work - focus the board immediately.
@@ -6165,13 +6248,13 @@
     // the main tab, `storage` fires here (it does NOT fire in the tab that
     // made the change, only in other same-origin tabs/windows - exactly
     // what we want). Reload state fresh from localStorage and refresh the
-    // capabilities/HUD, the same "refresh" PlayEngine already does when the
-    // Play tab regains focus in the normal page.
+    // capabilities/HUD (and this window's own title/checklist chrome).
     window.addEventListener("storage", function (e) {
       if (e.key && e.key !== LS_PROGRESS_KEY) return;
       state = loadState();
       if (computeStatus(state.currentStepId) === "locked") state.currentStepId = STEPS[0].id;
       PlayEngine.refresh();
+      refreshKioskChrome();
     });
   }
 
