@@ -213,7 +213,11 @@
         var d = s.steps[step.id];
         if (saved.code !== undefined) d.code = saved.code;
         if (saved.status === "completed" || saved.status === "skipped") d.status = saved.status;
-        if (typeof saved.hintsRevealed === "number") d.hintsRevealed = saved.hintsRevealed;
+        // Clamp to this step's CURRENT hint count - a save made before a
+        // hint-count content edit (e.g. a step trimmed from 3 hints to 1)
+        // could otherwise carry over a hintsRevealed value that no longer
+        // has a matching step.hints[i] to render.
+        if (typeof saved.hintsRevealed === "number") d.hintsRevealed = Math.max(0, Math.min(saved.hintsRevealed, step.hints.length));
         if (typeof saved.attempts === "number") d.attempts = saved.attempts;
         if (saved.lastFeedback) d.lastFeedback = saved.lastFeedback;
       });
@@ -1237,11 +1241,12 @@
       disabled: (pyState.status === "loading" || pyState.status === "error") ? "disabled" : null,
       onclick: function () { gradeStep(step.id); },
     }, [gradeButtonLabel()]);
+    var totalHints = step.hints.length;
     var hintBtn = el("button", {
       class: "btn", type: "button",
-      disabled: stepData.hintsRevealed >= 3 ? "disabled" : null,
+      disabled: stepData.hintsRevealed >= totalHints ? "disabled" : null,
       onclick: function () { revealHint(step.id); },
-    }, [stepData.hintsRevealed >= 3 ? "All hints shown" : "Show hint (" + (stepData.hintsRevealed + 1) + "/3)"]);
+    }, [stepData.hintsRevealed >= totalHints ? "All hints shown" : "Show hint (" + (stepData.hintsRevealed + 1) + "/" + totalHints + ")"]);
     var skipBtn = el("button", {
       class: "btn", type: "button",
       onclick: function () { skipStep(step.id); },
@@ -1264,7 +1269,7 @@
       var hintsBlock = el("div", { class: "hints-block" });
       for (var i = 0; i < stepData.hintsRevealed; i++) {
         hintsBlock.appendChild(el("div", { class: "hint-item" }, [
-          el("div", { class: "hint-tier", text: "Hint " + (i + 1) + " of 3" }),
+          el("div", { class: "hint-tier", text: "Hint " + (i + 1) + " of " + step.hints.length }),
           el("div", { class: "rich-text", html: richTextToHtml(step.hints[i]) }),
         ]));
       }
@@ -2172,7 +2177,8 @@
 
   function revealHint(id) {
     var stepData = state.steps[id];
-    if (stepData.hintsRevealed >= 3) return;
+    var totalHints = STEP_BY_ID[id].hints.length;
+    if (stepData.hintsRevealed >= totalHints) return;
     stepData.hintsRevealed += 1;
     persist();
     renderMain();

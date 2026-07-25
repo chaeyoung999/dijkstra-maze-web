@@ -73,9 +73,7 @@ const COURSE_STEPS = [
       'GAME_SUBTITLE = "Collect treasures, avoid hazards, and reach the goal"',
     ],
     hints: [
-      "You're editing two existing lines — don't add new variables or remove the quotes already there.",
-      "`TITLE` and `GAME_SUBTITLE` are both single strings, not lists — one pair of quotes each.",
-      'TITLE = "your title"   /   GAME_SUBTITLE = "your one-line description" — keep the variable names exactly as they are, change only the text inside the quotes.',
+      "`TITLE` and `GAME_SUBTITLE` are both single strings (not lists like `MISSION_RULES` later on) — you're editing two existing lines, not adding new variables. Keep the variable names and quotes exactly as they are, and just change the text inside the quotes: `TITLE = \"your title\"` / `GAME_SUBTITLE = \"your one-line description\"`.",
     ],
     visualizer: "titleCard",
     grading: {
@@ -113,9 +111,8 @@ const COURSE_STEPS = [
       '            pass  # Write your code here. Hint: the direction string is "bottom"',
     ],
     hints: [
-      'The line is nearly identical in all four branches — only the direction string changes: "left", "right", "top", "bottom". Replace each `pass` with one assignment.',
-      'Assign the result of the `try_move` call to `moved`. The direction string must exactly match the branch you\'re in — note the vertical directions are "top"/"bottom", not "up"/"down".',
-      'moved = self.player.try_move("left", self.maze)  — this exact shape goes in the first branch. Repeat it in the other three with the matching direction string.',
+      'All four branches call the same function, `self.player.try_move(direction, self.maze)`, and store what it returns in `moved` — only the direction string changes each time: "left", "right", "top", "bottom" (the vertical ones are "top"/"bottom", not "up"/"down"). Using `if`/`elif` (not four separate `if`s) matters too: it guarantees at most one branch runs per frame, even if two keys are held down together.',
+      'moved = self.player.try_move("???", self.maze)  — this exact shape goes in every branch; just swap in the matching direction string each time.',
     ],
     visualizer: "playerMove",
     grading: {
@@ -147,9 +144,8 @@ const COURSE_STEPS = [
       "        pass  # Write your code here.",
     ],
     hints: [
-      "Write one `if` line with both conditions joined by `or`, and a `return False` indented under it. Use `is None` for the first check, not `== None`.",
-      "The `if` line goes above the `dr, dc = {...}` line shown below. Both conditions live on that same line — don't split them into two separate `if` statements.",
-      "if current is None or current.walls[???]:  →  return False on the next line, indented once more.",
+      "This is a guard clause: handle the bad cases first and bail out immediately, so the rest of `try_move` can assume the move is legal. Two independent things can block it — no cell in that direction (`current is None`) or a wall in the way (`current.walls[direction]`) — so join them with `or` (either one alone is enough to block the move) inside a single `if`. Use `is None` rather than `== None`, the normal Python way to check for None.",
+      "if current is None or current.walls[???]:  →  return False on the next line, indented once more. One `if` line with both conditions together — don't split this into two separate `if` statements.",
     ],
     visualizer: "playerMove",
     grading: {
@@ -181,9 +177,7 @@ const COURSE_STEPS = [
       "        pass  # Write your code here.",
     ],
     hints: [
-      "Two separate lines: one updates the row, one updates the column. Both use `+=`.",
-      "`self.row` takes `dr`; `self.col` takes `dc` — don't mix them up, and don't reassign the whole position at once.",
-      "self.row += ???   and on the next line   self.col += ???",
+      "`dr` and `dc` are already computed above — add each to the matching part of the player's own position with `+=` (not `=`, which would replace the position instead of shifting it): `self.row` takes `dr`, `self.col` takes `dc`, on two separate lines. self.row += ???   and on the next line   self.col += ???",
     ],
     visualizer: "playerMove",
     grading: {
@@ -217,8 +211,7 @@ const COURSE_STEPS = [
       "            pass  # Write your code here.",
     ],
     hints: [
-      "Four lines: compute new_cost, then an `if` checking whether neighbor is unseen or new_cost beats the recorded distance, then (indented once more) update distance and parent, then push (new_cost, neighbor) onto the queue with heapq.heappush.",
-      "Both `cost` and `step_cost` are already defined above this line — you're combining them, not computing either one from scratch. The push only happens when the `if` is true.",
+      "This is Dijkstra's relaxation step, the same one you wrote for the ghost AI in Game AI Lab mission 8: add the cost already spent reaching `current` (`cost`) to this one extra step (`step_cost`) to get `new_cost`, the candidate cost of reaching `neighbor` through `current`. Only keep it if it's actually an improvement — `neighbor` hasn't been seen yet, or `new_cost` beats the recorded `distance[neighbor]` — in which case update BOTH `distance[neighbor]` (the new best cost) and `parent[neighbor]` (remembering you came from `current`, so the route can be traced back later) together, then push the improved `(new_cost, neighbor)` route onto the queue so it actually gets explored.",
       "new_cost = ??? + ???\nif neighbor not in distance or new_cost < distance[neighbor]:\n    distance[neighbor] = ???\n    parent[neighbor] = ???\n    heapq.heappush(queue, (???, neighbor))",
     ],
     visualizer: "dijkstraFrontier",
@@ -251,9 +244,7 @@ const COURSE_STEPS = [
       "                    pass  # Write your code here.",
     ],
     hints: [
-      "One line, using `+=`. Don't type a number — use the constant.",
-      "The constant is defined in `settings.py` and already available here — you don't need to import or define anything new.",
-      "self.score += ???",
+      "`ITEM_SCORE` is a named constant already defined in `settings.py` (not a number you type here) — using the name instead of a bare `100` means the game's balance can be retuned in one place later. Add it to `self.score` in place: self.score += ???",
     ],
     visualizer: "scoreBoard",
     grading: {
@@ -284,9 +275,7 @@ const COURSE_STEPS = [
       "        pass  # Write your code here.",
     ],
     hints: [
-      "One line, using `-=`. The constant already holds a positive amount, so subtract it rather than adding a negative one.",
-      "Same pattern as TODO 6, just the opposite operator and the swamp constant instead of the item constant.",
-      "self.score -= ???",
+      "Same idea as TODO 6, just the opposite direction: `SWAMP_SCORE_PENALTY` already holds the amount to lose as a positive number, so subtract it rather than adding a negative one. self.score -= ???",
     ],
     visualizer: "scoreBoard",
     grading: {
@@ -358,9 +347,8 @@ const COURSE_STEPS = [
       "]",
     ],
     hints: [
-      "Three dictionaries in a list, one per round. Deleting a key will crash the game, so change values only, and keep them plain integers.",
-      "Prefer not to hand-edit the numbers? Use the map editor panel on the right instead — see the next hint.",
-      "Use the map editor on the right: pick your rows and cols, paint the terrain (and the player/goal/monster start tiles), then press Apply to write the numbers into the code for you.",
+      "Three dictionaries in a list, one per round. Every key already means something to the engine (deleting one will crash the game), so only change the numeric values, and keep them plain integers — a fractional value like 11.5 rows doesn't make sense to the maze generator.",
+      "Don't want to hand-edit the numbers? Use the map editor panel on the right: pick your rows and cols, paint the terrain (plus the player/goal/monster start tiles), then press Apply to write these numbers into the code for you automatically.",
     ],
     visualizer: "mapEditor",
     grading: {
@@ -414,9 +402,7 @@ const COURSE_STEPS = [
       },
     ],
     hints: [
-      "Every value is either `None` or a quoted path — forgetting the quotes is the most common mistake here.",
-      "Don't want to type paths by hand? Use the asset picker panel on the right — click a bundled image or sound and it fills in the line for you.",
-      'PLAYER_IMAGE_PATH = "assets/images/boy.png"   — same pattern for every other line. Use the asset picker on the right to insert paths without typing them.',
+      "Every value here is either `None` (silent / built-in shape) or a quoted path under `assets/images/` or `assets/sounds/` — forgetting the quotes is the most common mistake when typing paths by hand. The asset picker panel on the right fills in the correct line for you with one click, so you don't have to type paths at all if you'd rather not.",
     ],
     visualizer: "assetPicker",
     grading: {
@@ -462,8 +448,7 @@ const COURSE_STEPS = [
       "]",
     ],
     hints: [
-      "The name is a string, the color is a tuple of three numbers from 0-255, and the rest (score/hint_bonus/route_weight) are plain integers. A negative score makes an item a trap.",
-      "Smaller (more negative) route weights make Dijkstra prefer that cell; larger weights make it avoid it. Add more dictionaries to the list for more distinct items.",
+      "`CUSTOM_ITEMS` is a list of dictionaries, and you can add as many as you like. Each one needs a `name` (string), a `color` (a tuple of three 0-255 numbers), and `score`/`hint_bonus`/`route_weight` (plain integers) — a negative score makes that item a trap, and a more negative `route_weight` makes Dijkstra actively route the hint path toward it (the opposite of a wall, which repels).",
       'CUSTOM_ITEMS = [\n    {"name": "Magic Key", "color": (255, 215, 0), "score": 50, "hint_bonus": 1, "route_weight": -180},\n    {"name": "Lucky Coin", "color": (250, 204, 21), "score": 20, "hint_bonus": 0, "route_weight": -40},\n]',
     ],
     visualizer: "scoreBoard",
@@ -500,9 +485,8 @@ const COURSE_STEPS = [
       "CUSTOM_TERRAIN_DISAPPEARS = False",
     ],
     hints: [
-      "The name is a string, the color is a tuple of three numbers, the score change may be negative, and `DISAPPEARS` must be exactly `True` or `False` (capital letter, no quotes).",
-      "Larger route weights make Dijkstra avoid this terrain; smaller (more negative) weights make it prefer this terrain — the opposite framing from TODO 10's item weight, but the same mechanism.",
-      'CUSTOM_TERRAIN_NAME = "Ice"  /  CUSTOM_TERRAIN_COLOR = (150, 220, 255)  /  CUSTOM_TERRAIN_SCORE_CHANGE = -5  /  CUSTOM_TERRAIN_DISAPPEARS = False',
+      "Symmetric to TODO 10, but as five separate constants instead of a list: `NAME` (string), `COLOR` (a tuple of three 0-255 numbers), `SCORE_CHANGE` (positive or negative, applied once when stepped on), `ROUTE_WEIGHT` (larger values make Dijkstra avoid this terrain — the opposite framing from TODO 10's item weight, but the same mechanism), and `DISAPPEARS` which must be exactly `True` or `False` (capital letter, no quotes — writing it as the string `\"True\"` is a common slip).",
+      'CUSTOM_TERRAIN_NAME = "Ice"\nCUSTOM_TERRAIN_COLOR = (150, 220, 255)\nCUSTOM_TERRAIN_SCORE_CHANGE = -5\nCUSTOM_TERRAIN_ROUTE_WEIGHT = 120\nCUSTOM_TERRAIN_DISAPPEARS = False',
     ],
     visualizer: "scoreBoard",
     grading: {
@@ -537,9 +521,8 @@ const COURSE_STEPS = [
       "MONSTER_COUNT = 1",
     ],
     hints: [
-      "All six values are plain integers. Keep MONSTER_CHASE_DISTANCE bigger than MONSTER_ATTACK_DISTANCE, and remember smaller speed numbers mean a FASTER monster.",
-      "A slower monster is a bigger MONSTER_SPEED_* number (more milliseconds between moves), not a smaller one — it's a delay, not a rate.",
-      "MONSTER_ATTACK_DISTANCE = 40  /  MONSTER_CHASE_DISTANCE = 250  /  MONSTER_SPEED_NORMAL = 300  — keep the variable names, change the values.",
+      "MONSTER_CHASE_DISTANCE must stay bigger than MONSTER_ATTACK_DISTANCE: the FSM you'll write in TODO 13 checks the ATTACK range first because it's the more specific (closer) case, so if CHASE were smaller or equal, the monster would never get a chance to notice you from farther away. All six values here are plain integers.",
+      "MONSTER_SPEED_* are milliseconds of delay between moves, not a speed rate — so a SMALLER number means a FASTER monster (less waiting between steps), the same idea as PLAYER_MOVE_DELAY_MS. Example: MONSTER_ATTACK_DISTANCE = 40  /  MONSTER_CHASE_DISTANCE = 250  /  MONSTER_SPEED_NORMAL = 300 — keep the variable names, change the values.",
     ],
     visualizer: "monsterLab",
     grading: {
@@ -567,8 +550,7 @@ const COURSE_STEPS = [
       "        pass  # Write your code here.",
     ],
     hints: [
-      "Three branches: if distance < MONSTER_ATTACK_DISTANCE, elif distance < MONSTER_CHASE_DISTANCE, else. Check the closer (smaller) distance first, exactly like Game AI Lab mission 3.",
-      "Each branch assigns a different string to self.state — the strings are exactly \"ATTACK\", \"CHASE\", \"PATROL\" (all capitals), since update() compares against these exact strings.",
+      "Check the more specific (closer) range FIRST, exactly like Game AI Lab mission 3: `if distance < MONSTER_ATTACK_DISTANCE`, `elif distance < MONSTER_CHASE_DISTANCE`, `else`. If CHASE were checked first, a monster close enough to ATTACK would incorrectly get caught by the broader CHASE branch instead. The three strings assigned to `self.state` must be exactly \"ATTACK\", \"CHASE\", \"PATROL\" (all capitals), since `update()` compares against these exact strings afterward.",
       'if distance < MONSTER_ATTACK_DISTANCE:\n    self.state = "???"\nelif distance < MONSTER_CHASE_DISTANCE:\n    self.state = "???"\nelse:\n    self.state = "???"',
     ],
     visualizer: "monsterLab",
@@ -595,8 +577,7 @@ const COURSE_STEPS = [
       "        pass  # Write your code here.",
     ],
     hints: [
-      "Call find_path_dijkstra with the maze, the monster's own position, and the player's position. Store the result in a variable before using it.",
-      "Only move if the path has more than one cell — path[0] is where the monster already is, so the next step is path[1].",
+      "Same pattern as Game AI Lab missions 10/11: recompute the path fresh on every move (never reuse an old one, since the player keeps moving), using `find_path_dijkstra` — the exact function you wrote for Required TODO 5 — called with the maze, the monster's own position, and the player's position. `path[0]` is always the monster's own current cell, so the next step toward the player is `path[1]` — but only move if the path actually has more than one cell, otherwise indexing into `path[1]` would crash (no route found yet, or already adjacent).",
       "path = find_path_dijkstra(???, ???, ???)\nif len(path) > ???:\n    self.row, self.col = path[???]",
     ],
     visualizer: "monsterLab",
@@ -632,9 +613,7 @@ const COURSE_STEPS = [
       "]",
     ],
     hints: [
-      "MISSION_RULES and HOW_TO_PLAY_RULES are both lists of strings — every item needs its own quotes and a comma.",
-      "Describe the game you actually built: mention your custom item(s) by name, your custom terrain, and the monster if you built it.",
-      'MISSION_RULES = ["Reach the goal.", "Score above 0."]   /   HOW_TO_PLAY_RULES = ["Move with arrows.", "Avoid the monster."] — keep the variable names, write your own list contents.',
+      "`MISSION_RULES` and `HOW_TO_PLAY_RULES` are both lists of strings (every item needs its own quotes and comma) — describe the game you actually built: mention your custom item(s) by name, your custom terrain, and the monster if you built it, rather than leaving the generic example text in place.",
     ],
     visualizer: "titleCard",
     grading: {
