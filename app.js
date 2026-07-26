@@ -4108,7 +4108,6 @@
   var MapEditorViz = (function () {
     var refs = null;
     var tool = "WALL";
-    var brushSize = 1;
     var painting = false;
     var eraseMode = false;
     var cursor = { r: 0, c: 0 };
@@ -4161,21 +4160,18 @@
       redoStack = [];
     }
 
+    // Always paints exactly one tile per click/drag step (no brush-size
+    // concept any more - the simplified editor is strictly "pick a tool,
+    // click/drag the board").
     function paintCell(r, c, typeOverride) {
       var d = activeRoundData().round;
       if (!d) return;
       var rows = d.rows, cols = d.cols;
-      var half = Math.floor(brushSize / 2);
+      if (r < 0 || r >= rows || c < 0 || c >= cols) return;
       var t = typeOverride || (eraseMode ? "NORMAL" : tool);
-      for (var dr = -half; dr <= half; dr++) {
-        for (var dc = -half; dc <= half; dc++) {
-          var rr = r + dr, cc = c + dc;
-          if (rr < 0 || rr >= rows || cc < 0 || cc >= cols) continue;
-          if (t === "GOAL") { d.goal = [rr, cc]; if (d.grid[rr][cc] === "WALL") d.grid[rr][cc] = "NORMAL"; }
-          else if (t === "START") { d.start = [rr, cc]; if (d.grid[rr][cc] === "WALL") d.grid[rr][cc] = "NORMAL"; }
-          else { d.grid[rr][cc] = t; }
-        }
-      }
+      if (t === "GOAL") { d.goal = [r, c]; if (d.grid[r][c] === "WALL") d.grid[r][c] = "NORMAL"; }
+      else if (t === "START") { d.start = [r, c]; if (d.grid[r][c] === "WALL") d.grid[r][c] = "NORMAL"; }
+      else { d.grid[r][c] = t; }
     }
 
     function draw() {
@@ -4313,45 +4309,6 @@
       refs.conflictBox.appendChild(actions);
     }
 
-    function refreshSizeInputs() {
-      if (!refs) return;
-      var d = activeRoundData().round;
-      if (!d) return;
-      refs.rowsInput.value = d.rows;
-      refs.colsInput.value = d.cols;
-      refs.seedInput.value = d.seed;
-      refs.clusterInput.value = d.clusterSize;
-      checkSizeWarning(d.rows, d.cols);
-    }
-
-    function checkSizeWarning(rows, cols) {
-      if (!refs) return;
-      var cellSize = Math.floor(Math.min(MAP_WINDOW_PIXEL_W / cols, MAP_WINDOW_PIXEL_H / rows));
-      if (rows < MAP_MIN_SIZE || cols < MAP_MIN_SIZE) {
-        refs.sizeWarning.textContent = "Rows and cols must each be at least " + MAP_MIN_SIZE + ".";
-        refs.sizeWarning.hidden = false;
-      } else if (rows > MAP_MAX_SIZE || cols > MAP_MAX_SIZE) {
-        refs.sizeWarning.textContent = "Rows and cols must each be at most " + MAP_MAX_SIZE + " (the fixed game window can't fit more).";
-        refs.sizeWarning.hidden = false;
-      } else if (cellSize < MAP_MIN_COMFY_CELL) {
-        refs.sizeWarning.textContent = "At " + rows + "×" + cols + ", each tile would render at only ~" + cellSize + "px in the game window — quite cramped. Consider a smaller grid.";
-        refs.sizeWarning.hidden = false;
-      } else {
-        refs.sizeWarning.hidden = true;
-      }
-    }
-
-    function regenerate() {
-      var d = activeRoundData().round;
-      if (!d) return;
-      pushUndo();
-      var gen = generatePaintedGrid(d.rows, d.cols, d.seed, d.clusterSize, {});
-      d.grid = gen.grid; d.start = gen.start; d.goal = gen.goal;
-      draw();
-      syncCodeFromPaint(false);
-      persist();
-    }
-
     function refreshForRound() {
       var ad = activeRoundData();
       if (!ad.round) {
@@ -4372,7 +4329,6 @@
         refs.canvas = made.canvas; refs.ctx = made.ctx;
       }
       undoStack = []; redoStack = [];
-      refreshSizeInputs();
       renderPalette();
       draw();
       renderConflict();
@@ -4455,12 +4411,9 @@
       if (!parsed) { if (refs) refs.parseNotice.textContent = "Couldn't read your ROUND_CONFIGS code right now — showing your last painted map."; return; }
       if (refs) refs.parseNotice.textContent = "";
       if (!ad.round) {
-        // not painted yet - let a hand size edit update the size inputs (no conflict possible)
-        var dict = parsed[ad.idx];
-        if (dict && dict.rows && dict.cols && refs) {
-          refs.rowsInput.value = dict.rows; refs.colsInput.value = dict.cols;
-          checkSizeWarning(dict.rows, dict.cols);
-        }
+        // Not painted yet (shouldn't normally happen - refreshForRound()
+        // always ensures a round exists on mount) - nothing to reconcile
+        // against yet, so no conflict is possible.
         return;
       }
       if (ad.round.lastSyncedDict && !dictsRoughlyEqual(parsed[ad.idx], ad.round.lastSyncedDict)) {
@@ -4484,41 +4437,30 @@
         }
         container.appendChild(tabs);
 
-        var sizeRow = el("div", { class: "viz-controlbar" }, [
-          el("label", { class: "small" }, ["Rows ", el("input", { type: "number", class: "map-size-input", min: String(MAP_MIN_SIZE), max: String(MAP_MAX_SIZE) })]),
-          el("label", { class: "small" }, ["Cols ", el("input", { type: "number", class: "map-size-input", min: String(MAP_MIN_SIZE), max: String(MAP_MAX_SIZE) })]),
-          el("button", { class: "btn btn-small btn-secondary", type: "button", text: "Apply size" }),
-        ]);
-        container.appendChild(sizeRow);
-        var rowsInput = sizeRow.querySelectorAll(".map-size-input")[0];
-        var colsInput = sizeRow.querySelectorAll(".map-size-input")[1];
-        var sizeWarning = el("div", { class: "small verdict-bad-text", hidden: "hidden" });
-        container.appendChild(sizeWarning);
-
-        var genRow = el("div", { class: "viz-controlbar" }, [
-          el("label", { class: "small" }, ["Cluster size ", el("input", { type: "range", min: "1", max: "6", class: "map-cluster-input" })]),
-          el("label", { class: "small" }, ["Seed ", el("input", { type: "number", class: "map-seed-input", style: "width:80px" })]),
-          el("button", { class: "btn btn-small btn-primary", type: "button", text: "Generate" }),
-        ]);
-        container.appendChild(genRow);
-        var clusterInput = genRow.querySelector(".map-cluster-input");
-        var seedInput = genRow.querySelector(".map-seed-input");
-        var generateBtn = genRow.querySelectorAll("button")[0];
-
+        // NOTE (this session): the teacher found rows/cols + "Apply size",
+        // cluster size + seed + "Generate", and the brush-size selector to
+        // all be confusing, unexplained controls for what should just be
+        // "pick a tile from the palette, click/drag the board" - all three
+        // were removed entirely. Each round now uses a fixed size (from
+        // PLAY_ROUND_CONFIGS, the same numbers ROUND_CONFIGS ships with per
+        // round) that the student never sees or sets - see ensureRound(),
+        // which already used PLAY_ROUND_CONFIGS as the size for a
+        // never-painted round even before this simplification. A sensible
+        // starting layout is still generated automatically the first time a
+        // round is opened (so students paint OVER something, not a totally
+        // blank grid) - only the student-facing re-roll/resize controls are
+        // gone, not the one-time internal generation itself.
         var palette = el("div", { class: "map-palette" });
         container.appendChild(el("div", { class: "sidebar-group-title", text: "Palette (click to select, then paint the board)" }));
         container.appendChild(palette);
 
-        var brushRow = el("div", { class: "viz-controlbar" });
-        [1, 2, 3].forEach(function (n) {
-          brushRow.appendChild(el("button", { class: "btn btn-small", type: "button", text: "Brush " + n, onclick: function () { brushSize = n; renderBrushActive(); } }));
-        });
+        var actionsRow = el("div", { class: "viz-controlbar" });
         var undoBtn = el("button", { class: "btn btn-small", type: "button", text: "Undo", onclick: doUndo });
         var redoBtn = el("button", { class: "btn btn-small", type: "button", text: "Redo", onclick: doRedo });
-        brushRow.appendChild(undoBtn); brushRow.appendChild(redoBtn);
-        container.appendChild(brushRow);
+        actionsRow.appendChild(undoBtn); actionsRow.appendChild(redoBtn);
+        container.appendChild(actionsRow);
 
-        container.appendChild(el("p", { class: "small muted", text: "Keyboard: click the board, then Arrow keys + Enter to paint. Right-click (or the Eraser tool) reverts a tile to floor." }));
+        container.appendChild(el("p", { class: "small muted", text: "Click or drag the board to paint the selected tile. Keyboard: click the board, then Arrow keys + Enter to paint. Right-click (or the Eraser tool) reverts a tile to floor." }));
         var boardWrap = el("div", { class: "viz-board-wrap" });
         container.appendChild(boardWrap);
         var verdictLine = el("div", { class: "small mt-8" });
@@ -4531,43 +4473,15 @@
 
         refs = {
           container: container, boardWrap: boardWrap, palette: palette,
-          rowsInput: rowsInput, colsInput: colsInput, sizeWarning: sizeWarning,
-          clusterInput: clusterInput, seedInput: seedInput, verdictLine: verdictLine,
-          parseNotice: parseNotice, conflictBox: conflictBox, canvas: null, ctx: null,
+          verdictLine: verdictLine, parseNotice: parseNotice, conflictBox: conflictBox,
+          canvas: null, ctx: null,
         };
-
-        function applySize() {
-          var d = activeRoundData().round;
-          var rows = clampInt(rowsInput.value, MAP_MIN_SIZE, MAP_MAX_SIZE, d ? d.rows : 11);
-          var cols = clampInt(colsInput.value, MAP_MIN_SIZE, MAP_MAX_SIZE, d ? d.cols : 15);
-          pushUndo();
-          var gen = generatePaintedGrid(rows, cols, d ? d.seed : 1, d ? d.clusterSize : 3, {});
-          state.mapEditorData.rounds[activeRoundData().idx] = { rows: rows, cols: cols, seed: d ? d.seed : 1, clusterSize: d ? d.clusterSize : 3, grid: gen.grid, start: gen.start, goal: gen.goal, lastSyncedDict: null };
-          persist();
-          refreshForRound();
-        }
-        sizeRow.querySelector("button").addEventListener("click", applySize);
-        clusterInput.addEventListener("change", function () {
-          var d = activeRoundData().round;
-          if (d) { d.clusterSize = Number(clusterInput.value); persist(); }
-        });
-        seedInput.addEventListener("change", function () {
-          var d = activeRoundData().round;
-          if (d) { d.seed = Number(seedInput.value) || 1; persist(); }
-        });
-        generateBtn.addEventListener("click", regenerate);
 
         function renderTabsActive() {
           Array.prototype.forEach.call(tabs.querySelectorAll("button"), function (btn, idx) {
             btn.className = "btn btn-small" + (state.mapEditorData.activeRound === idx ? " btn-primary" : "");
           });
         }
-        function renderBrushActive() {
-          Array.prototype.forEach.call(brushRow.querySelectorAll("button"), function (btn) {
-            btn.classList.toggle("btn-primary", btn.textContent === "Brush " + brushSize);
-          });
-        }
-        renderBrushActive();
 
         debouncedTextSync = debounce(onHandEdit, 500);
         attachTextSync();
@@ -5134,6 +5048,24 @@
     }
     function allRequiredCompleteExact() { return REQUIRED_ORDER.every(isDoneExact); }
 
+    // The board's max CSS width. The normal in-page Play tab lives in a
+    // narrow sidebar panel (380px is already generous there); the kiosk
+    // popout is a whole separate window with real space to spare, and the
+    // whole point of that view is "the game board fills the window" - so
+    // it gets a much bigger cap. fitWidth() still clamps to the actual
+    // container width, so a smaller kiosk window just uses what it has.
+    function playBoardMaxWidth() {
+      return isKioskMode() ? 900 : 380;
+    }
+    // Per-round cell size is normally capped at PLAY_ROUND_CONFIGS' own
+    // cellSize (tuned for the narrow sidebar) - in kiosk mode that cap is
+    // too small for a board meant to dominate the window, so it scales up
+    // to fill the available width instead (still capped at something
+    // sane so tiles never render absurdly large on a tiny painted map).
+    function playBoardCellCap() {
+      return isKioskMode() ? 56 : 999;
+    }
+
     function emptyWalledGrid(r, c) {
       var g = [];
       for (var i = 0; i < r; i++) {
@@ -5271,6 +5203,18 @@
       refs.notice.className = "play-broken-notice" + (isError ? " status-bad" : "");
     }
 
+    // Wraps a status message that exists only to explain an INCOMPLETE
+    // TODO or a raw code/runtime error - exactly the "teaching artifact"
+    // text the kiosk popout (?mode=play) must never show another student.
+    // In kiosk mode this collapses to "" (statusLine("") fully hides the
+    // notice, see above), so whatever didn't work just silently doesn't
+    // happen - no TODO-numbered explanation, no visible error. The normal
+    // in-page Play tab (used by the student themselves while working)
+    // keeps the real message unchanged, since it's genuinely useful there.
+    function teachingNote(text) {
+      return isKioskMode() ? "" : text;
+    }
+
     function refreshChecklist() {
       if (!refs) return;
       var caps = capabilities();
@@ -5311,8 +5255,8 @@
       if (caps.mapEditor && state.mapEditorData.rounds[index]) {
         var painted = state.mapEditorData.rounds[index];
         rows = painted.rows; cols = painted.cols;
-        var pw = fitWidth(refs ? refs.container : document.body, 380);
-        cellSize = Math.max(6, Math.floor(pw / cols));
+        var pw = fitWidth(refs ? refs.container : document.body, playBoardMaxWidth());
+        cellSize = Math.max(6, Math.min(playBoardCellCap(), Math.floor(pw / cols)));
         maze = paintedGridToWallGrid(painted.grid);
         terrain = paintedTerrainGrid(painted.grid);
         var extracted = paintedItemsAndBombs(painted.grid);
@@ -5323,14 +5267,14 @@
         playerStart = { row: painted.start[0], col: painted.start[1] };
         goal = { row: painted.goal[0], col: painted.goal[1] };
         timeLeft = cfg.timeLimitSeconds;
-        statusLine("Using your hand-painted map for this round (TODO 8).");
+        statusLine(teachingNote("Using your hand-painted map for this round (TODO 8)."));
         renderAll();
         return;
       }
 
       rows = cfg.rows; cols = cfg.cols;
-      var width = fitWidth(refs ? refs.container : document.body, 380);
-      cellSize = Math.max(8, Math.min(cfg.cellSize, Math.floor(width / cols)));
+      var width = fitWidth(refs ? refs.container : document.body, playBoardMaxWidth());
+      cellSize = Math.max(8, Math.min(isKioskMode() ? playBoardCellCap() : cfg.cellSize, Math.floor(width / cols)));
       player = { row: 0, col: 0 };
       playerStart = { row: 0, col: 0 };
       goal = { row: rows - 1, col: cols - 1 };
@@ -5355,7 +5299,7 @@
       function placeSwamps() {
         if (!caps.swampPlacement) {
           placeRandom(rng, forbidden, cfg.swampCount).forEach(function (p) { terrain[p[0]][p[1]] = "SWAMP"; });
-          statusLine("Swamps placed randomly — finish TODO 5 to place them along the shortest path instead.");
+          statusLine(teachingNote("Swamps placed randomly — finish TODO 5 to place them along the shortest path instead."));
           afterSwamps();
           return;
         }
@@ -5369,12 +5313,12 @@
             statusLine("");
           } else {
             placeRandom(rng, forbidden, cfg.swampCount).forEach(function (p) { terrain[p[0]][p[1]] = "SWAMP"; });
-            statusLine("TODO 5 isn't reconstructing a route yet, so swamps were placed randomly this round.");
+            statusLine(teachingNote("TODO 5 isn't reconstructing a route yet, so swamps were placed randomly this round."));
           }
           afterSwamps();
         }).catch(function (err) {
           placeRandom(rng, forbidden, cfg.swampCount).forEach(function (p) { terrain[p[0]][p[1]] = "SWAMP"; });
-          statusLine("Could not run TODO 5: " + (err && err.message ? err.message : err), true);
+          statusLine(teachingNote("Could not run TODO 5: " + (err && err.message ? err.message : err)), true);
           afterSwamps();
         });
       }
@@ -5526,7 +5470,7 @@
             updateStatusGrid();
           });
         } else {
-          statusLine("Collected a treasure, but TODO 6 isn't finished yet, so it's worth nothing.");
+          statusLine(teachingNote("Collected a treasure, but TODO 6 isn't finished yet, so it's worth nothing."));
         }
       }
       bombs.forEach(function (b) {
@@ -5550,7 +5494,7 @@
             updateStatusGrid();
           });
         } else {
-          statusLine("Stepped in a swamp, but TODO 7 isn't finished yet, so no penalty applied.");
+          statusLine(teachingNote("Stepped in a swamp, but TODO 7 isn't finished yet, so no penalty applied."));
         }
       } else if (here === "CUSTOM" && caps.customTerrain && customValues && customValues.terrain) {
         terrain[player.row][player.col] = "NORMAL";
@@ -5588,7 +5532,7 @@
       e.preventDefault();
       if (!running) return;
       var caps = capabilities();
-      if (!caps.movement) { statusLine("Finish TODO 2, 3 and 4 to make the player move."); return; }
+      if (!caps.movement) { statusLine(teachingNote("Finish TODO 2, 3 and 4 to make the player move.")); return; }
       var now = performance.now();
       if (busyMove || now - lastMoveAt < PLAY_MOVE_DELAY_MS) return;
       busyMove = true;
@@ -5600,7 +5544,7 @@
         busyMove = false;
         lastMoveAt = performance.now();
         var data = JSON.parse(json);
-        if (!data.ok) { statusLine("Your movement code raised an error: " + data.error, true); return; }
+        if (!data.ok) { statusLine(teachingNote("Your movement code raised an error: " + data.error), true); return; }
         player.row = data.row; player.col = data.col;
         draw();
         checkTileEffects();
@@ -5719,11 +5663,6 @@
         if (refs && refs.canvas) refs.canvas.removeEventListener("keydown", onKeydown);
         mounted = false; refs = null;
       },
-      // Exposed read-only, purely for display purposes outside PlayEngine
-      // (the kiosk header uses this to decide when to de-emphasize the
-      // capability checklist) - the exact same completion test the
-      // "YOUR GAME IS LIVE" banner already uses, not a new one.
-      allRequiredCompleteExact: function () { return allRequiredCompleteExact(); },
     };
 
     function refreshTitleCard() {
@@ -6245,8 +6184,9 @@
 
   // ------------------------------------------------- 14h. Play popout / kiosk mode
   //
-  // "Play in new window" opens this SAME page in a small separate window
-  // with ?mode=play in the URL. On load, if that flag is present, we skip
+  // The "▶ Play Game" toolbar button opens this SAME page in a small
+  // separate window with ?mode=play in the URL. On load, if that flag is
+  // present, we skip
   // the sidebar/editor/viz-tabs entirely and render ONLY the Play tab's
   // content, filling the window - reusing PlayEngine's existing mount/
   // refresh/unmount lifecycle completely unchanged (see #5 in the request:
@@ -6328,20 +6268,16 @@
     });
   }
 
-  // Once the game is actually fully playable, a homework checklist
-  // shouldn't be the first thing another student sees - de-emphasize it in
-  // favor of leading with the title screen and the game itself. Reuses
-  // PlayEngine's own "YOUR GAME IS LIVE" completion test (exposed above)
-  // rather than inventing a second definition of "done". Purely a kiosk-
-  // view CSS toggle - the normal in-page Play tab's checklist is untouched.
-  function refreshKioskCompletionChrome() {
-    var complete = typeof PlayEngine.allRequiredCompleteExact === "function" && PlayEngine.allRequiredCompleteExact();
-    document.body.classList.toggle("kiosk-required-complete", !!complete);
-  }
-
+  // NOTE (this session): the kiosk popout no longer has a "homework
+  // checklist steps back once complete" state - the Capabilities checklist,
+  // its heading, and the "YOUR GAME IS LIVE" banner are hidden
+  // UNCONDITIONALLY in kiosk mode now (see styles.css), regardless of
+  // completion, so this window never shows a teaching/debug artifact to
+  // another student. refreshKioskChrome() is left as a thin wrapper (rather
+  // than inlining refreshKioskTitle() at both call sites) so a future
+  // per-refresh kiosk-only concern has one obvious place to go.
   function refreshKioskChrome() {
     refreshKioskTitle();
-    refreshKioskCompletionChrome();
   }
 
   function initKioskFullscreenButton() {
@@ -6389,7 +6325,8 @@
     // the main tab, `storage` fires here (it does NOT fire in the tab that
     // made the change, only in other same-origin tabs/windows - exactly
     // what we want). Reload state fresh from localStorage and refresh the
-    // capabilities/HUD (and this window's own title/checklist chrome).
+    // board/HUD (PlayEngine.refresh()) and this window's own title (the
+    // checklist/banner are unconditionally hidden now, nothing to chrome).
     window.addEventListener("storage", function (e) {
       if (e.key && e.key !== LS_PROGRESS_KEY) return;
       state = loadState();
