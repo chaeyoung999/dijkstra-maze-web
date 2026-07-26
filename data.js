@@ -87,7 +87,7 @@ const COURSE_STEPS = [
   {
     id: "2", step: 2, kind: "Required", required: true, file: "game.py",
     title: "Connect the arrow keys or WASD keys to maze movement.",
-    lead: "Right now your maze ignores the keyboard entirely. Each frame, `update_player()` checks which arrow/WASD key is held down — the same `if`/`elif` dispatch pattern as Game AI Lab's ghost FSM, where a state string picked which method to call (`monster.patrol()`, `monster.chase()`, ...). Here, the key that's held down picks which direction to move. Inside that branch you need to:\n\n- call **`self.player.try_move(direction, self.maze)`** with the matching direction string, then\n- store the result in **`moved`**.\n\nBecause the branches use `if`/`elif` (not four separate `if`s), the player moves at most one cell per frame — even if two keys are pressed together.",
+    lead: "Right now your maze ignores the keyboard entirely. Each frame, `update_player()` checks which key is held down and needs to move the player one cell in that direction — the same `if`/`elif` dispatch idea as Game AI Lab's ghost FSM, where a state string picked which method to call (`monster.patrol()`, `monster.chase()`, ...). Look at how movement already happens elsewhere in the codebase for the piece you'll need to call here.",
     codeReference: [
       ["self.player.try_move(direction, self.maze)", "Attempts to move the player one cell in direction. Returns True if the move succeeded, False if it was blocked."],
       ["moved", "A boolean you set to the result of try_move. The code right after your TODO reads it to decide whether to reset the movement timer."],
@@ -126,7 +126,7 @@ const COURSE_STEPS = [
   {
     id: "3", step: 3, kind: "Required", required: true, file: "player.py",
     title: "Stop movement when there is no cell or a wall blocks the direction.",
-    lead: "`try_move` first looks up the cell the player is standing on, then must decide whether the move is even possible before touching any coordinates. Two things can block it:\n\n- there's no cell in that direction (**`current is None`**), or\n- a wall stands in the way (**`current.walls[direction]`** is `True`).\n\nJoin both checks with `or` and `return False` inside the `if`. This is a classic guard clause, the same shape as Game AI Lab's `get_tile_cost` (`if tile == WALL: return None`): handle the bad cases first and bail out early, so the rest of the function can assume the move is legal.",
+    lead: "`try_move` first looks up the cell the player is standing on, then needs to bail out early in exactly two situations before touching any coordinates — and this is a guard clause, the same shape as Game AI Lab's `get_tile_cost` handling `WALL` first. What are those two situations here, and what should happen when either one is true?",
     codeReference: [
       ["current", "The Cell the player currently stands on, looked up just above. May be None if there is no cell there."],
       ["current.walls[direction]", "True when a wall blocks movement in direction from the current cell."],
@@ -159,7 +159,7 @@ const COURSE_STEPS = [
   {
     id: "4", step: 4, kind: "Required", required: true, file: "player.py",
     title: "Update the player's row and column.",
-    lead: "Once `try_move` knows the move is legal, **`dr`** and **`dc`** already tell it how far to shift on each axis — the same delta idea as Game AI Lab's `directions = [(-1,0), (1,0), (0,-1), (0,1)]` and `get_distance()`. Apply that shift to the player's own position — add `dr` to **`self.row`** and `dc` to **`self.col`**, using the `+=` compound-assignment operator.",
+    lead: "Once `try_move` knows the move is legal, **`dr`**/**`dc`** already tell you how far to shift on each axis — the same delta idea as Game AI Lab's `directions = [(-1,0), (1,0), (0,-1), (0,1)]` and `get_distance()`. What do you do with a delta once you have it?",
     codeReference: [
       ["dr, dc", "The row and column change for the chosen direction, already looked up on the line above."],
       ["self.row, self.col", "The player's current grid position; update both in place."],
@@ -201,7 +201,7 @@ const COURSE_STEPS = [
     parts: [
       {
         part: "1/2", title: "Calculate the candidate cost to reach this neighbor.",
-        lead: "You already did this exact arithmetic for the ghost AI in Game AI Lab, mission 8 — their worked example was literally `new_cost = 3 + 2`. Add the cost already spent reaching the current cell (**`cost`**) to the cost of this one extra step (**`step_cost`**), and store that sum in **`new_cost`**. That's the whole idea for this part — one line, same formula, different graph.",
+        lead: "You already did this exact arithmetic for the ghost AI in Game AI Lab, mission 8 — their worked example was literally `new_cost = 3 + 2`. You have two numbers on hand here: how much has already been spent reaching this point, and how much this one extra step costs. What do those two numbers need to become, and where does the result belong? Same formula as mission 8, different graph.",
         contextBefore: [
           "            step_cost = get_positive_weight(neighbor)",
           "",
@@ -217,7 +217,7 @@ const COURSE_STEPS = [
       },
       {
         part: "2/2", title: "Decide whether to keep it, and record the improved route.",
-        lead: "Not every candidate cost is worth keeping. Only update the route if **`new_cost`** is actually better than anything found before — either **`neighbor`** hasn't been seen yet, or `new_cost` beats the recorded **`distance[neighbor]`**.\n\nWhen it *is* an improvement: **`distance[neighbor]`** and **`parent[neighbor]`** update together (the best cost and the route both changed), and the improved route gets pushed onto the queue so the search actually explores it — skip that push and the better route is discovered but never followed.",
+        lead: "Not every candidate cost is worth keeping. First figure out what actually counts as an improvement here — remember **`neighbor`** might not have any recorded cost yet, so \"better than before\" needs to account for that case too.\n\nThen think about what happens when it *is* an improvement: which values need to update together (the best cost and the route both changed), and whether the search itself needs to be told about the new route — an improvement nothing goes back to explore isn't much of an improvement.",
         contextBefore: [
           "            new_cost = 0  # Write your code here.",
         ],
@@ -244,7 +244,7 @@ const COURSE_STEPS = [
   {
     id: "6", step: 6, kind: "Required", required: true, file: "game.py",
     title: "Add the normal treasure score.",
-    lead: "Every normal treasure the player collects should nudge the score upward by a fixed amount, stored in the constant **`ITEM_SCORE`**. Add it to **`self.score`** with `+=` — reach for the named constant, never a bare number, so the rule stays easy to tune later.",
+    lead: "Every normal treasure the player collects should raise the score by a fixed amount — one that already has a name, **`ITEM_SCORE`**, rather than a number you'd type fresh each time. What do you do to **`self.score`** when the amount to add never changes?",
     codeReference: [
       ["self.score", "The player's running score for the current round."],
       ["ITEM_SCORE", "A constant from settings.py: the points awarded for one normal treasure."],
@@ -276,7 +276,7 @@ const COURSE_STEPS = [
   {
     id: "7", step: 7, kind: "Required", required: true, file: "game.py",
     title: "Subtract the swamp penalty from the score.",
-    lead: "Stepping into a swamp costs the player points. **`SWAMP_SCORE_PENALTY`** already holds that cost as a positive number, so subtract it from **`self.score`** with `-=` — no need to negate it yourself.",
+    lead: "Stepping into a swamp should lower the score instead of raising it — the same score-adjustment idea as TODO 6, but going the other direction. What does \"the other direction\" mean for **`SWAMP_SCORE_PENALTY`**'s sign, and which arithmetic operator follows from that?",
     codeReference: [
       ["self.score", "The player's running score for the current round."],
       ["SWAMP_SCORE_PENALTY", "A constant from settings.py: a positive number representing the amount to lose."],
@@ -307,7 +307,7 @@ const COURSE_STEPS = [
   {
     id: "8", step: 8, kind: "Bonus", required: false, file: "settings.py",
     title: "Redesign the three rounds.",
-    lead: "**`ROUND_CONFIGS`** is the difficulty curve of your whole game: one dictionary per round, read in order as the player advances. You can change `rows`, `cols`, object counts, `extra_open_walls`, `monster_count`, and `time_limit_seconds` — bigger mazes and stricter timers raise the difficulty.\n\nEvery key already means something to the engine, so keep all three dictionaries, keep every key, and keep every value an integer — only change the numbers.\n\nPrefer not to hand-edit the numbers? The map editor on the right lets you hand-paint a layout the same way you built Game AI Lab's N×N matrix map (with 0/1/\"P\"/\"G1\"/\"G2\" markers) — just for a maze instead of a ghost-chase board, now including exactly where the player starts, the goal, and (if you're doing the monster Bonus) where the monster(s) start.",
+    lead: "**`ROUND_CONFIGS`** is the difficulty curve of your whole game: one dictionary per round, read in order as the player advances. What makes a maze harder as a player advances — bigger dimensions? Fewer easy shortcuts? More hazards to dodge, less time to dodge them? Adjust the numbers with that curve in mind, rather than reshaping what's already there.\n\nThere's also a visual option: the map editor on the right lets you paint a layout directly, the same way you built Game AI Lab's N×N matrix map (with 0/1/\"P\"/\"G1\"/\"G2\" markers) — just for a maze instead of a ghost-chase board, now including exactly where the player starts, the goal, and (if you're doing the monster Bonus) where the monster(s) start.",
     codeReference: [
       ["ROUND_CONFIGS", "A list of exactly 3 dictionaries, one per round, read in order as the player clears rounds."],
       ["rows, cols, cell_size", "Grid dimensions and pixel size of one cell; bigger rows/cols means a bigger maze."],
@@ -380,7 +380,7 @@ const COURSE_STEPS = [
   {
     id: "9", step: 9, kind: "Bonus", required: false, file: "settings.py",
     title: "Replace the player, goal, terrain, item, bomb, monster images, and add sounds.",
-    lead: "Two settings blocks decide what the player sees and hears: image paths for the player, goal, terrain, items and monster, then sound paths for pickups, hazards, and background music.\n\nEvery value is either **`None`** (use the game's built-in shape/silence) or a quoted path to a file already provided in `assets/images/` or `assets/sounds/` — there's no third option, and you can change as many or as few lines as you like.",
+    lead: "Two settings blocks decide what the player sees and hears: image paths for the player, goal, terrain, items and monster, then sound paths for pickups, hazards, and background music.\n\nFor each line, decide what \"use the default\" should mean versus \"use this specific file,\" and where in the project such a file would need to live. You can change as many or as few lines as you like.",
     codeReference: [
       ["PLAYER_IMAGE_PATH / GOAL_IMAGE_PATH / SWAMP_IMAGE_PATH / ITEM_IMAGE_PATH / BOMB_IMAGE_PATH / FLOOR_TILE_IMAGE_PATH", "Each is either None (use the built-in drawn shape) or a quoted path to a file under assets/images/."],
       ["SWAMP_SOUND_PATH / ITEM_SOUND_PATH / BOMB_SOUND_PATH / BACKGROUND_MUSIC_PATH", "Each is either None (silent) or a quoted path to a file under assets/sounds/."],
@@ -439,7 +439,7 @@ const COURSE_STEPS = [
   {
     id: "10", step: 10, kind: "Bonus", required: false, file: "settings.py",
     title: "Customize your collectible item(s).",
-    lead: "This is where your game gets its own signature collectibles. **`CUSTOM_ITEMS`** is a list — add as many dictionaries as you like, each with its own:\n\n- **`name`** — the display name.\n- **`color`** — an RGB tuple, used when no image is set.\n- **`score`** — points added when collected.\n- **`hint_bonus`** — extra hint uses granted.\n- **`route_weight`** — a very negative value makes Dijkstra actively seek that item out.\n\nEvery round spawns several custom items total, each randomly drawn from this list — so two or three genuinely different items can appear side by side, each with its own personality.",
+    lead: "This is where your game gets its own signature collectibles. **`CUSTOM_ITEMS`** is a list — add as many dictionaries as you like, each with its own:\n\n- **`name`** — the display name.\n- **`color`** — an RGB tuple, used when no image is set.\n- **`score`** — points added when collected.\n- **`hint_bonus`** — extra hint uses granted.\n- **`route_weight`** — how strongly the hint path should be drawn toward this item, versus away from it.\n\nEvery round spawns several custom items total, each randomly drawn from this list — so two or three genuinely different items can appear side by side, each with its own personality.",
     codeReference: [
       ["CUSTOM_ITEMS", "A list of dictionaries — add as many as you like, each describing one distinct custom item."],
       ["name", "The display name of this collectible."],
@@ -518,7 +518,7 @@ const COURSE_STEPS = [
   {
     id: "12", step: 12, kind: "Bonus", required: false, file: "settings.py",
     title: "Tune the monster's distances, speeds, and count.",
-    lead: "The monster (TODO 13/14 below) needs a few numbers tuned before its behaviour makes sense.\n\n- **`MONSTER_ATTACK_DISTANCE`** and **`MONSTER_CHASE_DISTANCE`** are pixel distances — the same kind of threshold Game AI Lab's mission 3 used (check the more specific, closer range before the broader one), so `CHASE` must stay a bigger number than `ATTACK` or the monster will never notice you coming.\n- The **`MONSTER_SPEED_*`** constants are milliseconds between moves — smaller means faster, the same idea as `PLAYER_MOVE_DELAY_MS`.\n- **`MONSTER_COUNT`** is how many monsters spawn per round by default.",
+    lead: "The monster (TODO 13/14 below) needs a few numbers tuned before its behaviour makes sense.\n\n- **`MONSTER_ATTACK_DISTANCE`** and **`MONSTER_CHASE_DISTANCE`** are pixel-distance thresholds — the same kind of range check as Game AI Lab's mission 3, where the closer, more urgent case has to be checked before the broader one. Think about how these two distances need to relate to each other for that ordering to make sense.\n- The **`MONSTER_SPEED_*`** constants control how often the monster moves, the same relationship as `PLAYER_MOVE_DELAY_MS`. What effect does changing that number have on how the monster feels to play against?\n- **`MONSTER_COUNT`** is how many monsters spawn per round by default.",
     codeReference: [
       ["MONSTER_ATTACK_DISTANCE", "Pixel distance below which the monster switches to ATTACK."],
       ["MONSTER_CHASE_DISTANCE", "Pixel distance below which the monster switches to CHASE (must be greater than MONSTER_ATTACK_DISTANCE)."],
@@ -554,7 +554,7 @@ const COURSE_STEPS = [
   {
     id: "13", step: 13, kind: "Bonus", required: false, file: "monster.py",
     title: "Write the monster's PATROL / CHASE / ATTACK state dispatch.",
-    lead: "This is the exact same shape as Game AI Lab missions 2+3 combined: an `if`/`elif`/`elif` chain that checks the MORE specific (closer) range **first**.\n\n`distance` is already computed for you:\n\n- under **`MONSTER_ATTACK_DISTANCE`** → `\"ATTACK\"`\n- otherwise under **`MONSTER_CHASE_DISTANCE`** → `\"CHASE\"`\n- otherwise → `\"PATROL\"`",
+    lead: "This is the same shape as Game AI Lab missions 2+3 combined: a chain of range checks where order matters — the closer, more urgent case has to be checked before the broader one, or it never gets a chance to trigger.\n\n`distance` is already computed for you, just above. What are the two thresholds that should divide it into three states, and which order do they need to be checked in?",
     codeReference: [
       ["distance", "The Manhattan pixel distance between the monster and the player, already computed above your TODO."],
       ["self.state", "One of \"ATTACK\", \"CHASE\", or \"PATROL\" — read by update() right after this to decide what the monster does next."],
@@ -583,7 +583,7 @@ const COURSE_STEPS = [
   {
     id: "14", step: 14, kind: "Bonus", required: false, file: "monster.py",
     title: "Move the monster one tile toward the player while chasing.",
-    lead: "Same pattern as Game AI Lab missions 10/11: recalculate the path every move, check its length, then move one step.\n\nCall **`find_path_dijkstra`** — the exact function you wrote in Required TODO 5 — with the maze, the monster's position, and the player's position. Then move the monster to **`path[1]`** (the cell right after where it currently is) whenever `len(path) > 1`.",
+    lead: "Same pattern as Game AI Lab missions 10/11 — recompute a path fresh every move, then take just the first step of it.\n\nYou already have the function that finds a path: the exact one you wrote for Required TODO 5, **`find_path_dijkstra`**. Think about what inputs it needs here, which piece of the path it returns represents \"the next step,\" and why checking the path's length before using that piece matters.",
     codeReference: [
       ["find_path_dijkstra(maze, start, end)", "The Required TODO 5 function — reused here unchanged, called fresh every move so the monster always has an up-to-date route."],
       ["path[1]", "The first step away from the monster's current cell; path[0] is always the monster's own current position."],
