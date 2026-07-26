@@ -59,7 +59,7 @@ const COURSE_STEPS = [
   {
     id: "1", step: 1, kind: "Required", required: true, file: "settings.py",
     title: "Name your game.",
-    lead: "Every game needs an identity. Two variables in this file control what players see before they even move:\n\n- **`TITLE`** — shown in the window and on the title screen.\n- **`GAME_SUBTITLE`** — a one-line description shown under the title.\n\nYou've built a list of strings before — Game AI Lab's `behaviors = [\"PATROL\", \"CHASE\", \"ATTACK\"]` is the same idea, just describing ghost AI states instead of game text. This is a design task, not an algorithm: rewrite the text so it describes **your** game, not the example maze. There's no single correct answer. (Writing the game's actual *rules* is a separate Bonus step near the end — TODO 15 — once your game is finished.)",
+    lead: "Every game needs an identity. Two variables in this file control what players see before they even move:\n\n- **`TITLE`** — shown in the window and on the title screen.\n- **`GAME_SUBTITLE`** — a one-line description shown under the title.\n\nBoth are already working strings — your job is choosing better words for them, not inventing a new structure. This is a design task, not an algorithm: rewrite the text so it describes **your** game, not the example maze. There's no single correct answer. (Writing the game's actual *rules* is a separate Bonus step near the end — TODO 15 — once your game is finished.)",
     codeReference: [
       ["TITLE", "The string shown in the window title bar and on the title screen."],
       ["GAME_SUBTITLE", "A one-line description shown under the title."],
@@ -88,7 +88,7 @@ const COURSE_STEPS = [
   {
     id: "2", step: 2, kind: "Required", required: true, file: "game.py",
     title: "Connect the arrow keys or WASD keys to maze movement.",
-    lead: "Right now your maze ignores the keyboard entirely. Each frame, `update_player()` checks which key is held down and needs to move the player one cell in that direction — the same `if`/`elif` dispatch idea as Game AI Lab's ghost FSM, where a state string picked which method to call (`monster.patrol()`, `monster.chase()`, ...). Look at how movement already happens elsewhere in the codebase for the piece you'll need to call here.",
+    lead: "Right now your maze ignores the keyboard entirely. Each frame, `update_player()` checks which key is held down and needs to move the player one cell in that direction — since only one direction should apply per frame, an `if`/`elif` chain is the right tool here, not four separate `if`s. Look at how movement already happens elsewhere in the codebase for the piece you'll need to call here.",
     codeReference: [
       ["self.player.try_move(direction, self.maze)", "Attempts to move the player one cell in direction. Returns True if the move succeeded, False if it was blocked."],
       ["moved", "A boolean you set to the result of try_move. The code right after your TODO reads it to decide whether to reset the movement timer."],
@@ -135,7 +135,7 @@ const COURSE_STEPS = [
   {
     id: "3", step: 3, kind: "Required", required: true, file: "player.py",
     title: "Stop movement when there is no cell or a wall blocks the direction.",
-    lead: "`try_move` first looks up the cell the player is standing on, then needs to bail out early in exactly two situations before touching any coordinates — and this is a guard clause, the same shape as Game AI Lab's `get_tile_cost` handling `WALL` first. What are those two situations here, and what should happen when either one is true?",
+    lead: "`try_move` first looks up the cell the player is standing on, then needs to bail out early in exactly two situations before touching any coordinates — this is a guard clause. What are those two situations here, and what should happen when either one is true?",
     codeReference: [
       ["current", "The Cell the player currently stands on, looked up just above. May be None if there is no cell there."],
       ["current.walls[direction]", "True when a wall blocks movement in direction from the current cell."],
@@ -169,7 +169,7 @@ const COURSE_STEPS = [
   {
     id: "4", step: 4, kind: "Required", required: true, file: "player.py",
     title: "Update the player's row and column.",
-    lead: "Once `try_move` knows the move is legal, **`dr`**/**`dc`** already tell you how far to shift on each axis — the same delta idea as Game AI Lab's `directions = [(-1,0), (1,0), (0,-1), (0,1)]` and `get_distance()`. What do you do with a delta once you have it?",
+    lead: "Once `try_move` knows the move is legal, **`dr`**/**`dc`** already tell you how far to shift on each axis — a row change and a column change for whichever direction was pressed. What do you do with a delta once you have it?",
     codeReference: [
       ["dr, dc", "The row and column change for the chosen direction, already looked up on the line above."],
       ["self.row, self.col", "The player's current grid position; update both in place."],
@@ -221,7 +221,7 @@ const COURSE_STEPS = [
     parts: [
       {
         part: "1/2", title: "Calculate the candidate cost to reach this neighbor.",
-        lead: "You already did this exact arithmetic for the ghost AI in Game AI Lab, mission 8 — their worked example was literally `new_cost = 3 + 2`. You have two numbers on hand here: how much has already been spent reaching this point, and how much this one extra step costs. What do those two numbers need to become, and where does the result belong? Same formula as mission 8, different graph.",
+        lead: "You have two numbers on hand here: how much has already been spent reaching this point, and how much this one extra step costs. What do those two numbers need to become, and where does the result belong?",
         contextBefore: [
           "def find_path_dijkstra(",
           "    map_data,",
@@ -373,7 +373,7 @@ const COURSE_STEPS = [
   {
     id: "8", step: 8, kind: "Bonus", required: false, file: "settings.py",
     title: "Redesign the three rounds.",
-    lead: "**`ROUND_CONFIGS`** is the difficulty curve of your whole game: one dictionary per round, read in order as the player advances. What makes a maze harder as a player advances — bigger dimensions? Fewer easy shortcuts? More hazards to dodge, less time to dodge them? Adjust the numbers with that curve in mind, rather than reshaping what's already there.\n\nThere's also a visual option: the map editor on the right lets you paint a layout directly, the same way you built Game AI Lab's N×N matrix map (with 0/1/\"P\"/\"G1\"/\"G2\" markers) — just for a maze instead of a ghost-chase board, now including exactly where the player starts, the goal, and (if you're doing the monster Bonus) where the monster(s) start.",
+    lead: "**`ROUND_CONFIGS`** is the difficulty curve of your whole game: one dictionary per round, read in order as the player advances. What makes a maze harder as a player advances — bigger dimensions? Fewer easy shortcuts? More hazards to dodge, less time to dodge them? Adjust the numbers with that curve in mind, rather than reshaping what's already there.\n\nThere's also a visual option: the map editor on the right lets you paint a layout directly, tile by tile — pick a piece from the palette, then click or drag on the board, including exactly where the player starts, the goal, and (if you're doing the monster Bonus) where the monster(s) start.",
     codeReference: [
       ["ROUND_CONFIGS", "A list of exactly 3 dictionaries, one per round, read in order as the player clears rounds."],
       ["rows, cols, cell_size", "Grid dimensions and pixel size of one cell; bigger rows/cols means a bigger maze."],
@@ -584,7 +584,7 @@ const COURSE_STEPS = [
   {
     id: "12", step: 12, kind: "Bonus", required: false, file: "settings.py",
     title: "Tune the monster's distances, speeds, and count.",
-    lead: "The monster (TODO 13/14 below) needs a few numbers tuned before its behaviour makes sense.\n\n- **`MONSTER_ATTACK_DISTANCE`** and **`MONSTER_CHASE_DISTANCE`** are pixel-distance thresholds — the same kind of range check as Game AI Lab's mission 3, where the closer, more urgent case has to be checked before the broader one. Think about how these two distances need to relate to each other for that ordering to make sense.\n- The **`MONSTER_SPEED_*`** constants control how often the monster moves, the same relationship as `PLAYER_MOVE_DELAY_MS`. What effect does changing that number have on how the monster feels to play against?\n- **`MONSTER_COUNT`** is how many monsters spawn per round by default.",
+    lead: "The monster (TODO 13/14 below) needs a few numbers tuned before its behaviour makes sense.\n\n- **`MONSTER_ATTACK_DISTANCE`** and **`MONSTER_CHASE_DISTANCE`** are pixel-distance thresholds — TODO 13's state check below looks at the closer, more urgent range first. Think about how these two distances need to relate to each other for that ordering to make sense.\n- The **`MONSTER_SPEED_*`** constants control how often the monster moves, the same relationship as `PLAYER_MOVE_DELAY_MS`. What effect does changing that number have on how the monster feels to play against?\n- **`MONSTER_COUNT`** is how many monsters spawn per round by default.",
     codeReference: [
       ["MONSTER_ATTACK_DISTANCE", "Pixel distance below which the monster switches to ATTACK."],
       ["MONSTER_CHASE_DISTANCE", "Pixel distance below which the monster switches to CHASE (must be greater than MONSTER_ATTACK_DISTANCE)."],
@@ -620,7 +620,7 @@ const COURSE_STEPS = [
   {
     id: "13", step: 13, kind: "Bonus", required: false, file: "monster.py",
     title: "Write the monster's PATROL / CHASE / ATTACK state dispatch.",
-    lead: "This is the same shape as Game AI Lab missions 2+3 combined: a chain of range checks where order matters — the closer, more urgent case has to be checked before the broader one, or it never gets a chance to trigger.\n\n`distance` is already computed for you, just above. What are the two thresholds that should divide it into three states, and which order do they need to be checked in?",
+    lead: "This needs a chain of range checks where order matters — the closer, more urgent case has to be checked before the broader one, or it never gets a chance to trigger.\n\n`distance` is already computed for you, just above. What are the two thresholds that should divide it into three states, and which order do they need to be checked in?",
     codeReference: [
       ["distance", "The Manhattan pixel distance between the monster and the player, already computed above your TODO."],
       ["self.state", "One of \"ATTACK\", \"CHASE\", or \"PATROL\" — read by update() right after this to decide what the monster does next."],
@@ -635,14 +635,14 @@ const COURSE_STEPS = [
       "        pass  # Write your code here.",
     ],
     hints: [
-      "Check the more specific (closer) range FIRST, exactly like Game AI Lab mission 3: `if distance < MONSTER_ATTACK_DISTANCE`, `elif distance < MONSTER_CHASE_DISTANCE`, `else`. If CHASE were checked first, a monster close enough to ATTACK would incorrectly get caught by the broader CHASE branch instead. The three strings assigned to `self.state` must be exactly \"ATTACK\", \"CHASE\", \"PATROL\" (all capitals), since `update()` compares against these exact strings afterward.",
+      "Check the more specific (closer) range FIRST: `if distance < MONSTER_ATTACK_DISTANCE`, `elif distance < MONSTER_CHASE_DISTANCE`, `else`. If CHASE were checked first, a monster close enough to ATTACK would incorrectly get caught by the broader CHASE branch instead. The three strings assigned to `self.state` must be exactly \"ATTACK\", \"CHASE\", \"PATROL\" (all capitals), since `update()` compares against these exact strings afterward.",
       'if distance < MONSTER_ATTACK_DISTANCE:\n    self.state = "???"\nelif distance < MONSTER_CHASE_DISTANCE:\n    self.state = "???"\nelse:\n    self.state = "???"',
     ],
     visualizer: "monsterLab",
     grading: {
       mode: "behaviour",
       harness: "monsterFsm_13",
-      casesDescription: "Distances well inside/at the edges of each band; asserts self.state ends up exactly \"ATTACK\"/\"CHASE\"/\"PATROL\" per Game AI Lab's closer-range-first ordering.",
+      casesDescription: "Distances well inside/at the edges of each band; asserts self.state ends up exactly \"ATTACK\"/\"CHASE\"/\"PATROL\" using the closer-range-first check order.",
     },
   },
 
@@ -650,7 +650,7 @@ const COURSE_STEPS = [
   {
     id: "14", step: 14, kind: "Bonus", required: false, file: "monster.py",
     title: "Move the monster one tile toward the player while chasing.",
-    lead: "Same pattern as Game AI Lab missions 10/11 — recompute a path fresh every move, then take just the first step of it.\n\nYou already have the function that finds a path: the exact one you wrote for Required TODO 5, **`find_path_dijkstra`**. Think about what inputs it needs here, which piece of the path it returns represents \"the next step,\" and why checking the path's length before using that piece matters.",
+    lead: "Recompute a path fresh every move, then take just the first step of it.\n\nYou already have the function that finds a path: the exact one you wrote for Required TODO 5, **`find_path_dijkstra`**. Think about what inputs it needs here, which piece of the path it returns represents \"the next step,\" and why checking the path's length before using that piece matters.",
     codeReference: [
       ["find_path_dijkstra(maze, start, end)", "The Required TODO 5 function — reused here unchanged, called fresh every move so the monster always has an up-to-date route."],
       ["self.row, self.col", "The monster's own current grid position — the same (row, col) shape find_path_dijkstra expects for start, and the same two attributes TODO 4 updated on the player."],
@@ -665,7 +665,7 @@ const COURSE_STEPS = [
       "        pass  # Write your code here.",
     ],
     hints: [
-      "Same pattern as Game AI Lab missions 10/11: recompute the path fresh on every move (never reuse an old one, since the player keeps moving), using `find_path_dijkstra` — the exact function you wrote for Required TODO 5 — called with the maze, the monster's own position, and the player's position. `path[0]` is always the monster's own current cell, so the next step toward the player is `path[1]` — but only move if the path actually has more than one cell, otherwise indexing into `path[1]` would crash (no route found yet, or already adjacent).",
+      "Recompute the path fresh on every move (never reuse an old one, since the player keeps moving), using `find_path_dijkstra` — the exact function you wrote for Required TODO 5 — called with the maze, the monster's own position, and the player's position. `path[0]` is always the monster's own current cell, so the next step toward the player is `path[1]` — but only move if the path actually has more than one cell, otherwise indexing into `path[1]` would crash (no route found yet, or already adjacent).",
       "path = find_path_dijkstra(???, ???, ???)\nif len(path) > ???:\n    self.row, self.col = path[???]",
     ],
     visualizer: "monsterLab",
