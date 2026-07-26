@@ -44,8 +44,9 @@ const KNOWN_ASSET_FILES = {
     "explode.png", "explode_2.png", "floor_tile_1.png", "floor_tile_2.png",
     "goal_chest.png", "goal_door.png", "goal_flag.png", "house.png",
     "item_coin.png", "item_gem_1.png", "item_gem_2.png", "item_star.png",
-    "lion.png", "player_ninja.png", "player_robot.png", "terrain_ice.png",
-    "terrain_lava.png", "terrain_mud.png", "terrain_swamp_1.png", "terrain_swamp_2.png",
+    "lion.png", "monster_shadow.png", "player_ninja.png", "player_robot.png",
+    "terrain_ice.png", "terrain_lava.png", "terrain_mud.png",
+    "terrain_swamp_1.png", "terrain_swamp_2.png",
   ],
   sounds: [
     "bgm_1.wav", "bgm_2.wav", "explosion_1.wav", "explosion_2.wav", "explosion_3.wav",
@@ -465,7 +466,7 @@ const COURSE_STEPS = [
           'ITEM_IMAGE_PATH = None  # Example: "assets/images/apple.png" (also try candy.png, item_gem_1.png, item_gem_2.png, item_coin.png, item_star.png)',
           'BOMB_IMAGE_PATH = None  # Example: "assets/images/bomb.png" (also try bomb_2.png)',
           'FLOOR_TILE_IMAGE_PATH = None  # Background floor for open path cells. Example: "assets/images/floor_tile_1.png" (also try floor_tile_2.png)',
-          'MONSTER_IMAGE_PATH = None  # Example: "assets/images/lion.png" - None uses a built-in drawn shape.',
+          'MONSTER_IMAGE_PATH = None  # Example: "assets/images/monster_shadow.png" - None uses a built-in drawn shape.',
         ],
       },
       {
