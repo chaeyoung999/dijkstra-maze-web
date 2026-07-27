@@ -32,7 +32,14 @@ code, pre, .mono { font-family: "Cascadia Mono", "Consolas", "SFMono-Regular", M
   --stone-300: #a89f8e;
   --torch: #d97a2b;
   --torch-bright: #f0a24a;
-  --gold: #c9971f;
+  /* --gold is used as literal TEXT (.hint-tier) as well as a decorative
+     border, so - unlike the other swatch constants above, which only ever
+     sit on the always-dark topbar/editor-label bars - it needs a
+     theme-aware light value. #c9971f only hits 2.04:1 against the light
+     theme's --context-bg (see the accessibility audit note near the
+     bottom of this file); this darker value is the light-theme default,
+     restored to the original bright swatch in both dark blocks below. */
+  --gold: #795b13;
   --emerald: #2f8f5b;
   --ruby: #b53a3a;
   --sapphire: #33638c;
@@ -43,15 +50,33 @@ code, pre, .mono { font-family: "Cascadia Mono", "Consolas", "SFMono-Regular", M
   --panel-border: #d9c8a0;
   --text: #2a2418;
   --text-dim: #6b5f45;
-  --text-faint: #8f8368;
+  /* #8f8368 only hit 2.96:1 against --bg (WCAG AA needs 4.5:1 for normal
+     text) - darkened to #6c634e, same hue/saturation, ~4.7-5.5:1. See the
+     accessibility audit note near the bottom of this file. */
+  --text-faint: #6c634e;
   --accent: var(--torch);
+  /* --accent (torch orange) is fine as a button-fill/border color at its
+     original brightness (dark text sits ON TOP of it), but several rules
+     use it as literal foreground text directly on the page/panel
+     background, where the original #d97a2b only hit ~2.4-2.9:1. This
+     darker variant (same hue) is for exactly those text-color uses -
+     see .code-reference-token/.marker-line/.viz-tab.is-active/the
+     current-step sidebar badge below, and the audit note at the bottom
+     of this file. Dark theme just reuses --accent (already 8+:1). */
+  --accent-text: #824817;
   --accent-contrast: #fff8ec;
   --accent-2: var(--sapphire);
-  --success: var(--emerald);
+  /* --success/--warning (used as literal text next to their own -bg AND
+     against the general page background - e.g. .verdict-good-text,
+     .banner-warning) originally only hit 3.2-3.9:1 in the light theme;
+     both darkened (same hue) to 4.6-5.9:1 against every background they
+     actually appear on. Dark theme's own values already passed (6-8:1),
+     untouched. */
+  --success: #257047;
   --success-bg: #e4f2e7;
   --danger: var(--ruby);
   --danger-bg: #f8e6e3;
-  --warning: #a5680f;
+  --warning: #89560c;
   --warning-bg: #fbeccb;
   --info-bg: #e4eef4;
   --locked: #b9ae94;
@@ -80,8 +105,17 @@ code, pre, .mono { font-family: "Cascadia Mono", "Consolas", "SFMono-Regular", M
   --panel-border: #3a3327;
   --text: #ece3cf;
   --text-dim: #b9ac8d;
-  --text-faint: #8b7f66;
+  /* #8b7f66 hit 4.74:1 against --bg but only 4.30:1 against --panel -
+     lightened slightly (same hue) to clear 4.5:1 against both. */
+  --text-faint: #91846a;
   --accent: var(--torch-bright);
+  /* Dark theme's --accent (torch-bright) already clears 8:1+ as literal
+     text on both --bg/--panel, so accent-text/gold just reuse the
+     existing bright swatches instead of the light-theme's darkened
+     values - see the --gold/--accent-text comments in the base :root
+     block above. */
+  --accent-text: var(--accent);
+  --gold: #c9971f;
   --accent-contrast: #201203;
   --accent-2: #6fa8cf;
   --success: #57c084;
@@ -117,8 +151,10 @@ code, pre, .mono { font-family: "Cascadia Mono", "Consolas", "SFMono-Regular", M
     --panel-border: #3a3327;
     --text: #ece3cf;
     --text-dim: #b9ac8d;
-    --text-faint: #8b7f66;
+    --text-faint: #91846a;
     --accent: var(--torch-bright);
+    --accent-text: var(--accent);
+    --gold: #c9971f;
     --accent-contrast: #201203;
     --accent-2: #6fa8cf;
     --success: #57c084;
@@ -335,7 +371,7 @@ body.kiosk-mode #pyodideBanner {
    designed for - override for the kiosk header, which sits on the normal
    page background and needs to read correctly in both light and dark
    theme. */
-.kiosk-header-actions .icon-btn { color: var(--text); border-color: var(--panel-border); background: transparent; width: 32px; height: 32px; }
+.kiosk-header-actions .icon-btn { color: var(--text); border-color: var(--panel-border); background: transparent; }
 .kiosk-header-actions .icon-btn:hover { background: color-mix(in srgb, var(--text) 8%, transparent); }
 .kiosk-editor-link { font-size: 0.75rem; color: var(--text-faint); white-space: nowrap; }
 .kiosk-play-view { width: 100%; max-width: 920px; }
@@ -396,8 +432,10 @@ body.kiosk-mode #kioskPlayView .play-status-item .label { font-size: 0.6rem; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 38px;
-  height: 38px;
+  /* Accessibility audit: 38x38 fell short of the 44x44 minimum touch
+     target (classroom laptop/trackpad audience, not just touch screens). */
+  width: 44px;
+  height: 44px;
   border-radius: 8px;
   border: 1px solid rgba(255,255,255,0.18);
   background: rgba(255,255,255,0.06);
@@ -427,6 +465,9 @@ body.kiosk-mode #kioskPlayView .play-status-item .label { font-size: 0.6rem; }
   font-weight: 600;
   font-size: 0.88rem;
   white-space: nowrap;
+  /* Accessibility audit: ~39px rendered height at this padding/font-size,
+     under the 44px touch-target minimum. */
+  min-height: 44px;
   transition: transform 0.08s ease, background 0.15s ease;
 }
 .btn:hover { background: rgba(255,255,255,0.16); }
@@ -450,6 +491,9 @@ a.btn { text-decoration: none; cursor: pointer; }
 .btn-secondary { background: var(--accent-2) !important; color: #fff !important; border-color: var(--accent-2) !important; }
 .btn-outline-danger { color: var(--danger) !important; border-color: var(--danger) !important; }
 .btn-outline-danger:hover { background: var(--danger-bg) !important; }
+/* .btn-small is always combined with .btn (e.g. class="btn btn-small"),
+   so it inherits .btn's min-height: 44px touch-target fix above - this
+   class only needs to override padding/font-size, not re-state it. */
 .btn-small { padding: 6px 12px; font-size: 0.8rem; }
 
 /* --------------------------------------------------------------- layout */
@@ -527,7 +571,7 @@ a.btn { text-decoration: none; cursor: pointer; }
 }
 .sidebar-item.status-completed .sidebar-badge { border-color: var(--success); background: var(--success); color: #fff; }
 .sidebar-item.status-skipped .sidebar-badge { border-color: var(--warning); background: transparent; color: var(--warning); }
-.sidebar-item.status-current .sidebar-badge { border-color: var(--accent); color: var(--accent); }
+.sidebar-item.status-current .sidebar-badge { border-color: var(--accent); color: var(--accent-text); }
 .sidebar-item.status-locked .sidebar-badge { border-color: var(--locked); color: var(--locked); }
 .sidebar-label { display: flex; flex-direction: column; min-width: 0; }
 .sidebar-label-title { font-size: 0.86rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -624,7 +668,7 @@ a.btn { text-decoration: none; cursor: pointer; }
 .code-reference-body { padding: 4px 14px 12px; }
 .code-reference-row { padding: 8px 0; border-top: 1px dashed var(--panel-border); }
 .code-reference-row:first-child { border-top: none; }
-.code-reference-token { display: block; font-size: 0.86rem; margin-bottom: 2px; color: var(--accent); }
+.code-reference-token { display: block; font-size: 0.86rem; margin-bottom: 2px; color: var(--accent-text); }
 .code-reference-explain { font-size: 0.86rem; color: var(--text-dim); }
 
 /* ---------------------------------------------------------------- editor */
@@ -671,7 +715,7 @@ a.btn { text-decoration: none; cursor: pointer; }
 .context-block { opacity: 0.85; }
 .context-block.context-before { border-bottom: 1px dashed var(--panel-border); }
 .context-block.context-after { border-top: 1px dashed var(--panel-border); }
-.marker-line { color: var(--accent); font-weight: 700; opacity: 0.8; }
+.marker-line { color: var(--accent-text); font-weight: 700; opacity: 0.9; }
 
 /* Python syntax-highlight token colors, applied to both the read-only
    context blocks (rendered straight to HTML) and the highlight-behind-
@@ -789,6 +833,15 @@ a.btn { text-decoration: none; cursor: pointer; }
    of the two layers is later in DOM order. */
 .code-editor-stack:focus-within .code-highlight-layer {
   background: color-mix(in srgb, transparent 94%, var(--accent) 6%);
+}
+/* Accessibility audit finding: .editable-wrap's top/bottom border is
+   var(--editable-border) ALWAYS (focused or not), so the 6% tint above
+   was the only focus-specific visual change - too subtle to count as a
+   "clearly visible" focus indicator (SC 2.4.7). Adds a real ring around
+   the whole editable box on focus, matching the same --focus-ring color
+   :focus-visible uses everywhere else on the page. */
+.editable-wrap:focus-within {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-ring) 55%, transparent);
 }
 
 .autocomplete-popup {
@@ -934,7 +987,7 @@ a.btn { text-decoration: none; cursor: pointer; }
   font-size: 0.85rem;
   color: var(--text-faint);
 }
-.viz-tab.is-active { color: var(--accent); border-bottom-color: var(--accent); }
+.viz-tab.is-active { color: var(--accent-text); border-bottom-color: var(--accent); }
 .viz-content { padding: 16px; overflow-y: auto; flex: 1; }
 .viz-placeholder {
   border: 2px dashed var(--panel-border);
@@ -1172,6 +1225,10 @@ a.btn { text-decoration: none; cursor: pointer; }
   align-items: center;
   gap: 6px;
   padding: 6px 9px;
+  /* Accessibility audit: these are painting tools clicked constantly while
+     using the map editor - at padding 6px 9px + 0.78rem text the rendered
+     height was well under the 44px touch-target minimum. */
+  min-height: 44px;
   border-radius: 8px;
   border: 1px solid var(--panel-border);
   background: var(--bg-elevated);
@@ -1305,3 +1362,73 @@ a.btn { text-decoration: none; cursor: pointer; }
 }
 .export-unfinished-list li { padding: 2px 0; color: var(--text-dim); }
 .export-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+
+/* =========================================================================
+   Accessibility audit (this session) - summary
+   =========================================================================
+   Applied a "UI UX Pro Max" tool audit (accessibility checklist only - its
+   Hero-Centric/Claymorphism marketing-page recommendations and Google
+   Fonts CDN imports were NOT adopted; this is an IDE-like app with a
+   working dungeon/treasure-hunt theme and a load-bearing dark mode, not a
+   landing page, and this project stays 100% offline/no-external-CDN).
+
+   Contrast (WCAG 1.4.3, 4.5:1 for normal text) - computed against actual
+   hex values, not eyeballed. Found real failures, LIGHT theme only (dark
+   theme's own values already passed everywhere checked):
+     --text-faint  #8f8368 -> #6c634e   (was 2.96:1 vs --bg, now 4.71:1)
+     --warning     #a5680f -> #89560c   (was 3.63-3.92:1, now 4.89-5.73:1)
+     --success     #2f8f5b -> #257047   (was 3.20-3.74:1, now 4.77-5.58:1;
+                                          also fixed white-on-badge 4.04->6.02)
+     --gold        #c9971f -> #795b13 in light only (was 2.04:1 vs
+                                          --context-bg in .hint-tier, now 4.87:1;
+                                          dark theme keeps the original bright value)
+     --accent as literal text (.code-reference-token, .marker-line,
+       .viz-tab.is-active, current-step sidebar badge) was 2.39-2.88:1 -
+       introduced --accent-text (a darkened, same-hue value, light only)
+       for exactly those text uses; --accent itself is untouched and still
+       used for borders/button fills, where the original brightness was
+       already fine. .marker-line's opacity 0.8->0.9 (0.8 dropped it back
+       under 4.5:1 even with the darker color).
+   DARK theme: only --text-faint nudged (#8b7f66 -> #91846a, was 4.30:1
+   against --panel, now 4.61:1) - everything else already passed.
+   --locked (disabled/skipped sidebar items) intentionally left alone in
+   both themes - WCAG 1.4.3 explicitly exempts inactive UI components.
+
+   Touch targets (44x44 minimum, classroom laptop/trackpad audience):
+     .icon-btn 38x38 -> 44x44 (theme toggle); the kiosk fullscreen button's
+       32x32 override removed so it inherits the same fix.
+     .btn (and .btn-small, which always pairs with .btn) ~31-39px tall ->
+       min-height: 44px (Undo/Redo, round tabs, control-bar buttons, the
+       Progress dropdown trigger, etc. - width was already fine for any
+       button with a text label).
+     .map-palette-item (map editor tool swatches) ~28-30px tall ->
+       min-height: 44px.
+     Checked and already fine: sidebar step items (two stacked text lines
+     already exceed 44px), .viz-tab (~44.4px already), .asset-thumb
+     (44x44 image + padding + label already well over 44x44).
+
+   Focus visibility: global :focus-visible (3px solid ring) already covers
+   the Progress dropdown, map editor palette, and kiosk controls - none of
+   them override it. One real gap found: the code editor textarea's
+   `.editable-wrap` border is on unconditionally (focused or not), so the
+   existing 6% background tint was the ONLY focus-specific change and too
+   subtle to read as "clearly visible" - added a --focus-ring box-shadow
+   on .editable-wrap:focus-within, matching the ring color used everywhere
+   else on the page.
+
+   Reduced motion: the existing `@media (prefers-reduced-motion: reduce)`
+   block (`* { animation: none !important; transition: none !important; }`)
+   is a universal !important rule, so it already covers every CSS
+   animation/transition added in any later task by construction - verified
+   no new @keyframes or inline animation styles were added anywhere that
+   could bypass it. The canvas-based algorithm visualizers' Step/Run
+   playback and the Play tab's round timer are JS setInterval loops the
+   student explicitly starts (Run/Play), not ambient decorative motion -
+   left out of scope, same as a video player's own play button would be.
+
+   Icon-only controls: audited every button - all icon-only controls
+   (#themeToggle, #kioskFullscreenBtn, the popup-blocked dismiss "x", the
+   asset picker's "▶" sound preview) already had aria-label; the map
+   editor palette items always carry a visible text label alongside their
+   swatch, so no separate label was needed there. No gaps found.
+   ========================================================================= */
