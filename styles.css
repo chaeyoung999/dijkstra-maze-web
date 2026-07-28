@@ -1,7 +1,9 @@
 /*
  * styles.css — all visual styling for the Dijkstra Maze TODO Quest.
- * Theme: treasure-hunting maze / dungeon-explorer.
- * Light + dark themes via CSS variables. No external fonts/icons/CDN.
+ * Theme: warm parchment/torch (yellow/brown family), permanently light -
+ * there is no dark mode and no theme toggle (removed on purpose: a teacher
+ * asked for one consistent look with no way to switch away from it). No
+ * external fonts/icons/CDN.
  */
 
 /* ---------------------------------------------------------------- reset */
@@ -33,12 +35,9 @@ code, pre, .mono { font-family: "Cascadia Mono", "Consolas", "SFMono-Regular", M
   --torch: #d97a2b;
   --torch-bright: #f0a24a;
   /* --gold is used as literal TEXT (.hint-tier) as well as a decorative
-     border, so - unlike the other swatch constants above, which only ever
-     sit on the always-dark topbar/editor-label bars - it needs a
-     theme-aware light value. #c9971f only hits 2.04:1 against the light
-     theme's --context-bg (see the accessibility audit note near the
-     bottom of this file); this darker value is the light-theme default,
-     restored to the original bright swatch in both dark blocks below. */
+     border. #c9971f only hit 2.04:1 against --context-bg (WCAG AA needs
+     4.5:1 for normal text - see the accessibility audit note near the
+     bottom of this file); darkened (same hue) to clear 4.87:1. */
   --gold: #795b13;
   --emerald: #2f8f5b;
   --ruby: #b53a3a;
@@ -62,16 +61,14 @@ code, pre, .mono { font-family: "Cascadia Mono", "Consolas", "SFMono-Regular", M
      darker variant (same hue) is for exactly those text-color uses -
      see .code-reference-token/.marker-line/.viz-tab.is-active/the
      current-step sidebar badge below, and the audit note at the bottom
-     of this file. Dark theme just reuses --accent (already 8+:1). */
+     of this file. */
   --accent-text: #824817;
   --accent-contrast: #fff8ec;
   --accent-2: var(--sapphire);
   /* --success/--warning (used as literal text next to their own -bg AND
      against the general page background - e.g. .verdict-good-text,
-     .banner-warning) originally only hit 3.2-3.9:1 in the light theme;
-     both darkened (same hue) to 4.6-5.9:1 against every background they
-     actually appear on. Dark theme's own values already passed (6-8:1),
-     untouched. */
+     .banner-warning) originally only hit 3.2-3.9:1; both darkened (same
+     hue) to 4.6-5.9:1 against every background they actually appear on. */
   --success: #257047;
   --success-bg: #e4f2e7;
   --danger: var(--ruby);
@@ -96,91 +93,6 @@ code, pre, .mono { font-family: "Cascadia Mono", "Consolas", "SFMono-Regular", M
   --tok-fn: #795e26;
   --tok-cls: #267f99;
   --tok-self: #001080;
-}
-
-:root[data-theme="dark"] {
-  --bg: #14120f;
-  --bg-elevated: #1c1915;
-  --panel: #201c17;
-  --panel-border: #3a3327;
-  --text: #ece3cf;
-  --text-dim: #b9ac8d;
-  /* #8b7f66 hit 4.74:1 against --bg but only 4.30:1 against --panel -
-     lightened slightly (same hue) to clear 4.5:1 against both. */
-  --text-faint: #91846a;
-  --accent: var(--torch-bright);
-  /* Dark theme's --accent (torch-bright) already clears 8:1+ as literal
-     text on both --bg/--panel, so accent-text/gold just reuse the
-     existing bright swatches instead of the light-theme's darkened
-     values - see the --gold/--accent-text comments in the base :root
-     block above. */
-  --accent-text: var(--accent);
-  --gold: #c9971f;
-  --accent-contrast: #201203;
-  --accent-2: #6fa8cf;
-  --success: #57c084;
-  --success-bg: #16281c;
-  --danger: #e0685f;
-  --danger-bg: #2c1614;
-  --warning: #e0af49;
-  --warning-bg: #2c220f;
-  --info-bg: #142530;
-  --locked: #4a443a;
-  --editable-bg: #221e17;
-  --editable-border: var(--torch-bright);
-  --context-bg: #1a1712;
-  --shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
-  --focus-ring: #6fb8ec;
-  --scrollbar: #4a4030;
-
-  /* Python syntax-highlight token colors (VS Code "Dark+" default theme) */
-  --tok-kw: #569cd6;
-  --tok-str: #ce9178;
-  --tok-cm: #6a9955;
-  --tok-num: #b5cea8;
-  --tok-fn: #dcdcaa;
-  --tok-cls: #4ec9b0;
-  --tok-self: #9cdcfe;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #14120f;
-    --bg-elevated: #1c1915;
-    --panel: #201c17;
-    --panel-border: #3a3327;
-    --text: #ece3cf;
-    --text-dim: #b9ac8d;
-    --text-faint: #91846a;
-    --accent: var(--torch-bright);
-    --accent-text: var(--accent);
-    --gold: #c9971f;
-    --accent-contrast: #201203;
-    --accent-2: #6fa8cf;
-    --success: #57c084;
-    --success-bg: #16281c;
-    --danger: #e0685f;
-    --danger-bg: #2c1614;
-    --warning: #e0af49;
-    --warning-bg: #2c220f;
-    --info-bg: #142530;
-    --locked: #4a443a;
-    --editable-bg: #221e17;
-    --editable-border: var(--torch-bright);
-    --context-bg: #1a1712;
-    --shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
-    --focus-ring: #6fb8ec;
-    --scrollbar: #4a4030;
-
-    /* Python syntax-highlight token colors (VS Code "Dark+" default theme) */
-    --tok-kw: #569cd6;
-    --tok-str: #ce9178;
-    --tok-cm: #6a9955;
-    --tok-num: #b5cea8;
-    --tok-fn: #dcdcaa;
-    --tok-cls: #4ec9b0;
-    --tok-self: #9cdcfe;
-  }
 }
 
 body {
@@ -244,10 +156,6 @@ body {
   top: 0;
   z-index: 50;
   box-shadow: var(--shadow);
-}
-:root[data-theme="light"] .topbar,
-:root:not([data-theme="dark"]) .topbar {
-  background: linear-gradient(180deg, var(--stone-800), var(--stone-900));
 }
 .brand { display: flex; align-items: center; gap: 10px; }
 .brand-icon { width: 34px; height: 34px; color: var(--torch-bright); flex-shrink: 0; }
@@ -442,15 +350,6 @@ body.kiosk-mode #kioskPlayView .play-status-item .label { font-size: 0.6rem; }
   color: var(--parchment);
 }
 .icon-btn:hover { background: rgba(255,255,255,0.14); }
-.icon-moon { display: none; }
-:root[data-theme="dark"] .icon-sun,
-:root:not([data-theme="light"]) .icon-sun { display: none; }
-:root[data-theme="dark"] .icon-moon,
-:root:not([data-theme="light"]) .icon-moon { display: block; }
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) .icon-sun { display: block; }
-  :root:not([data-theme="dark"]) .icon-moon { display: none; }
-}
 
 /* --------------------------------------------------------------- buttons */
 .btn {
@@ -479,13 +378,24 @@ a.btn { text-decoration: none; cursor: pointer; }
 .btn-ghost-danger { background: transparent; color: #f3b3ac; border-color: rgba(224,104,95,0.5); }
 .btn-ghost-danger:hover { background: rgba(224,104,95,0.15); }
 
-/* main-panel buttons (on parchment, not stone) */
-.main-panel .btn, .step-card .btn {
+/* Buttons on parchment, not stone. .btn's default colors (--parchment
+   text, near-invisible white overlay background) assume the dark topbar
+   it was designed for. Every OTHER place a plain .btn appears sits on a
+   light parchment panel instead - .main-panel/.step-card (the TODO
+   card), .viz-panel (Step/Run/Pause/Reset/Play/Hint, the map editor and
+   asset picker controls - literally every button in the right-hand
+   panel), and .modal-box (confirm dialogs, the export/full-file-viewer
+   modals). Without this override those buttons render as pale cream text
+   on a barely-there white tint over an already-light background -
+   effectively invisible; this was a real, site-wide bug (a teacher
+   reported "some buttons are hard to see now") fixed by giving every
+   light-panel .btn its own readable background/border/text. */
+.main-panel .btn, .step-card .btn, .viz-panel .btn, .modal-box .btn {
   background: var(--panel);
   border: 1px solid var(--panel-border);
   color: var(--text);
 }
-.main-panel .btn:hover, .step-card .btn:hover { background: var(--context-bg); }
+.main-panel .btn:hover, .step-card .btn:hover, .viz-panel .btn:hover, .modal-box .btn:hover { background: var(--context-bg); }
 .btn-primary { background: var(--accent) !important; color: var(--accent-contrast) !important; border-color: var(--accent) !important; font-size: 0.95rem; padding: 11px 22px; }
 .btn-primary:hover { filter: brightness(1.08); }
 .btn-secondary { background: var(--accent-2) !important; color: #fff !important; border-color: var(--accent-2) !important; }
@@ -976,7 +886,7 @@ a.btn { text-decoration: none; cursor: pointer; }
   display: flex;
   flex-direction: column;
 }
-.viz-tabs { display: flex; border-bottom: 1px solid var(--panel-border); }
+.viz-tabs { display: flex; align-items: stretch; border-bottom: 1px solid var(--panel-border); }
 .viz-tab {
   flex: 1;
   padding: 12px;
@@ -988,7 +898,38 @@ a.btn { text-decoration: none; cursor: pointer; }
   color: var(--text-faint);
 }
 .viz-tab.is-active { color: var(--accent-text); border-bottom-color: var(--accent); }
+/* C1: the Step View / Play fullscreen toggle sits at the end of the tab
+   strip rather than full 44x44 (the tab strip itself is ~46px tall, so a
+   44px square square-icon button reads as part of the same row without
+   forcing the row taller); color/border overridden the same way
+   .kiosk-header-actions .icon-btn is, since .icon-btn's default
+   (--parchment text) assumes the dark topbar it was designed for, not
+   this light tab strip. */
+.viz-fullscreen-btn {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 0;
+  border: none;
+  border-left: 1px solid var(--panel-border);
+  background: transparent;
+  color: var(--text-faint);
+}
+.viz-fullscreen-btn:hover { background: var(--context-bg); color: var(--text); }
 .viz-content { padding: 16px; overflow-y: auto; flex: 1; }
+/* When #vizPanel itself is the fullscreen element (Step View or Play tab
+   blown up full-screen, see C1/initFullscreenToggle), make it actually
+   fill the screen instead of shrinking to its normal sticky-sidebar box,
+   and keep the site's own background instead of the UA's default
+   fullscreen black backdrop - same treatment as .kiosk-root:fullscreen. */
+.viz-panel:fullscreen,
+.viz-panel:-webkit-full-screen {
+  position: static;
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  background: var(--panel);
+}
 .viz-placeholder {
   border: 2px dashed var(--panel-border);
   border-radius: 8px;
@@ -1031,6 +972,57 @@ a.btn { text-decoration: none; cursor: pointer; }
 .modal-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 10px; }
 .modal-message { color: var(--text-dim); font-size: 0.92rem; margin-bottom: 18px; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+
+/* =========================================================================
+   "View full file" viewer (C2) - a VS-Code-like read-only view of a
+   complete real source file, own live code spliced into every TODO's spot.
+   Much larger than the default confirm-dialog .modal-box, since it holds a
+   whole file rather than a sentence or two.
+   ========================================================================= */
+.fileview-modal {
+  max-width: min(920px, 96vw);
+  width: 100%;
+  max-height: 88vh;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.fileview-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--panel-border);
+  background: var(--context-bg);
+  flex-shrink: 0;
+}
+.fileview-title {
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-weight: 700;
+  font-size: 0.95rem;
+  margin-bottom: 3px;
+}
+/* .icon-btn's default colors (--parchment text, translucent-white
+   background) assume the dark topbar it was designed for - this modal
+   sits on the normal light panel background instead. */
+.fileview-close { flex-shrink: 0; width: 40px; height: 40px; color: var(--text); border-color: var(--panel-border); background: transparent; }
+.fileview-close:hover { background: color-mix(in srgb, var(--text) 8%, transparent); }
+.fileview-body {
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+  background: var(--editable-bg);
+}
+/* buildContextBlock()'s own markup (.code-block/.code-gutter/.code-lines)
+   renders the file; just let it grow to its natural (large) height inside
+   this scrolling container instead of the fixed narrow column it normally
+   shares with the editable textarea. */
+.fileview-body .code-block.fileview-code {
+  min-height: 100%;
+}
+.fileview-body .code-gutter { position: sticky; left: 0; }
 
 /* -------------------------------------------------------------- scrollbars */
 * { scrollbar-color: var(--scrollbar) transparent; scrollbar-width: thin; }
@@ -1122,6 +1114,18 @@ a.btn { text-decoration: none; cursor: pointer; }
 .viz-pq-label { color: var(--text-faint); margin-bottom: 4px; font-weight: 700; text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.05em; }
 .viz-pq-list { list-style: none; margin: 0; padding: 0; max-height: 140px; overflow-y: auto; font-family: "Cascadia Mono", Consolas, monospace; }
 .viz-pq-list li { padding: 2px 0; border-bottom: 1px dashed var(--panel-border); color: var(--text-dim); }
+
+/* ------------------------------------------------------------ kiosk gate */
+/* E2: title/rules gate shown before gameplay in the kiosk popout - reuses
+   .titlecard-frame's fixed-dark "real game screen" styling (see the note
+   above .viz-canvas) since a splash/rules screen reads naturally as part
+   of the game presentation, same as the board itself. */
+.kiosk-gate { width: 100%; max-width: 640px; }
+.kiosk-gate .titlecard-frame { padding: 32px 24px; text-align: center; }
+.kiosk-gate .titlecard-title { font-size: 1.9rem; }
+.kiosk-gate .titlecard-subtitle { font-size: 1rem; }
+.kiosk-gate .titlecard-list { text-align: left; max-width: 420px; margin: 0 auto; }
+.kiosk-start-btn { margin-top: 22px; width: 100%; justify-content: center; font-size: 1.05rem; padding: 14px 22px; }
 
 /* -------------------------------------------------------- title card viz */
 .titlecard-frame {
@@ -1364,35 +1368,45 @@ a.btn { text-decoration: none; cursor: pointer; }
 .export-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
 
 /* =========================================================================
-   Accessibility audit (this session) - summary
+   Dark mode removal (later session)
    =========================================================================
+   Dark mode was removed entirely per a direct teacher request: one
+   consistent warm parchment/torch look (yellow/brown family), no toggle,
+   no prefers-color-scheme auto-switch, no way to land on a badly-contrasted
+   combination the teacher never reviewed. Deleted: the whole
+   :root[data-theme="dark"] variable block, the
+   @media (prefers-color-scheme: dark) block, the theme-conditional topbar
+   background override (now just one .topbar rule), and the sun/moon
+   icon-swap CSS for the removed #themeToggle button (see app.js/index.html
+   for the JS/markup side of this same removal). Every --variable below is
+   now a single, permanent value - no per-theme split remains anywhere in
+   this file.
+
+   Accessibility audit (earlier session) - summary
+   -------------------------------------------------------------------------
    Applied a "UI UX Pro Max" tool audit (accessibility checklist only - its
    Hero-Centric/Claymorphism marketing-page recommendations and Google
    Fonts CDN imports were NOT adopted; this is an IDE-like app with a
-   working dungeon/treasure-hunt theme and a load-bearing dark mode, not a
-   landing page, and this project stays 100% offline/no-external-CDN).
+   working dungeon/treasure-hunt theme, not a landing page, and this
+   project stays 100% offline/no-external-CDN).
 
    Contrast (WCAG 1.4.3, 4.5:1 for normal text) - computed against actual
-   hex values, not eyeballed. Found real failures, LIGHT theme only (dark
-   theme's own values already passed everywhere checked):
+   hex values, not eyeballed. Found and fixed real failures:
      --text-faint  #8f8368 -> #6c634e   (was 2.96:1 vs --bg, now 4.71:1)
      --warning     #a5680f -> #89560c   (was 3.63-3.92:1, now 4.89-5.73:1)
      --success     #2f8f5b -> #257047   (was 3.20-3.74:1, now 4.77-5.58:1;
                                           also fixed white-on-badge 4.04->6.02)
-     --gold        #c9971f -> #795b13 in light only (was 2.04:1 vs
-                                          --context-bg in .hint-tier, now 4.87:1;
-                                          dark theme keeps the original bright value)
+     --gold        #c9971f -> #795b13   (was 2.04:1 vs --context-bg in
+                                          .hint-tier, now 4.87:1)
      --accent as literal text (.code-reference-token, .marker-line,
        .viz-tab.is-active, current-step sidebar badge) was 2.39-2.88:1 -
-       introduced --accent-text (a darkened, same-hue value, light only)
-       for exactly those text uses; --accent itself is untouched and still
-       used for borders/button fills, where the original brightness was
-       already fine. .marker-line's opacity 0.8->0.9 (0.8 dropped it back
-       under 4.5:1 even with the darker color).
-   DARK theme: only --text-faint nudged (#8b7f66 -> #91846a, was 4.30:1
-   against --panel, now 4.61:1) - everything else already passed.
-   --locked (disabled/skipped sidebar items) intentionally left alone in
-   both themes - WCAG 1.4.3 explicitly exempts inactive UI components.
+       introduced --accent-text (a darkened, same-hue value) for exactly
+       those text uses; --accent itself is untouched and still used for
+       borders/button fills, where the original brightness was already
+       fine. .marker-line's opacity 0.8->0.9 (0.8 dropped it back under
+       4.5:1 even with the darker color).
+   --locked (disabled/skipped sidebar items) intentionally left alone -
+   WCAG 1.4.3 explicitly exempts inactive UI components.
 
    Touch targets (44x44 minimum, classroom laptop/trackpad audience):
      .icon-btn 38x38 -> 44x44 (theme toggle); the kiosk fullscreen button's

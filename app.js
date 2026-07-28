@@ -37,7 +37,6 @@
   STEPS.forEach(function (s) { STEP_BY_ID[s.id] = s; });
 
   var LS_PROGRESS_KEY = "dijkstraMaze.progress.v1";
-  var LS_THEME_KEY = "dijkstraMaze.theme";
   var PYODIDE_VERSION = "0.26.4";
   var PYODIDE_INDEX_URL = "https://cdn.jsdelivr.net/pyodide/v" + PYODIDE_VERSION + "/full/";
   var PYODIDE_SCRIPT_URL = PYODIDE_INDEX_URL + "pyodide.js";
@@ -126,21 +125,53 @@
   }
 
   // Dedent then re-indent Python source so a student's snippet can be
-  // spliced into a test scaffold regardless of the absolute indentation
-  // they typed. Blank lines are preserved (as indent-only) so line counts
-  // stay stable for the on-screen gutter.
+  // spliced into a test scaffold (or the real exported project file, see
+  // getBodyForMarker) regardless of the absolute indentation they typed.
+  // Blank lines are preserved (as indent-only) so line counts stay stable
+  // for the on-screen gutter.
+  //
+  // Bug fix (teacher report: "comments shouldn't matter, but right now
+  // one causes an error"): a comment is 100% inert in real Python
+  // regardless of where it sits or how it's indented - the tokenizer
+  // ignores a comment line's own indentation completely when building the
+  // INDENT/DEDENT stack. The PRIOR version of this function computed
+  // minIndent (the common leading whitespace to strip) across every
+  // non-blank line, comments included. That meant a comment typed at a
+  // shallower indent than the surrounding code (extremely easy to do by
+  // accident - e.g. a comment flush-left above indented code) dragged
+  // minIndent down to the comment's own indent. Then `line.slice(minIndent)`
+  // on that SAME shallow comment sliced blindly by character count, not by
+  // "how much whitespace does this line actually have" - so a comment
+  // whose own indent was smaller than the computed minIndent could have
+  // its leading "#" (and part of its text) chopped clean off, turning an
+  // inert comment into a bare, broken fragment of "code" that Python then
+  // failed to parse (a real SyntaxError, reported as an "index"/indent
+  // mismatch by exactly the comment that should never have mattered).
+  //
+  // Fix: comment-only lines never participate in the minIndent
+  // computation (matching real Python, where only actual statements
+  // define indentation levels) and are reindented independently, by
+  // stripping their OWN full leading whitespace and reapplying `indent` -
+  // so a comment's content is always preserved intact and its position
+  // can never influence, or be corrupted by, the surrounding code's
+  // indentation math, matching how real Python treats it: fully inert,
+  // regardless of where it is or how it lines up with anything else.
+  function isCommentOnlyLine(line) { return line.trim().charAt(0) === "#"; }
+
   function reindentPython(code, indent) {
     var raw = String(code == null ? "" : code).replace(/\r\n/g, "\n").replace(/\t/g, "    ");
     var lines = raw.split("\n");
     var minIndent = Infinity;
     lines.forEach(function (line) {
       if (line.trim().length === 0) return;
+      if (isCommentOnlyLine(line)) return;
       var m = line.match(/^ */)[0].length;
       if (m < minIndent) minIndent = m;
     });
     if (!isFinite(minIndent)) minIndent = 0;
     lines = lines.map(function (line) {
       if (line.trim().length === 0) return "";
+      if (isCommentOnlyLine(line)) return line.replace(/^\s*/, "");
       return line.length >= minIndent ? line.slice(minIndent) : line.replace(/^ +/, "");
     });
     while (lines.length && lines[0].trim() === "") lines.shift();
@@ -294,7 +325,7 @@
   }
   function allRequiredDone() { return REQUIRED_ORDER.every(isRequiredDone); }
 
-  // Capstone one-off exception (TODO 15, "write your game's rules"): rules
+  // Capstone one-off exception (TODO 9, "write your game's rules"): rules
   // only make sense once the student's actually built their custom game, so
   // this single Bonus step stays locked until every OTHER Bonus step is
   // completed or skipped - independent of the normal "all Bonus unlocks
@@ -357,30 +388,11 @@
     return order[idx + 1];
   }
 
-  // ----------------------------------------------------------- 3. theme
-
-  function getStoredTheme() {
-    try { return localStorage.getItem(LS_THEME_KEY); } catch (e) { return null; }
-  }
-  function applyTheme(theme) {
-    if (theme === "light" || theme === "dark") document.documentElement.setAttribute("data-theme", theme);
-    else document.documentElement.removeAttribute("data-theme");
-  }
-  function initTheme() {
-    var stored = getStoredTheme();
-    applyTheme(stored || null);
-  }
-  function toggleTheme() {
-    var current = document.documentElement.getAttribute("data-theme");
-    if (!current) {
-      current = (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
-    }
-    var next = current === "dark" ? "light" : "dark";
-    applyTheme(next);
-    try { localStorage.setItem(LS_THEME_KEY, next); } catch (e) {}
-  }
-
   // ----------------------------------------------------------- 4. modal
+  // (Section 3, "theme", removed entirely: this app is permanently the
+  // warm parchment/torch look now - no dark mode, no toggle, no
+  // prefers-color-scheme auto-switch. See styles.css's "Dark mode
+  // removal" note for the CSS side of this same change.)
 
   function showConfirm(title, message, opts) {
     opts = opts || {};
@@ -1235,10 +1247,10 @@
     card.appendChild(el("div", { class: "step-lead rich-text", html: richTextToHtml(step.lead) }));
 
     // Generic "Required steps go in order" / "Bonus unlocks together" flow
-    // banners were removed here (steps 1-14) - they duplicated the
+    // banners were removed here (steps 1-8) - they duplicated the
     // sidebar's own permanent group headers/notes (see renderSidebarGroup),
     // which are visible at all times regardless of which step is open.
-    // TODO 15's capstone banners are NOT duplicated anywhere else, so they
+    // TODO 9's capstone banners are NOT duplicated anywhere else, so they
     // stay exactly as they were.
     if (step.id === CAPSTONE_BONUS_ID) {
       if (status === "locked") {
@@ -1269,7 +1281,7 @@
 
     if (step.parts) {
       // TODO 5's two parts are coupled (Part 2 literally uses new_cost,
-      // which Part 1 defines) - unlike TODO 9's independent image/sound
+      // which Part 1 defines) - unlike TODO 7's independent image/sound
       // parts. Part 2's "before" context shows the STUDENT'S OWN live
       // Part 1 code (kept in sync as they type), not the reference form -
       // showing the reference answer here would leak Part 1's graded
@@ -1323,9 +1335,17 @@
       class: "btn btn-outline-danger btn-small", type: "button",
       onclick: function () { resetStep(step.id); },
     }, ["Reset this step"]);
+    // C2: opens a read-only, VS-Code-like view of the COMPLETE real file
+    // (step.file) with this step's own live code (and every other TODO's
+    // live code in that same file) spliced into place - see
+    // openFullFileViewer/buildFullFileLive near the project-export code.
+    var viewFileBtn = el("button", {
+      class: "btn btn-small", type: "button",
+      onclick: function () { openFullFileViewer(step); },
+    }, ["📄 View full file"]);
 
     card.appendChild(el("div", { class: "step-actions" }, [
-      gradeBtn, hintBtn, skipBtn,
+      gradeBtn, hintBtn, skipBtn, viewFileBtn,
       el("span", { class: "spacer" }),
       el("span", { class: "attempt-count", text: stepData.attempts + " attempt" + (stepData.attempts === 1 ? "" : "s") }),
       resetBtn,
@@ -1430,20 +1450,56 @@
 
   var PY_PRELUDE = "import json, base64, traceback\n";
 
+  // Rewritten (B1) to be fully OUTCOME-based, "like Reach the Star": this
+  // grades WHAT HAPPENS TO THE PLAYER, never HOW the student got there. A
+  // student who calls self.player.try_move(direction, self.maze) exactly
+  // as hinted passes; so does a student who bypasses try_move entirely and
+  // inlines their own row/col math AND their own wall check, as long as
+  // the final position is correct. This works by giving the harness its
+  // OWN independent, provably-correct reference FakePlayer.try_move /
+  // FakeMaze (NOT the student's own TODO 3/4 code - TODO 2 is graded in
+  // total isolation from whether TODO 3/4 are even attempted yet) and then
+  // only inspecting the final position and the `moved` value afterward -
+  // never asserting a specific method was called with specific arguments.
   function harness_movement_2(code) {
     var fnSrc = buildFnSource("self, pygame, keys, moved", code, "    ");
     return [
       PY_PRELUDE,
       b64Line("FN_SRC", fnSrc),
+      "START_ROW = 2",
+      "START_COL = 2",
+      "DELTA = {'top': (-1, 0), 'right': (0, 1), 'bottom': (1, 0), 'left': (0, -1)}",
       "def _run():",
       "    result = {'ok': False, 'passed': [], 'failed': [], 'error': None, 'traceback': None}",
+      "    class FakeCell:",
+      "        def __init__(self, walls):",
+      "            self.walls = walls",
+      "    class FakeMaze:",
+      "        # Independent reference maze: every cell is open EXCEPT the",
+      "        # player's own starting cell, which blocks whichever",
+      "        # direction(s) a given test case names. Good enough to check",
+      "        # real outcomes without depending on the student's own TODO 3/4.",
+      "        def __init__(self, blocked_dirs):",
+      "            self.blocked_dirs = blocked_dirs",
+      "        def get_cell(self, row, col):",
+      "            if row == START_ROW and col == START_COL:",
+      "                return FakeCell({d: (d in self.blocked_dirs) for d in DELTA})",
+      "            return FakeCell({d: False for d in DELTA})",
       "    class FakePlayer:",
+      "        # A correct, independent REFERENCE try_move - not the",
+      "        # student's own code - used only so a student who correctly",
+      "        # calls self.player.try_move(...) sees correct behaviour back.",
       "        def __init__(self):",
-      "            self.calls = []",
-      "            self.return_value = True",
+      "            self.row = START_ROW",
+      "            self.col = START_COL",
       "        def try_move(self, direction, maze):",
-      "            self.calls.append(direction)",
-      "            return self.return_value",
+      "            current = maze.get_cell(self.row, self.col)",
+      "            if current is None or current.walls[direction]:",
+      "                return False",
+      "            dr, dc = DELTA[direction]",
+      "            self.row += dr",
+      "            self.col += dc",
+      "            return True",
       "    class Pygame:",
       "        K_LEFT = 1; K_a = 2; K_RIGHT = 3; K_d = 4; K_UP = 5; K_w = 6; K_DOWN = 7; K_s = 8",
       "    class SelfObj:",
@@ -1456,49 +1512,56 @@
       "        result['error'] = 'Python syntax error on line %s: %s.' % (line, e.msg)",
       "        return json.dumps(result)",
       "    _fn = ns['_fn']",
-      "    def run_case(pressed, return_value=True):",
+      "    def run_case(pressed, blocked_dirs=()):",
       "        pygame = Pygame()",
       "        player = FakePlayer()",
-      "        player.return_value = return_value",
+      "        maze = FakeMaze(set(blocked_dirs))",
       "        self = SelfObj()",
       "        self.player = player",
-      "        self.maze = object()",
+      "        self.maze = maze",
       "        key_names = ['K_LEFT', 'K_a', 'K_RIGHT', 'K_d', 'K_UP', 'K_w', 'K_DOWN', 'K_s']",
       "        keys = {}",
       "        for name in key_names:",
       "            keys[getattr(pygame, name)] = name in pressed",
       "        out = _fn(self, pygame, keys, False)",
       "        if not isinstance(out, dict):",
-      "            return 'RETURNED_EARLY', player.calls",
-      "        return out.get('moved', False), player.calls",
+      "            return 'RETURNED_EARLY', None, None",
+      "        return (player.row, player.col), out.get('moved', False), None",
       "    try:",
       "        cases = [",
-      "            ('no keys pressed', [], True, False, []),",
-      "            ('LEFT calls try_move(\"left\", ...)', ['K_LEFT'], True, True, ['left']),",
-      "            ('A (alt left) calls try_move(\"left\", ...)', ['K_a'], True, True, ['left']),",
-      "            ('RIGHT calls try_move(\"right\", ...)', ['K_RIGHT'], True, True, ['right']),",
-      "            ('D (alt right) calls try_move(\"right\", ...)', ['K_d'], True, True, ['right']),",
-      "            ('UP calls try_move(\"top\", ...)', ['K_UP'], True, True, ['top']),",
-      "            ('W (alt up) calls try_move(\"top\", ...)', ['K_w'], True, True, ['top']),",
-      "            ('DOWN calls try_move(\"bottom\", ...)', ['K_DOWN'], True, True, ['bottom']),",
-      "            ('S (alt down) calls try_move(\"bottom\", ...)', ['K_s'], True, True, ['bottom']),",
-      "            ('moved reflects a blocked try_move', ['K_LEFT'], False, False, ['left']),",
+      "            ('no keys pressed: stays put', [], (), (START_ROW, START_COL), False),",
+      "            ('LEFT moves one cell left', ['K_LEFT'], (), (START_ROW, START_COL - 1), True),",
+      "            ('A (alt left) moves one cell left', ['K_a'], (), (START_ROW, START_COL - 1), True),",
+      "            ('RIGHT moves one cell right', ['K_RIGHT'], (), (START_ROW, START_COL + 1), True),",
+      "            ('D (alt right) moves one cell right', ['K_d'], (), (START_ROW, START_COL + 1), True),",
+      "            ('UP moves one cell up', ['K_UP'], (), (START_ROW - 1, START_COL), True),",
+      "            ('W (alt up) moves one cell up', ['K_w'], (), (START_ROW - 1, START_COL), True),",
+      "            ('DOWN moves one cell down', ['K_DOWN'], (), (START_ROW + 1, START_COL), True),",
+      "            ('S (alt down) moves one cell down', ['K_s'], (), (START_ROW + 1, START_COL), True),",
+      "            ('a wall blocks the move (stays put)', ['K_LEFT'], ('left',), (START_ROW, START_COL), False),",
       "        ]",
-      "        for label, pressed, retval, expect_moved, expect_calls in cases:",
-      "            moved, calls = run_case(pressed, retval)",
-      "            if moved == 'RETURNED_EARLY':",
+      "        for label, pressed, blocked, expect_pos, expect_moved in cases:",
+      "            pos, moved, _ = run_case(pressed, blocked)",
+      "            if pos == 'RETURNED_EARLY':",
       "                result['failed'].append('%s: your code used return and exited update_player early. Remove any stray return statement.' % label)",
-      "            elif calls != expect_calls:",
-      "                result['failed'].append('%s: expected try_move to be called with %s, got %s. Check the direction string and which key branch you wrote it in.' % (label, expect_calls, calls))",
+      "            elif pos != expect_pos:",
+      "                result['failed'].append('%s: expected the player to end up at (row, col) = %s, got %s.' % (label, expect_pos, pos))",
       "            elif moved != expect_moved:",
-      "                result['failed'].append('%s: moved should be %r (the return value of try_move), got %r. Assign moved = self.player.try_move(...), not a hardcoded value.' % (label, expect_moved, moved))",
+      "                result['failed'].append('%s: the player ended up in the right place, but moved should be %r, got %r.' % (label, expect_moved, moved))",
       "            else:",
       "                result['passed'].append(label)",
-      "        moved, calls = run_case(['K_LEFT', 'K_RIGHT'])",
-      "        if len(calls) != 1:",
-      "            result['failed'].append('Pressing LEFT and RIGHT together should still call try_move exactly once (use if/elif, not separate if statements); it was called %d time(s).' % len(calls))",
+      "        # Two opposite keys at once: exactly one direction should win",
+      "        # (if/elif, not separate independent ifs) - accept EITHER",
+      "        # neighbor, since which branch wins when both are held is a",
+      "        # legitimate implementation choice, not something to grade.",
+      "        pos, moved, _ = run_case(['K_LEFT', 'K_RIGHT'])",
+      "        valid_positions = [(START_ROW, START_COL - 1), (START_ROW, START_COL + 1)]",
+      "        if pos == 'RETURNED_EARLY':",
+      "            result['failed'].append('Pressing LEFT and RIGHT together: your code used return and exited update_player early.')",
+      "        elif pos not in valid_positions:",
+      "            result['failed'].append('Pressing LEFT and RIGHT together should still move exactly one cell (use if/elif, not separate if statements); expected one of %s, got %s.' % (valid_positions, pos))",
       "        else:",
-      "            result['passed'].append('Only one branch runs when multiple keys are pressed together.')",
+      "            result['passed'].append('Only one direction wins when multiple keys are pressed together.')",
       "    except Exception as e:",
       "        result['error'] = '%s: %s' % (type(e).__name__, e)",
       "        result['traceback'] = traceback.format_exc()",
@@ -1605,86 +1668,9 @@
     ].join("\n");
   }
 
-  function harness_score_6(code) {
-    var fnSrc = buildFnSource("self, ITEM_SCORE", code, "    ");
-    return [
-      PY_PRELUDE,
-      b64Line("FN_SRC", fnSrc),
-      "def _run():",
-      "    result = {'ok': False, 'passed': [], 'failed': [], 'error': None, 'traceback': None}",
-      "    ns = {}",
-      "    try:",
-      "        exec(compile(FN_SRC, '<student>', 'exec'), {}, ns)",
-      "    except SyntaxError as e:",
-      "        line = max(1, (e.lineno or 1) - 1)",
-      "        result['error'] = 'Python syntax error on line %s: %s.' % (line, e.msg)",
-      "        return json.dumps(result)",
-      "    _fn = ns['_fn']",
-      "    ITEM_SCORE = 100",
-      "    class SelfObj:",
-      "        def __init__(self, score):",
-      "            self.score = score",
-      "    try:",
-      "        for n in (0, 1, 3, 7):",
-      "            self = SelfObj(0)",
-      "            for i in range(n):",
-      "                _fn(self, ITEM_SCORE)",
-      "            expected = n * ITEM_SCORE",
-      "            if self.score == expected:",
-      "                result['passed'].append('after collecting %d treasure(s), score=%d' % (n, expected))",
-      "            else:",
-      "                result['failed'].append('after collecting %d treasure(s), expected score=%d, got %d.' % (n, expected, self.score))",
-      "    except Exception as e:",
-      "        result['error'] = '%s: %s' % (type(e).__name__, e)",
-      "        result['traceback'] = traceback.format_exc()",
-      "    result['ok'] = result['error'] is None and len(result['failed']) == 0",
-      "    return json.dumps(result)",
-      "_run()",
-    ].join("\n");
-  }
-
-  function harness_score_7(code) {
-    var fnSrc = buildFnSource("self, SWAMP_SCORE_PENALTY", code, "    ");
-    return [
-      PY_PRELUDE,
-      b64Line("FN_SRC", fnSrc),
-      "def _run():",
-      "    result = {'ok': False, 'passed': [], 'failed': [], 'error': None, 'traceback': None}",
-      "    ns = {}",
-      "    try:",
-      "        exec(compile(FN_SRC, '<student>', 'exec'), {}, ns)",
-      "    except SyntaxError as e:",
-      "        line = max(1, (e.lineno or 1) - 1)",
-      "        result['error'] = 'Python syntax error on line %s: %s.' % (line, e.msg)",
-      "        return json.dumps(result)",
-      "    _fn = ns['_fn']",
-      "    PENALTY = 100",
-      "    START = 500",
-      "    class SelfObj:",
-      "        def __init__(self, score):",
-      "            self.score = score",
-      "    try:",
-      "        for n in (0, 1, 2, 4):",
-      "            self = SelfObj(START)",
-      "            for i in range(n):",
-      "                _fn(self, PENALTY)",
-      "            expected = START - n * PENALTY",
-      "            if self.score == expected:",
-      "                result['passed'].append('after stepping on %d swamp(s), score=%d' % (n, expected))",
-      "            else:",
-      "                result['failed'].append('after stepping on %d swamp(s), expected score=%d, got %d.' % (n, expected, self.score))",
-      "    except Exception as e:",
-      "        result['error'] = '%s: %s' % (type(e).__name__, e)",
-      "        result['traceback'] = traceback.format_exc()",
-      "    result['ok'] = result['error'] is None and len(result['failed']) == 0",
-      "    return json.dumps(result)",
-      "_run()",
-    ].join("\n");
-  }
-
   // Required Dijkstra relaxation, split into two independently-graded parts
   // (TODO 5 Part 1/2 and Part 2/2 - the same coupling-aware split pattern
-  // TODO 9 uses for images/sounds, except these two parts genuinely depend
+  // TODO 7 uses for images/sounds, except these two parts genuinely depend
   // on each other: Part 2's code uses new_cost, which Part 1 computes).
   // Each part gets its OWN isolated test: Part 1 is graded purely on
   // whether it computes new_cost correctly from (cost, step_cost); Part 2
@@ -1781,163 +1767,26 @@
     ].join("\n");
   }
 
-  // Bonus monster FSM (TODO 13): isolates just update_state's dispatch -
-  // distance in, self.state out. Boundary cases are exact-equality tests
-  // (Game AI Lab mission 3's "check the closer range first" idea): the
-  // ATTACK/CHASE boundary itself must land in CHASE, not ATTACK, since the
-  // real code uses strict `<` comparisons.
-  function harness_monsterFsm_13(code) {
-    var fnSrc = buildFnSource("self, distance", code, "    ");
-    return [
-      PY_PRELUDE,
-      "MONSTER_ATTACK_DISTANCE = 50",
-      "MONSTER_CHASE_DISTANCE = 200",
-      b64Line("FN_SRC", fnSrc),
-      "def _run():",
-      "    result = {'ok': False, 'passed': [], 'failed': [], 'error': None, 'traceback': None}",
-      "    class SelfObj:",
-      "        def __init__(self):",
-      "            self.state = None",
-      "    ns = {}",
-      "    try:",
-      "        exec(compile(FN_SRC, '<student>', 'exec'), {'MONSTER_ATTACK_DISTANCE': MONSTER_ATTACK_DISTANCE, 'MONSTER_CHASE_DISTANCE': MONSTER_CHASE_DISTANCE}, ns)",
-      "    except SyntaxError as e:",
-      "        line = max(1, (e.lineno or 1) - 1)",
-      "        result['error'] = 'Python syntax error on line %s: %s.' % (line, e.msg)",
-      "        return json.dumps(result)",
-      "    _fn = ns['_fn']",
-      "    cases = [",
-      "        ('well inside ATTACK range', 10, 'ATTACK'),",
-      "        ('just under the ATTACK edge', 49, 'ATTACK'),",
-      "        ('exactly at the ATTACK/CHASE boundary', 50, 'CHASE'),",
-      "        ('well inside CHASE range', 120, 'CHASE'),",
-      "        ('just under the CHASE edge', 199, 'CHASE'),",
-      "        ('exactly at the CHASE/PATROL boundary', 200, 'PATROL'),",
-      "        ('far away', 500, 'PATROL'),",
-      "    ]",
-      "    try:",
-      "        for label, distance, expected in cases:",
-      "            self = SelfObj()",
-      "            _fn(self, distance)",
-      "            if self.state == expected:",
-      "                result['passed'].append('%s (distance=%d): state=%s' % (label, distance, expected))",
-      "            else:",
-      "                result['failed'].append('%s (distance=%d): expected state=%r, got %r.' % (label, distance, expected, self.state))",
-      "    except Exception as e:",
-      "        result['error'] = '%s: %s' % (type(e).__name__, e)",
-      "        result['traceback'] = traceback.format_exc()",
-      "    result['ok'] = result['error'] is None and len(result['failed']) == 0",
-      "    return json.dumps(result)",
-      "_run()",
-    ].join("\n");
-  }
-
-  // Bonus monster chase movement (TODO 14): a small open FakeMaze + a
-  // from-scratch (BFS-shaped) find_path_dijkstra ground truth, so this
-  // harness isolates "did you call find_path_dijkstra and move to path[1]"
-  // without depending on the student's OWN Required TODO 5 code at all.
-  function harness_monsterChase_14(code) {
-    var fnSrc = buildFnSource("self, maze, player_position", code, "    ");
-    return [
-      PY_PRELUDE + "from collections import deque",
-      b64Line("FN_SRC", fnSrc),
-      "def find_path_dijkstra(map_data, start, end, get_weight=None, all_weights=None):",
-      "    queue = deque([start])",
-      "    parent = {start: None}",
-      "    visited = {start}",
-      "    while queue:",
-      "        current = queue.popleft()",
-      "        if current == end:",
-      "            break",
-      "        for neighbor in map_data.get_open_neighbors(current):",
-      "            if neighbor not in visited:",
-      "                visited.add(neighbor)",
-      "                parent[neighbor] = current",
-      "                queue.append(neighbor)",
-      "    if end not in parent:",
-      "        return []",
-      "    path = [end]",
-      "    cur = end",
-      "    while cur != start:",
-      "        cur = parent[cur]",
-      "        path.append(cur)",
-      "    path.reverse()",
-      "    return path",
-      "class FakeMaze:",
-      "    def __init__(self, rows, cols):",
-      "        self.rows = rows",
-      "        self.cols = cols",
-      "    def get_open_neighbors(self, position):",
-      "        r, c = position",
-      "        out = []",
-      "        for dr, dc in ((-1, 0), (1, 0), (0, -1), (0, 1)):",
-      "            nr, nc = r + dr, c + dc",
-      "            if 0 <= nr < self.rows and 0 <= nc < self.cols:",
-      "                out.append((nr, nc))",
-      "        return out",
-      "class SelfObj:",
-      "    def __init__(self, row, col):",
-      "        self.row = row",
-      "        self.col = col",
-      "    def get_position(self):",
-      "        return (self.row, self.col)",
-      "def _run():",
-      "    result = {'ok': False, 'passed': [], 'failed': [], 'error': None, 'traceback': None}",
-      "    ns = {}",
-      "    try:",
-      "        exec(compile(FN_SRC, '<student>', 'exec'), {'find_path_dijkstra': find_path_dijkstra}, ns)",
-      "    except SyntaxError as e:",
-      "        line = max(1, (e.lineno or 1) - 1)",
-      "        result['error'] = 'Python syntax error on line %s: %s.' % (line, e.msg)",
-      "        return json.dumps(result)",
-      "    _fn = ns['_fn']",
-      "    maze = FakeMaze(6, 6)",
-      "    cases = [",
-      "        ('several tiles away', (0, 0), (0, 4)),",
-      "        ('across the grid', (5, 5), (0, 0)),",
-      "        ('already adjacent', (2, 2), (2, 3)),",
-      "    ]",
-      "    try:",
-      "        for label, start, target in cases:",
-      "            self = SelfObj(*start)",
-      "            before = self.get_position()",
-      "            _fn(self, maze, target)",
-      "            after = self.get_position()",
-      "            if after == before:",
-      "                result['failed'].append('%s: the monster did not move at all - did you call find_path_dijkstra and check len(path) > 1?' % label)",
-      "                continue",
-      "            manhattan_before = abs(before[0] - target[0]) + abs(before[1] - target[1])",
-      "            manhattan_after = abs(after[0] - target[0]) + abs(after[1] - target[1])",
-      "            is_neighbor = abs(after[0] - before[0]) + abs(after[1] - before[1]) == 1",
-      "            if not is_neighbor:",
-      "                result['failed'].append('%s: moved from %r to %r, which is not exactly one tile away - move to path[1], not further.' % (label, before, after))",
-      "            elif manhattan_after >= manhattan_before:",
-      "                result['failed'].append('%s: moved from %r to %r, which is not closer to the player at %r.' % (label, before, after, target))",
-      "            else:",
-      "                result['passed'].append('%s: moved one tile closer, from %r to %r' % (label, before, after))",
-      "    except Exception as e:",
-      "        result['error'] = '%s: %s' % (type(e).__name__, e)",
-      "        result['traceback'] = traceback.format_exc()",
-      "    result['ok'] = result['error'] is None and len(result['failed']) == 0",
-      "    return json.dumps(result)",
-      "_run()",
-    ].join("\n");
-  }
+  // D1/D4/F changelog note: this file used to also define
+  // harness_score_6/harness_score_7 (treasure/swamp score grading) and
+  // harness_monsterFsm_13/harness_monsterChase_14 (monster FSM/chase
+  // grading) here. All four were deleted along with the features they
+  // graded - the monster was removed entirely (teacher: "monster attacks
+  // by distance - remove this"), and score/treasure/swamp were removed
+  // when the game was redefined as pure maze-solving (goal + timer +
+  // bomb-reset only). See BEHAVIOUR_HARNESSES below for the current,
+  // renumbered set.
 
   var BEHAVIOUR_HARNESSES = {
     movement_2: harness_movement_2,
     guardClause_3: harness_guardClause_3,
     positionDelta_4: harness_positionDelta_4,
     dijkstra_5: harness_dijkstra_5,
-    score_6: harness_score_6,
-    score_7: harness_score_7,
-    monsterFsm_13: harness_monsterFsm_13,
-    monsterChase_14: harness_monsterChase_14,
   };
 
   // ------------------------------------------------- 11. syntax harnesses
   //
-  // These are the open-ended TODOs (1, 8, 9, 10, 11, 12, 15): there is no single
+  // These are the open-ended TODOs (1, 6, 7, 8, 9): there is no single
   // "correct" value, so passing only requires two things:
   //   1. the code compiles and executes without a Python error, and
   //   2. every name in mustDefine actually got defined (so nothing crashes
@@ -1995,8 +1844,8 @@
     ].join("\n");
   }
 
-  function harness_syntax_8(code) {
-    var starter = linesOf(STEP_BY_ID["8"].starter);
+  function harness_syntax_6(code) {
+    var starter = linesOf(STEP_BY_ID["6"].starter);
     return [
       pySyntaxPrelude(code, starter),
       "def _run():",
@@ -2051,9 +1900,9 @@
     ].join("\n");
   }
 
-  function harness_syntax_9(code) {
-    var imageVars = ["PLAYER_IMAGE_PATH", "GOAL_IMAGE_PATH", "SWAMP_IMAGE_PATH", "ITEM_IMAGE_PATH", "BOMB_IMAGE_PATH", "FLOOR_TILE_IMAGE_PATH", "MONSTER_IMAGE_PATH"];
-    var soundVars = ["SWAMP_SOUND_PATH", "ITEM_SOUND_PATH", "BOMB_SOUND_PATH", "BACKGROUND_MUSIC_PATH"];
+  function harness_syntax_7(code) {
+    var imageVars = ["PLAYER_IMAGE_PATH", "GOAL_IMAGE_PATH", "BOMB_IMAGE_PATH", "FLOOR_TILE_IMAGE_PATH"];
+    var soundVars = ["BOMB_SOUND_PATH", "BACKGROUND_MUSIC_PATH"];
     return [
       pySyntaxPrelude(code, ""),
       "IMAGE_VARS = " + JSON.stringify(imageVars).replace(/"/g, "'"),
@@ -2106,12 +1955,13 @@
     ].join("\n");
   }
 
-  function harness_syntax_10(code) {
-    var starter = linesOf(STEP_BY_ID["10"].starter);
-    var itemKeys = ["name", "color", "score", "hint_bonus", "route_weight"];
+  function harness_syntax_8(code) {
+    var starter = linesOf(STEP_BY_ID["8"].starter);
+    var itemKeys = ["name", "color", "effect", "amount"];
     return [
       pySyntaxPrelude(code, starter),
       "ITEM_KEYS = " + JSON.stringify(itemKeys).replace(/"/g, "'"),
+      "KNOWN_EFFECTS = ['add_time', 'add_hint']",
       "def _run():",
       "    result = {'ok': False, 'passed': [], 'failed': [], 'warnings': [], 'error': None, 'traceback': None}",
       "    try:",
@@ -2145,9 +1995,11 @@
       "                color = item_def.get('color')",
       "                if not (isinstance(color, tuple) and len(color) == 3 and all(isinstance(v, int) and 0 <= v <= 255 for v in color)):",
       "                    result['warnings'].append('Heads up: %s color is usually a 3-tuple of ints 0-255, e.g. (255, 215, 0) — still counts as complete, but double-check it renders correctly.' % label)",
-      "                for n in ('score', 'hint_bonus', 'route_weight'):",
-      "                    if type(item_def.get(n)) is not int:",
-      "                        result['warnings'].append('Heads up: %s[\\'%s\\'] is usually a plain integer — this still counts as complete, but double-check it behaves as expected.' % (label, n))",
+      "                effect = item_def.get('effect')",
+      "                if effect not in KNOWN_EFFECTS:",
+      "                    result['warnings'].append('Heads up: %s[\\'effect\\'] = %s is not one of the built-in effects (%s) — this still counts as complete (an unrecognized effect is a safe no-op in the real game), but double-check it is the effect you meant.' % (label, _short_repr(effect), ', '.join(KNOWN_EFFECTS)))",
+      "                if type(item_def.get('amount')) is not int:",
+      "                    result['warnings'].append('Heads up: %s[\\'amount\\'] is usually a plain integer — this still counts as complete, but double-check it behaves as expected.' % label)",
       "                result['passed'].append('%s: %s' % (label, _short_repr(item_def)))",
       "    except Exception as e:",
       "        result['error'] = '%s: %s' % (type(e).__name__, e)",
@@ -2158,84 +2010,8 @@
     ].join("\n");
   }
 
-  function harness_syntax_11(code) {
-    var starter = linesOf(STEP_BY_ID["11"].starter);
-    return [
-      pySyntaxPrelude(code, starter),
-      "def _run():",
-      "    result = {'ok': False, 'passed': [], 'failed': [], 'warnings': [], 'error': None, 'traceback': None}",
-      "    try:",
-      "        compile(CODE, '<student>', 'exec')",
-      "    except SyntaxError as e:",
-      "        result['error'] = 'Python syntax error on line %s: %s.' % (e.lineno, e.msg)",
-      "        return json.dumps(result)",
-      "    try:",
-      "        ns = {}",
-      "        exec(compile(CODE, '<student>', 'exec'), {}, ns)",
-      "        names = ['CUSTOM_TERRAIN_NAME', 'CUSTOM_TERRAIN_COLOR', 'CUSTOM_TERRAIN_SCORE_CHANGE', 'CUSTOM_TERRAIN_ROUTE_WEIGHT', 'CUSTOM_TERRAIN_DISAPPEARS']",
-      "        missing = [n for n in names if n not in ns]",
-      "        if missing:",
-      "            result['failed'].append('Missing definition(s): %s.' % ', '.join(missing))",
-      "        else:",
-      "            result['passed'].append('All five are defined: NAME=%s, COLOR=%s, SCORE_CHANGE=%s, ROUTE_WEIGHT=%s, DISAPPEARS=%s.' % tuple(_short_repr(ns[n]) for n in names))",
-      "            color = ns['CUSTOM_TERRAIN_COLOR']",
-      "            if not (isinstance(color, tuple) and len(color) == 3 and all(isinstance(v, int) and 0 <= v <= 255 for v in color)):",
-      "                result['warnings'].append('Heads up: CUSTOM_TERRAIN_COLOR is usually a 3-tuple of ints 0-255 — this still counts as complete, but double-check it renders correctly.')",
-      "            for n in ('CUSTOM_TERRAIN_SCORE_CHANGE', 'CUSTOM_TERRAIN_ROUTE_WEIGHT'):",
-      "                if type(ns[n]) is not int:",
-      "                    result['warnings'].append('Heads up: %s is usually a plain integer — this still counts as complete, but double-check it behaves as expected.' % n)",
-      "            if type(ns['CUSTOM_TERRAIN_DISAPPEARS']) is not bool:",
-      "                result['warnings'].append('Heads up: CUSTOM_TERRAIN_DISAPPEARS is usually exactly True or False — this still counts as complete, but double-check it behaves as expected.')",
-      "    except Exception as e:",
-      "        result['error'] = '%s: %s' % (type(e).__name__, e)",
-      "        result['traceback'] = traceback.format_exc()",
-      "    result['ok'] = result['error'] is None and len(result['failed']) == 0",
-      "    return json.dumps(result)",
-      "_run()",
-    ].join("\n");
-  }
-
-  function harness_syntax_12(code) {
-    var starter = linesOf(STEP_BY_ID["12"].starter);
-    return [
-      pySyntaxPrelude(code, starter),
-      "def _run():",
-      "    result = {'ok': False, 'passed': [], 'failed': [], 'warnings': [], 'error': None, 'traceback': None}",
-      "    try:",
-      "        compile(CODE, '<student>', 'exec')",
-      "    except SyntaxError as e:",
-      "        result['error'] = 'Python syntax error on line %s: %s.' % (e.lineno, e.msg)",
-      "        return json.dumps(result)",
-      "    try:",
-      "        ns = {}",
-      "        exec(compile(CODE, '<student>', 'exec'), {}, ns)",
-      "        names = ['MONSTER_ATTACK_DISTANCE', 'MONSTER_CHASE_DISTANCE', 'MONSTER_SPEED_NORMAL', 'MONSTER_SPEED_SWAMP', 'MONSTER_SPEED_CUSTOM', 'MONSTER_COUNT']",
-      "        missing = [n for n in names if n not in ns]",
-      "        if missing:",
-      "            result['failed'].append('Missing definition(s): %s.' % ', '.join(missing))",
-      "        else:",
-      "            result['passed'].append('All six are defined: %s.' % ', '.join('%s=%s' % (n, _short_repr(ns[n])) for n in names))",
-      "            for n in names:",
-      "                if type(ns[n]) is not int:",
-      "                    result['warnings'].append('Heads up: %s is usually a plain integer — this still counts as complete, but double-check it behaves as expected.' % n)",
-      "            attack = ns.get('MONSTER_ATTACK_DISTANCE')",
-      "            chase = ns.get('MONSTER_CHASE_DISTANCE')",
-      "            if isinstance(attack, int) and isinstance(chase, int) and not (chase > attack):",
-      "                result['warnings'].append('Heads up: MONSTER_CHASE_DISTANCE is usually greater than MONSTER_ATTACK_DISTANCE, or the monster will never notice you coming — this still counts as complete, but double-check it in the Play tab.')",
-      "            count = ns.get('MONSTER_COUNT')",
-      "            if isinstance(count, int) and count < 0:",
-      "                result['warnings'].append('Heads up: MONSTER_COUNT is usually 0 or more.')",
-      "    except Exception as e:",
-      "        result['error'] = '%s: %s' % (type(e).__name__, e)",
-      "        result['traceback'] = traceback.format_exc()",
-      "    result['ok'] = result['error'] is None and len(result['failed']) == 0",
-      "    return json.dumps(result)",
-      "_run()",
-    ].join("\n");
-  }
-
-  function harness_syntax_15(code) {
-    var starter = linesOf(STEP_BY_ID["15"].starter);
+  function harness_syntax_9(code) {
+    var starter = linesOf(STEP_BY_ID["9"].starter);
     return [
       pySyntaxPrelude(code, starter),
       "def _run():",
@@ -2271,12 +2047,10 @@
 
   var SYNTAX_HARNESSES = {
     "1": harness_syntax_1,
+    "6": harness_syntax_6,
+    "7": harness_syntax_7,
     "8": harness_syntax_8,
     "9": harness_syntax_9,
-    "10": harness_syntax_10,
-    "11": harness_syntax_11,
-    "12": harness_syntax_12,
-    "15": harness_syntax_15,
   };
 
   // -------------------------------------------- 12. hints/skip/reset/io
@@ -2333,7 +2107,7 @@
     if (state.assetData && state.assetData.uploadedFiles && state.assetData.uploadedFiles.length) {
       showConfirm(
         "Remember your uploaded files",
-        "progress.json saved your code, painted maps, and the list of " + state.assetData.uploadedFiles.length + " file(s) you added in TODO 9 — but NOT the image/sound files themselves. Those live on your disk (or your connected project folder). Keep them safe, or you'll need to re-upload them next time.",
+        "progress.json saved your code, painted maps, and the list of " + state.assetData.uploadedFiles.length + " file(s) you added in TODO 7 — but NOT the image/sound files themselves. Those live on your disk (or your connected project folder). Keep them safe, or you'll need to re-upload them next time.",
         { confirmLabel: "Got it", cancelLabel: "Close" }
       );
     }
@@ -2774,183 +2548,45 @@
     ].join("\n");
   }
 
-  // Play tab swamp placement: the student's merged Required TODO 5 code,
-  // called with UNIFORM weights - the same "no weights passed" call maze.py
-  // itself makes in create_swamps(), which is exactly what makes Dijkstra
-  // degenerate into BFS (see TODO 5's lead / pathfinding.py's docstring).
-  function traceHarness_swampPlacement(code5a, code5b, mazeGrid, start, end, swampCount) {
-    var fn5 = buildFnSourceTwoParts("cost, step_cost, neighbor, current, distance, parent, queue", code5a, code5b, "    ");
-    return [
-      "import json, base64, random, heapq, traceback",
-      b64Line("FN5_SRC", fn5),
-      "GRID = " + JSON.stringify(JSON.stringify(mazeGrid)),
-      "START = " + JSON.stringify(start),
-      "END = " + JSON.stringify(end),
-      "SWAMP_COUNT = " + Number(swampCount),
-      "BUDGET = " + FLOOD_BUDGET,
-      "TRACE_CAP = " + TRACE_CAP,
-      "def _run():",
-      "    result = {'ok': True, 'error': None, 'traceback': None, 'trace': [], 'stopped_reason': None, 'path': [], 'path_len': 0, 'optimal_len': None, 'swamp_cells': [], 'swamp_on_path': None}",
-      "    grid = json.loads(GRID)",
-      "    rows = len(grid); cols = len(grid[0]) if rows else 0",
-      "    start = tuple(START); end = tuple(END)",
-      "    def get_open_neighbors(pos):",
-      "        r, c = pos",
-      "        cell = grid[r][c]",
-      "        out = []",
-      "        for direction, dr, dc in (('top', -1, 0), ('right', 0, 1), ('bottom', 1, 0), ('left', 0, -1)):",
-      "            if not cell.get(direction, True):",
-      "                nr, nc = r + dr, c + dc",
-      "                if 0 <= nr < rows and 0 <= nc < cols:",
-      "                    out.append((nr, nc))",
-      "        return out",
-      "    try:",
-      "        exec(compile(FN5_SRC, '<t5>', 'exec'), {'heapq': heapq}, {})",
-      "    except SyntaxError as e:",
-      "        result['ok'] = False",
-      "        result['error'] = 'Python syntax error on line %s: %s.' % (e.lineno, e.msg)",
-      "        return json.dumps(result)",
-      "    def find_path_uniform(start, end):",
-      "        queue = [(0, start)]",
-      "        distance = {start: 0}",
-      "        parent = {start: None}",
-      "        visited = set()",
-      "        steps = 0",
-      "        while queue:",
-      "            steps += 1",
-      "            if steps > BUDGET:",
-      "                result['stopped_reason'] = 'budget'",
-      "                break",
-      "            cost, current = heapq.heappop(queue)",
-      "            if current in visited:",
-      "                continue",
-      "            visited.add(current)",
-      "            if current == end:",
-      "                break",
-      "            for neighbor in get_open_neighbors(current):",
-      "                if neighbor in visited:",
-      "                    continue",
-      "                step_cost = 1",
-      "                ns5 = {}",
-      "                exec(compile(FN5_SRC, '<t5>', 'exec'), {'heapq': heapq}, ns5)",
-      "                ns5['_fn'](cost, step_cost, neighbor, current, distance, parent, queue)",
-      "                if neighbor in distance and len(result['trace']) < TRACE_CAP:",
-      "                    result['trace'].append({'type': 'visit', 'cell': list(neighbor), 'from': list(current)})",
-      "        if end not in parent:",
-      "            return []",
-      "        path = [end]; cur = end; seen_back = {end}",
-      "        while cur != start:",
-      "            nxt = parent.get(cur)",
-      "            if nxt is None or nxt in seen_back:",
-      "                return []",
-      "            path.append(nxt); seen_back.add(nxt); cur = nxt",
-      "        path.reverse()",
-      "        return path",
-      "    try:",
-      "        path = find_path_uniform(start, end)",
-      "        result['path'] = [list(p) for p in path]",
-      "        result['path_len'] = len(path)",
-      "        if len(result['trace']) < TRACE_CAP and path:",
-      "            result['trace'].append({'type': 'path', 'cells': [list(p) for p in path]})",
-      "        # This fixed test maze has no interior walls, so the optimal path",
-      "        # length is just the Manhattan distance + 1 - plain arithmetic, not",
-      "        # a graph search, so this cannot resemble the TODO itself.",
-      "        result['optimal_len'] = abs(end[0] - start[0]) + abs(end[1] - start[1]) + 1",
-      "        candidates = path[2:-2] if len(path) > 4 else []",
-      "        rng = random.Random(7)",
-      "        rng.shuffle(candidates)",
-      "        selected = candidates[:SWAMP_COUNT]",
-      "        used_fallback = False",
-      "        if len(selected) < SWAMP_COUNT:",
-      "            used_fallback = True",
-      "            forbidden = {start, end, *[tuple(x) for x in selected]}",
-      "            others = [(r, c) for r in range(rows) for c in range(cols) if (r, c) not in forbidden]",
-      "            rng.shuffle(others)",
-      "            selected = selected + others[:SWAMP_COUNT - len(selected)]",
-      "        result['swamp_cells'] = [list(s) for s in selected]",
-      "        result['swamp_on_path'] = (not used_fallback)",
-      "    except Exception as e:",
-      "        result['ok'] = False",
-      "        result['error'] = '%s: %s' % (type(e).__name__, e)",
-      "        result['traceback'] = traceback.format_exc()",
-      "    return json.dumps(result)",
-      "_run()",
-    ].join("\n");
-  }
+  // D4 changelog note: swamp placement and the treasure/swamp/custom-item/
+  // custom-terrain "score board" preview used to be built here
+  // (traceHarness_swampPlacement / traceHarness_scoreBoard). Both were
+  // deleted along with score/swamp/treasure/custom-terrain themselves -
+  // the game is pure maze-solving now (goal + timer + bomb-reset), so
+  // there is no running score to animate and nothing left to place along
+  // the shortest path except bombs, which spawn randomly (see game.py's
+  // create_game_objects - given, not a TODO). TODO 8's Bonus preview is
+  // the much simpler traceHarness_customItems below.
 
-  // NOTE: each tile kind below is independently branched (treasure only
-  // touches code6, swamp only code7, custom_item/custom_terrain only read
-  // CODE10/CODE11 as plain data) - unlike playerMove's strict AND-chain,
-  // there is no inherent cross-dependency here. The one real issue found on
-  // review was structural, not conceptual: a blanket up-front syntax check
-  // used to abort the ENTIRE trace (all tile kinds) if EITHER code6 or code7
-  // had a syntax error, even for tile kinds that don't use that function at
-  // all. Each branch below now catches its own errors independently, so a
-  // broken TODO 7 (say) can never block seeing TODO 6's own effect on
-  // treasure tiles, or vice versa - same isolation principle as playerMove.
-  function traceHarness_scoreBoard(code6, code7, code10, code11, tiles, startingScore) {
-    var fn6 = buildFnSource("self, ITEM_SCORE", code6, "    ");
-    var fn7 = buildFnSource("self, SWAMP_SCORE_PENALTY", code7, "    ");
+  // Lightweight preview for the CUSTOM_ITEMS Bonus (TODO 8): parses the
+  // student's list and returns it as-is (name/color/effect/amount) for
+  // the customItemLab visualizer to render as a simple card list - no
+  // simulation needed since there's no cumulative score to animate any
+  // more, just "here's what your item(s) look like and do."
+  function traceHarness_customItems(code) {
     return [
       "import json, base64, traceback",
-      b64Line("FN6_SRC", fn6),
-      b64Line("FN7_SRC", fn7),
-      b64Line("CODE10", code10),
-      b64Line("CODE11", code11),
-      "TILES = " + JSON.stringify(JSON.stringify(tiles)),
-      "START_SCORE = " + Number(startingScore),
-      "ITEM_SCORE = 100",
-      "SWAMP_SCORE_PENALTY = 100",
+      b64Line("CODE", code),
       "def _run():",
-      "    result = {'ok': True, 'error': None, 'traceback': None, 'trace': [], 'custom_item': None, 'custom_terrain': None}",
-      "    class SelfObj:",
-      "        def __init__(self, score):",
-      "            self.score = score",
-      "    self_ = SelfObj(START_SCORE)",
-      "    def try_call(fn_src, args):",
-      "        try:",
-      "            ns = {}",
-      "            exec(compile(fn_src, '<tile>', 'exec'), {}, ns)",
-      "            ns['_fn'](*args)",
-      "        except Exception:",
-      "            pass  # this tile kind's TODO isn't finished/valid yet - no effect, but other tiles still run",
-      "    def safe_read_dict(code, filename):",
-      "        try:",
-      "            ns = {}",
-      "            exec(compile(code, filename, 'exec'), {}, ns)",
-      "            return ns",
-      "        except Exception:",
-      "            return {}",
-      "    ns10 = safe_read_dict(CODE10, '<t10>')",
-      "    custom_items = ns10.get('CUSTOM_ITEMS') or [{'name': 'Custom Item', 'color': (180, 180, 180), 'score': 0, 'hint_bonus': 0, 'route_weight': 0}]",
-      "    first_item = custom_items[0] if custom_items else {'name': 'Custom Item', 'color': (180, 180, 180), 'score': 0, 'hint_bonus': 0, 'route_weight': 0}",
+      "    result = {'ok': True, 'error': None, 'items': []}",
       "    try:",
-      "        for tile in json.loads(TILES):",
-      "            kind = tile['kind']",
-      "            before = self_.score",
-      "            if kind == 'treasure':",
-      "                try_call(FN6_SRC, (self_, ITEM_SCORE))",
-      "                label = 'Treasure'",
-      "            elif kind == 'swamp':",
-      "                try_call(FN7_SRC, (self_, SWAMP_SCORE_PENALTY))",
-      "                label = 'Swamp'",
-      "            elif kind == 'custom_item':",
-      "                self_.score += first_item.get('score', 0)",
-      "                label = str(first_item.get('name', 'Custom Item'))",
-      "            elif kind == 'custom_terrain':",
-      "                ns11 = safe_read_dict(CODE11, '<t11>')",
-      "                self_.score += ns11.get('CUSTOM_TERRAIN_SCORE_CHANGE', 0)",
-      "                label = str(ns11.get('CUSTOM_TERRAIN_NAME', 'Custom Terrain'))",
-      "            else:",
-      "                label = kind",
-      "            result['trace'].append({'type': 'score', 'kind': kind, 'label': label, 'delta': self_.score - before, 'total': self_.score})",
-      "        result['custom_item'] = {'name': str(first_item.get('name', 'Custom Item')), 'color': list(first_item.get('color', (180, 180, 180))), 'score': first_item.get('score', 0), 'weight': first_item.get('route_weight', 0)}",
-      "        ns11b = safe_read_dict(CODE11, '<t11>')",
-      "        result['custom_terrain'] = {'name': str(ns11b.get('CUSTOM_TERRAIN_NAME', 'Custom Terrain')), 'color': list(ns11b.get('CUSTOM_TERRAIN_COLOR', (180, 180, 180))), 'change': ns11b.get('CUSTOM_TERRAIN_SCORE_CHANGE', 0)}",
+      "        ns = {}",
+      "        exec(compile(CODE, '<t8>', 'exec'), {}, ns)",
+      "        items = ns.get('CUSTOM_ITEMS') or []",
+      "        out = []",
+      "        for item_def in items:",
+      "            if not isinstance(item_def, dict):",
+      "                continue",
+      "            out.append({",
+      "                'name': str(item_def.get('name', 'Custom Item')),",
+      "                'color': list(item_def.get('color', (180, 180, 180))),",
+      "                'effect': str(item_def.get('effect', '')),",
+      "                'amount': item_def.get('amount', 0),",
+      "            })",
+      "        result['items'] = out",
       "    except Exception as e:",
       "        result['ok'] = False",
       "        result['error'] = '%s: %s' % (type(e).__name__, e)",
-      "        result['traceback'] = traceback.format_exc()",
       "    return json.dumps(result)",
       "_run()",
     ].join("\n");
@@ -3045,87 +2681,35 @@
     ].join("\n");
   }
 
-  // Extracts CUSTOM_ITEM_*/CUSTOM_TERRAIN_* values without grading anything -
-  // used by the Play tab to show the student's own custom item/terrain.
-  // NOTE: CUSTOM_ITEMS (TODO 10) is a LIST - the real pygame game spawns
-  // every entry randomly per-instance (see items.py's CustomItem.item_def),
-  // but this Play-tab mini-preview simplifies to showing just the FIRST
-  // entry's stats/color (a deliberate, disclosed scope simplification -
-  // the full multi-item behaviour is only in the real exported game).
-  function traceHarness_customValues(code10, code11) {
-    return [
-      "import json, base64, traceback",
-      b64Line("CODE10", code10),
-      b64Line("CODE11", code11),
-      "def _run():",
-      "    result = {'ok': True, 'error': None, 'item': None, 'terrain': None}",
-      "    try:",
-      "        ns10 = {}",
-      "        exec(compile(CODE10, '<t10>', 'exec'), {}, ns10)",
-      "        items = ns10.get('CUSTOM_ITEMS') or [{'name': 'Custom Item', 'color': (180, 180, 180), 'score': 0, 'hint_bonus': 0, 'route_weight': 0}]",
-      "        first_item = items[0]",
-      "        result['item'] = {'name': str(first_item.get('name', 'Custom Item')), 'color': list(first_item.get('color', (180, 180, 180))), 'score': first_item.get('score', 0), 'weight': first_item.get('route_weight', 0)}",
-      "        ns11 = {}",
-      "        exec(compile(CODE11, '<t11>', 'exec'), {}, ns11)",
-      "        result['terrain'] = {'name': str(ns11.get('CUSTOM_TERRAIN_NAME', 'Custom Terrain')), 'color': list(ns11.get('CUSTOM_TERRAIN_COLOR', (180, 180, 180))), 'change': ns11.get('CUSTOM_TERRAIN_SCORE_CHANGE', 0), 'weight': ns11.get('CUSTOM_TERRAIN_ROUTE_WEIGHT', 0)}",
-      "    except Exception as e:",
-      "        result['ok'] = False",
-      "        result['error'] = '%s: %s' % (type(e).__name__, e)",
-      "    return json.dumps(result)",
-      "_run()",
-    ].join("\n");
-  }
+  // D3/D4 changelog note: this file used to also define
+  // traceHarness_customValues (extracted a custom item AND custom terrain
+  // preview) and traceHarness_scoreDelta (one real scoring step for the
+  // Play tab). Both were deleted - custom terrain no longer exists, score
+  // no longer exists, and CUSTOM_ITEMS' new preview is
+  // traceHarness_customItems above.
 
-  // One real scoring step (treasure via TODO 6 / swamp via TODO 7) for
-  // the Play tab, applied to the CURRENT running score.
-  function traceHarness_scoreDelta(code, paramName, constValue, currentScore) {
-    var fn = buildFnSource("self, " + paramName, code, "    ");
-    return [
-      "import json, base64, traceback",
-      b64Line("FN_SRC", fn),
-      paramName + " = " + Number(constValue),
-      "START_SCORE = " + Number(currentScore),
-      "def _run():",
-      "    result = {'ok': True, 'error': None, 'score': START_SCORE}",
-      "    class SelfObj:",
-      "        def __init__(self, score):",
-      "            self.score = score",
-      "    ns = {}",
-      "    try:",
-      "        exec(compile(FN_SRC, '<student>', 'exec'), {}, ns)",
-      "    except SyntaxError as e:",
-      "        result['ok'] = False",
-      "        result['error'] = 'Python syntax error on line %s: %s.' % (e.lineno, e.msg)",
-      "        return json.dumps(result)",
-      "    try:",
-      "        self_ = SelfObj(START_SCORE)",
-      "        ns['_fn'](self_, " + paramName + ")",
-      "        result['score'] = self_.score",
-      "    except Exception as e:",
-      "        result['ok'] = False",
-      "        result['error'] = '%s: %s' % (type(e).__name__, e)",
-      "    return json.dumps(result)",
-      "_run()",
-    ].join("\n");
-  }
-
-  // Dijkstra's hint route drawn on the REAL round maze (walls + terrain),
-  // using the student's Required TODO 5 code (both parts, reassembled) and
-  // terrain-based route weights.
-  function traceHarness_dijkstraOnMaze(code5a, code5b, mazeGrid, weightsByTerrain, terrainGrid, start, end) {
+  // Dijkstra's hint route drawn on the REAL round maze (walls only - no
+  // terrain concept exists any more), using the student's Required TODO 5
+  // code (both parts, reassembled) and BOMB-avoidance route weights - the
+  // sole remaining purpose of find_path_dijkstra after D (monster/swamp/
+  // treasure removed): mirrors game.py's get_current_route_weight exactly
+  // (STUDENT_NORMAL_WEIGHT for every open cell, STUDENT_BOMB_WEIGHT for a
+  // cell an ACTIVE bomb currently occupies).
+  function traceHarness_hintRoute(code5a, code5b, mazeGrid, bombPositions, start, end) {
     var fn5 = buildFnSourceTwoParts("cost, step_cost, neighbor, current, distance, parent, queue", code5a, code5b, "    ");
     return [
       "import json, heapq, base64, traceback",
       b64Line("FN5_SRC", fn5),
       "GRID = " + JSON.stringify(JSON.stringify(mazeGrid)),
-      "TERRAIN = " + JSON.stringify(JSON.stringify(terrainGrid)),
-      "WEIGHTS_BY_TERRAIN = " + JSON.stringify(JSON.stringify(weightsByTerrain)),
+      "BOMB_POSITIONS = " + JSON.stringify(JSON.stringify(bombPositions)),
       "START = " + JSON.stringify(start),
       "END = " + JSON.stringify(end),
       "BUDGET = " + FLOOD_BUDGET,
+      "STUDENT_NORMAL_WEIGHT = 0",
+      "STUDENT_BOMB_WEIGHT = 1000",
       "def _run():",
       "    result = {'ok': True, 'error': None, 'traceback': None, 'path': [], 'total_cost': None}",
-      "    grid = json.loads(GRID); terrain = json.loads(TERRAIN); wbt = json.loads(WEIGHTS_BY_TERRAIN)",
+      "    grid = json.loads(GRID); bomb_positions = json.loads(BOMB_POSITIONS)",
       "    rows = len(grid); cols = len(grid[0]) if rows else 0",
       "    start = tuple(START); end = tuple(END)",
       "    def get_open_neighbors(pos):",
@@ -3139,7 +2723,8 @@
       "                    out.append((nr, nc))",
       "        return out",
       "    def get_route_weight(pos):",
-      "        return wbt.get(terrain[pos[0]][pos[1]], 0)",
+      "        key = str(pos[0]) + ',' + str(pos[1])",
+      "        return STUDENT_BOMB_WEIGHT if bomb_positions.get(key) else STUDENT_NORMAL_WEIGHT",
       "    try:",
       "        exec(compile(FN5_SRC, '<t5>', 'exec'), {'heapq': heapq}, {})",
       "    except SyntaxError as e:",
@@ -3290,10 +2875,12 @@
   //
   // These reference bodies are intentionally NOT the literal graded answer
   // (see REFERENCE_* below) - they're a different-shaped-but-behaviourally-
-  // equivalent stand-in, the same principle already used by
-  // harness_monsterChase_14's from-scratch ground-truth find_path_dijkstra
-  // (computes the same result via a different code shape, without
-  // reproducing the exact expected snippet a student is graded on). Verified
+  // equivalent stand-in, the same principle harness_movement_2 itself now
+  // uses (its FakePlayer.try_move is an independent, correct reference
+  // implementation, not the student's own TODO 3/4 code - see B1's
+  // changelog note above harness_movement_2): compute the same result via
+  // a different code shape, without reproducing the exact expected snippet
+  // a student is graded on. Verified
   // against the REAL grading harnesses (harness_movement_2/guardClause_3/
   // positionDelta_4) to confirm they are behaviourally correct substitutes.
   var REFERENCE_CODE = {
@@ -3495,101 +3082,81 @@
 
   // -------------------------------------------------- 14f. scoreBoard viz
 
-  var ScoreBoardViz = (function () {
+  // D4 replacement for the old ScoreBoardViz (which animated a running
+  // score across treasure/swamp/custom_item/custom_terrain tiles - none of
+  // that exists any more). TODO 8's Bonus is now just "design your own
+  // collectible(s)", so the preview is equally simple: parse CUSTOM_ITEMS
+  // and show each entry as a card (swatch, name, and a plain-English
+  // description of its effect) - no simulation, nothing to step through.
+  var CustomItemLabViz = (function () {
     var refs = null;
-    var TILES = [
-      { kind: "treasure" }, { kind: "swamp" }, { kind: "treasure" }, { kind: "custom_item" },
-      { kind: "swamp" }, { kind: "custom_terrain" }, { kind: "treasure" },
-    ];
-    var idx = 0;
-    var total = 0;
 
-    function tileLabel(kind) { return { treasure: "Treasure", swamp: "Swamp", custom_item: "Custom item", custom_terrain: "Custom terrain" }[kind] || kind; }
-    function tileColor(kind, data) {
-      if (kind === "custom_item" && data && data.custom_item) return "rgb(" + data.custom_item.color.join(",") + ")";
-      if (kind === "custom_terrain" && data && data.custom_terrain) return "rgb(" + data.custom_terrain.color.join(",") + ")";
-      if (kind === "treasure") return "#22c55e";
-      if (kind === "swamp") return "#867d38";
-      return "#888";
+    function effectDescription(item) {
+      var effect = item.effect, amount = item.amount;
+      if (effect === "add_time") return "+" + amount + "s time when collected";
+      if (effect === "add_hint") return "+" + amount + " hint use(s) when collected";
+      if (effect) return "effect: " + effect + " (not a built-in effect - safe no-op in the real game)";
+      return "no effect set";
     }
 
-    function renderStrip(data) {
+    function renderItems(items) {
       if (!refs) return;
-      refs.strip.innerHTML = "";
-      TILES.forEach(function (t, i) {
-        var tile = el("div", { class: "score-tile" + (i === idx ? " is-current" : "") + (i < idx ? " is-done" : ""), style: "background:" + tileColor(t.kind, data) });
-        var label = t.kind === "custom_item" && data && data.custom_item ? data.custom_item.name : (t.kind === "custom_terrain" && data && data.custom_terrain ? data.custom_terrain.name : tileLabel(t.kind));
-        tile.title = label;
-        refs.strip.appendChild(tile);
+      refs.list.innerHTML = "";
+      if (!items.length) {
+        refs.list.appendChild(el("p", { class: "small muted", text: "CUSTOM_ITEMS is empty right now - add at least one dictionary to see a preview here." }));
+        return;
+      }
+      items.forEach(function (item) {
+        var color = "rgb(" + item.color.join(",") + ")";
+        var card = el("div", { class: "viz-readout", style: "display:flex;align-items:center;gap:10px;padding:8px 0;" }, [
+          el("span", { style: "width:22px;height:22px;border-radius:50%;flex-shrink:0;display:inline-block;background:" + color + ";border:1px solid rgba(0,0,0,0.25);" }),
+          el("span", {}, [
+            el("strong", { text: item.name }),
+            el("br"),
+            el("span", { class: "small muted", text: effectDescription(item) }),
+          ]),
+        ]);
+        refs.list.appendChild(card);
       });
     }
 
     function runFresh() {
-      var c6 = state.steps["6"].code, c7 = state.steps["7"].code;
-      var c10 = state.steps["10"].code, c11 = state.steps["11"].code;
+      var code = state.steps["8"].code;
       if (refs) refs.verdict.info("Running your code…");
       ensurePyodide().then(function (py) {
-        return py.runPythonAsync(traceHarness_scoreBoard(c6, c7, c10, c11, TILES, 0));
+        return py.runPythonAsync(traceHarness_customItems(code));
       }).then(function (json) {
         var data = JSON.parse(json);
-        idx = 0; total = 0;
-        renderStrip(data);
-        if (refs) refs.readout.set("score", "0");
-        if (!data.ok) { if (refs) refs.verdict.set(false, data.error || "Your code raised an error."); return; }
-        refs._data = data;
-        if (refs) refs.verdict.info("Press Step to play through the tiles, or Run to play them all.");
+        if (!data.ok) {
+          if (refs) { refs.verdict.set(false, data.error || "Your code raised an error."); renderItems([]); }
+          return;
+        }
+        renderItems(data.items);
+        if (refs) refs.verdict.info(data.items.length + " item(s) defined. Each round spawns several, randomly drawn from this list.");
       }).catch(function (err) { if (refs) refs.verdict.set(false, "Could not run: " + (err && err.message ? err.message : err)); });
-    }
-
-    function stepOnce() {
-      if (!refs || !refs._data) return;
-      var trace = refs._data.trace;
-      if (idx >= trace.length) return;
-      var evt = trace[idx];
-      total = evt.total;
-      idx++;
-      renderStrip(refs._data);
-      refs.readout.set("score", String(total));
-      if (idx >= trace.length) {
-        if (total > 0) refs.verdict.set(true, "Final score " + total + " — above 0, round would be won.");
-        else refs.verdict.set(false, "Final score " + total + " — not above 0, round would be lost.");
-      }
-    }
-
-    function runAll() {
-      if (!refs || !refs._data) return;
-      var trace = refs._data.trace;
-      var timer = setInterval(function () {
-        if (idx >= trace.length) { clearInterval(timer); return; }
-        stepOnce();
-      }, prefersReducedMotion() ? 0 : 260);
     }
 
     return {
       mount: function (container) {
         container.innerHTML = "";
-        var strip = el("div", { class: "score-strip" });
-        container.appendChild(strip);
         var actions = el("div", { class: "viz-controlbar" }, [
-          el("button", { class: "btn btn-small", type: "button", text: "Step", onclick: stepOnce }),
-          el("button", { class: "btn btn-small btn-primary", type: "button", text: "Run", onclick: runAll }),
-          el("button", { class: "btn btn-small btn-secondary", type: "button", text: "↻ Replay animation", onclick: runFresh }),
+          el("button", { class: "btn btn-small btn-secondary", type: "button", text: "↻ Refresh preview", onclick: runFresh }),
         ]);
         container.appendChild(actions);
-        container.appendChild(el("p", { class: "small muted", text: "\"Replay animation\" re-plays your last-saved code here without submitting an attempt — press \"Run my code\" above (in the editor) to check your answer." }));
-        var readout = buildReadout([{ key: "score", label: "Running score" }]);
-        container.appendChild(readout.node);
+        container.appendChild(el("p", { class: "small muted", text: "\"Refresh preview\" re-reads your last-saved code here without submitting an attempt — press \"Run my code\" above (in the editor) to check your answer." }));
+        var list = el("div", {});
+        container.appendChild(list);
         var verdict = buildVerdict();
         container.appendChild(verdict.node);
-        refs = { strip: strip, readout: readout, verdict: verdict, _data: null };
+        refs = { list: list, verdict: verdict };
         runFresh();
       },
-      show: function () { if (refs && refs._data) renderStrip(refs._data); },
+      show: function () { runFresh(); },
       update: function () { runFresh(); },
       unmount: function () { refs = null; },
     };
   })();
-  Visualizer.register("scoreBoard", ScoreBoardViz);
+  Visualizer.register("customItemLab", CustomItemLabViz);
 
   // -------------------------------------------------- 14g. dijkstraFrontier viz
 
@@ -3825,7 +3392,7 @@
   // to WARN the student that cells will look cramped, never to block them.
   var MAP_WINDOW_PIXEL_W = 976, MAP_WINDOW_PIXEL_H = 542;
   var MAP_MIN_COMFY_CELL = 16;
-  var ROUND_CONFIG_KEY_ORDER = ["rows", "cols", "cell_size", "extra_open_walls", "item_count", "swamp_count", "bomb_count", "custom_item_count", "custom_terrain_count", "monster_count", "time_limit_seconds"];
+  var ROUND_CONFIG_KEY_ORDER = ["rows", "cols", "cell_size", "extra_open_walls", "bomb_count", "custom_item_count", "time_limit_seconds"];
 
   function makeGrid(rows, cols, fill) {
     var g = [];
@@ -3860,10 +3427,10 @@
     var grid = round.grid;
     var reach = floodReachable(grid, round.start);
     var goalReachable = !!reach[round.goal[0] + "," + round.goal[1]];
-    var treasureCells = [];
-    for (var r = 0; r < grid.length; r++) for (var c = 0; c < grid[r].length; c++) if (grid[r][c] === "TREASURE") treasureCells.push([r, c]);
-    var treasuresReachable = treasureCells.filter(function (p) { return !!reach[p[0] + "," + p[1]]; }).length;
-    return { goalReachable: goalReachable, treasuresTotal: treasureCells.length, treasuresReachable: treasuresReachable, reach: reach };
+    var itemCells = [];
+    for (var r = 0; r < grid.length; r++) for (var c = 0; c < grid[r].length; c++) if (grid[r][c] === "CUSTOM_ITEM") itemCells.push([r, c]);
+    var itemsReachable = itemCells.filter(function (p) { return !!reach[p[0] + "," + p[1]]; }).length;
+    return { goalReachable: goalReachable, treasuresTotal: itemCells.length, treasuresReachable: itemsReachable, reach: reach };
   }
 
   function paintedGridToWallGrid(grid) {
@@ -3882,19 +3449,19 @@
     }
     return out;
   }
-  function paintedTerrainGrid(grid) {
-    return grid.map(function (row) { return row.map(function (t) { return (t === "SWAMP" || t === "CUSTOM") ? t : "NORMAL"; }); });
-  }
+  // (paintedTerrainGrid used to exist here for SWAMP/CUSTOM terrain tiles -
+  // deleted along with terrain itself; maze.py's get_terrain() always
+  // returns "NORMAL" now, so there is nothing left for a painted map to
+  // encode about terrain.)
   function paintedItemsAndBombs(grid) {
-    var items = [], bombs = [], monsters = [];
+    var items = [], bombs = [];
     for (var r = 0; r < grid.length; r++) {
       for (var c = 0; c < grid[r].length; c++) {
-        if (grid[r][c] === "TREASURE") items.push([r, c]);
+        if (grid[r][c] === "CUSTOM_ITEM") items.push([r, c]);
         else if (grid[r][c] === "BOMB") bombs.push([r, c]);
-        else if (grid[r][c] === "MONSTER") monsters.push([r, c]);
       }
     }
-    return { items: items, bombs: bombs, monsters: monsters };
+    return { items: items, bombs: bombs };
   }
 
   function pickEligibleSeed(grid, rng, predicate, avoid) {
@@ -3985,15 +3552,6 @@
     });
     ensureConnectivity(grid, start, rng);
 
-    var swampBudget = opts.swampCount != null ? opts.swampCount : Math.round(area * 0.08);
-    var swampClusterCells = Math.max(2, Math.round(clusterSize * clusterSize * 0.7));
-    var numSwampSeeds = Math.max(1, Math.round(swampBudget / swampClusterCells));
-    for (var s = 0; s < numSwampSeeds; s++) {
-      var sc = pickEligibleSeed(grid, rng, function (v) { return v === "NORMAL"; }, protectedCells);
-      if (!sc) break;
-      growCluster(grid, "SWAMP", sc, swampClusterCells, rng, function (v) { return v === "NORMAL"; });
-    }
-
     function scatterSmallClusters(type, count) {
       var placed = 0, perCluster = Math.max(1, Math.round(clusterSize / 1.5)), guard2 = 0;
       while (placed < count && guard2++ < count * 6 + 20) {
@@ -4007,30 +3565,26 @@
         placed += Math.max(1, after - before);
       }
     }
-    scatterSmallClusters("TREASURE", opts.itemCount != null ? opts.itemCount : Math.max(3, Math.round(area * 0.03)));
+    scatterSmallClusters("CUSTOM_ITEM", opts.itemCount != null ? opts.itemCount : Math.max(3, Math.round(area * 0.03)));
     scatterSmallClusters("BOMB", opts.bombCount != null ? opts.bombCount : Math.max(2, Math.round(area * 0.015)));
-    scatterSmallClusters("MONSTER", opts.monsterCount != null ? opts.monsterCount : 1);
 
     return { grid: grid, start: start, goal: goal };
   }
 
   function derivedCountsFromGrid(grid, existingDict, timeLimitSeconds) {
     var rows = grid.length, cols = grid[0].length;
-    var swamp = 0, treasure = 0, bomb = 0, custom = 0, monster = 0;
+    var item = 0, bomb = 0;
     for (var r = 0; r < rows; r++) {
       for (var c = 0; c < cols; c++) {
         var t = grid[r][c];
-        if (t === "SWAMP") swamp++;
-        else if (t === "TREASURE") treasure++;
+        if (t === "CUSTOM_ITEM") item++;
         else if (t === "BOMB") bomb++;
-        else if (t === "CUSTOM") custom++;
-        else if (t === "MONSTER") monster++;
       }
     }
     var out = {};
     ROUND_CONFIG_KEY_ORDER.forEach(function (k) { out[k] = existingDict && existingDict[k] != null ? existingDict[k] : 0; });
     out.rows = rows; out.cols = cols;
-    out.swamp_count = swamp; out.item_count = treasure; out.bomb_count = bomb; out.custom_terrain_count = custom; out.monster_count = monster;
+    out.bomb_count = bomb; out.custom_item_count = item;
     if (!out.cell_size) out.cell_size = Math.max(MAP_MIN_COMFY_CELL, Math.floor(Math.min(MAP_WINDOW_PIXEL_W / cols, MAP_WINDOW_PIXEL_H / rows)));
     if (!out.time_limit_seconds) out.time_limit_seconds = timeLimitSeconds || 60;
     if (!out.extra_open_walls) out.extra_open_walls = 0;
@@ -4102,7 +3656,7 @@
 
   function dictsRoughlyEqual(a, b) {
     if (!a || !b) return false;
-    return ["rows", "cols", "swamp_count", "item_count", "bomb_count"].every(function (k) { return a[k] === b[k]; });
+    return ["rows", "cols", "custom_item_count", "bomb_count"].every(function (k) { return a[k] === b[k]; });
   }
 
   var MapEditorViz = (function () {
@@ -4120,10 +3674,8 @@
     var TILE_META = {
       WALL: { label: "Wall", color: "#3a3327", desc: "Blocks movement." },
       NORMAL: { label: "Floor (eraser)", color: "#12100c", desc: "Open, no effect." },
-      SWAMP: { label: "Swamp", color: "rgba(134,180,146,0.65)", desc: "Route weight 100 · score penalty." },
-      TREASURE: { label: "Treasure", color: "#22c55e", desc: "Normal treasure score." },
-      BOMB: { label: "Bomb", color: "#e0685f", desc: "Hazard." },
-      MONSTER: { label: "Monster", color: "#be1e3c", desc: "Chasing enemy start position (Bonus)." },
+      CUSTOM_ITEM: { label: "Custom item", color: "#22c55e", desc: "Spawns one of your TODO 8 custom items here." },
+      BOMB: { label: "Bomb", color: "#e0685f", desc: "Touching it resets the player to the start position." },
       GOAL: { label: "Goal", color: "#f0c04a", desc: "Round exit (exactly one)." },
       START: { label: "Start", color: "#4fa3e3", desc: "Player start (exactly one)." },
     };
@@ -4133,14 +3685,8 @@
       return { idx: idx, round: state.mapEditorData.rounds[idx] };
     }
 
-    function customTerrainAvailable() {
-      return state.steps["11"] && state.steps["11"].status === "completed";
-    }
-
     function paletteTypes() {
-      var types = ["WALL", "NORMAL", "SWAMP", "TREASURE", "BOMB", "MONSTER", "GOAL", "START"];
-      if (customTerrainAvailable()) types.splice(3, 0, "CUSTOM");
-      return types;
+      return ["WALL", "NORMAL", "CUSTOM_ITEM", "BOMB", "GOAL", "START"];
     }
 
     function ensureRound(idx, rows, cols) {
@@ -4188,7 +3734,7 @@
           var x = c * CELL, y = r * CELL;
           var t = d.grid[r][c];
           var meta = TILE_META[t] || TILE_META.NORMAL;
-          ctx.fillStyle = t === "CUSTOM" && customValuesCache && customValuesCache.terrain ? "rgb(" + customValuesCache.terrain.color.join(",") + ")" : meta.color;
+          ctx.fillStyle = meta.color;
           ctx.fillRect(x, y, CELL - 1, CELL - 1);
           var reachable = !!verdict.reach[r + "," + c];
           if (t !== "WALL" && !reachable) {
@@ -4208,20 +3754,9 @@
         ctx.strokeRect(cursor.c * CELL + 1, cursor.r * CELL + 1, CELL - 2, CELL - 2);
       }
       refs.verdictLine.textContent = (verdict.goalReachable ? "Goal reachable ✓" : "Goal reachable ✗") + " · " +
-        verdict.treasuresReachable + "/" + verdict.treasuresTotal + " treasures reachable" +
+        verdict.treasuresReachable + "/" + verdict.treasuresTotal + " custom items reachable" +
         (verdict.treasuresReachable < verdict.treasuresTotal ? " ✗" : (verdict.treasuresTotal > 0 ? " ✓" : ""));
       refs.verdictLine.className = "small " + (verdict.goalReachable && verdict.treasuresReachable === verdict.treasuresTotal ? "verdict-good-text" : "verdict-bad-text");
-    }
-
-    var customValuesCache = null;
-    function loadCustomTerrainColor() {
-      if (!customTerrainAvailable()) { customValuesCache = null; return; }
-      ensurePyodide().then(function (py) {
-        return py.runPythonAsync(traceHarness_customValues(state.steps["10"].code, state.steps["11"].code));
-      }).then(function (json) {
-        var data = JSON.parse(json);
-        if (data.ok) { customValuesCache = data; draw(); renderPalette(); }
-      }).catch(function () {});
     }
 
     function renderPalette() {
@@ -4229,16 +3764,14 @@
       refs.palette.innerHTML = "";
       paletteTypes().forEach(function (t) {
         var meta = TILE_META[t] || TILE_META.NORMAL;
-        var color = t === "CUSTOM" && customValuesCache && customValuesCache.terrain ? "rgb(" + customValuesCache.terrain.color.join(",") + ")" : meta.color;
-        var label = t === "CUSTOM" && customValuesCache && customValuesCache.terrain ? customValuesCache.terrain.name : meta.label;
         var swatch = el("button", {
           class: "map-palette-item" + (tool === t && !eraseMode ? " is-active" : ""),
           type: "button",
-          title: label + " — " + (t === "CUSTOM" ? "route weight " + (customValuesCache && customValuesCache.terrain ? customValuesCache.terrain.weight : 0) : meta.desc),
+          title: meta.label + " — " + meta.desc,
           onclick: function () { tool = t; eraseMode = false; renderPalette(); },
         }, [
-          el("span", { class: "map-palette-swatch", style: "background:" + color }),
-          el("span", { class: "map-palette-label", text: label }),
+          el("span", { class: "map-palette-swatch", style: "background:" + meta.color }),
+          el("span", { class: "map-palette-label", text: meta.label }),
         ]);
         refs.palette.appendChild(swatch);
       });
@@ -4254,7 +3787,7 @@
       var d = ad.round;
       if (!d || !refs) return;
       var ta = document.querySelector("#mainPanel .code-textarea");
-      var code = ta ? ta.value : (state.steps["8"].code || "");
+      var code = ta ? ta.value : (state.steps["6"].code || "");
       var parsed = parseRoundConfigsSource(code);
       var derived = derivedCountsFromGrid(d.grid, parsed ? parsed[ad.idx] : null, parsed ? parsed[ad.idx] && parsed[ad.idx].time_limit_seconds : null);
       if (!force && parsed && d.lastSyncedDict && !dictsRoughlyEqual(parsed[ad.idx], d.lastSyncedDict)) {
@@ -4268,17 +3801,17 @@
       rounds3[ad.idx] = derived;
       var newCode = buildRoundConfigsSource(rounds3);
       d.lastSyncedDict = derived;
-      writeStep8Code(newCode);
+      writeStep6Code(newCode);
       persist();
     }
 
-    function writeStep8Code(newCode) {
+    function writeStep6Code(newCode) {
       var ta = document.querySelector("#mainPanel .code-textarea");
       if (ta) {
         ta.value = newCode;
         ta.dispatchEvent(new Event("input"));
       } else {
-        state.steps["8"].code = newCode;
+        state.steps["6"].code = newCode;
         persist();
       }
     }
@@ -4295,7 +3828,7 @@
           var idx = syncConflict.idx;
           var rows = clampInt(dict.rows, MAP_MIN_SIZE, MAP_MAX_SIZE, 11);
           var cols = clampInt(dict.cols, MAP_MIN_SIZE, MAP_MAX_SIZE, 15);
-          var gen = generatePaintedGrid(rows, cols, 1, 3, { swampCount: dict.swamp_count, itemCount: dict.item_count, bombCount: dict.bomb_count });
+          var gen = generatePaintedGrid(rows, cols, 1, 3, { itemCount: dict.custom_item_count, bombCount: dict.bomb_count });
           state.mapEditorData.rounds[idx] = { rows: rows, cols: cols, seed: 1, clusterSize: 3, grid: gen.grid, start: gen.start, goal: gen.goal, lastSyncedDict: dict };
           syncConflict = null;
           persist();
@@ -4469,7 +4002,7 @@
         container.appendChild(parseNotice);
         var conflictBox = el("div", { class: "viz-verdict verdict-info", hidden: "hidden" });
         container.appendChild(conflictBox);
-        container.appendChild(el("p", { class: "small muted mt-8", text: "Once TODO 8 is complete, this round uses your painted map in the Play tab instead of a randomly-generated one." }));
+        container.appendChild(el("p", { class: "small muted mt-8", text: "Once TODO 6 is complete, this round uses your painted map in the Play tab instead of a randomly-generated one." }));
 
         refs = {
           container: container, boardWrap: boardWrap, palette: palette,
@@ -4485,7 +4018,6 @@
 
         debouncedTextSync = debounce(onHandEdit, 500);
         attachTextSync();
-        loadCustomTerrainColor();
         refreshForRound();
       },
       show: function () { attachTextSync(); refreshForRound(); },
@@ -4516,13 +4048,8 @@
   var ASSET_SLOTS = [
     { key: "PLAYER_IMAGE_PATH", kind: "image", partIndex: 0, label: "Player sprite" },
     { key: "GOAL_IMAGE_PATH", kind: "image", partIndex: 0, label: "Goal sprite" },
-    { key: "SWAMP_IMAGE_PATH", kind: "image", partIndex: 0, label: "Swamp terrain" },
-    { key: "ITEM_IMAGE_PATH", kind: "image", partIndex: 0, label: "Treasure item" },
     { key: "BOMB_IMAGE_PATH", kind: "image", partIndex: 0, label: "Bomb" },
     { key: "FLOOR_TILE_IMAGE_PATH", kind: "image", partIndex: 0, label: "Floor tile" },
-    { key: "MONSTER_IMAGE_PATH", kind: "image", partIndex: 0, label: "Monster" },
-    { key: "SWAMP_SOUND_PATH", kind: "sound", partIndex: 1, label: "Swamp step sound" },
-    { key: "ITEM_SOUND_PATH", kind: "sound", partIndex: 1, label: "Item pickup sound" },
     { key: "BOMB_SOUND_PATH", kind: "sound", partIndex: 1, label: "Bomb explosion sound" },
     { key: "BACKGROUND_MUSIC_PATH", kind: "sound", partIndex: 1, label: "Background music" },
   ];
@@ -4618,18 +4145,18 @@
     function slotByKey(key) { return ASSET_SLOTS.filter(function (s) { return s.key === key; })[0]; }
 
     function currentPaths() {
-      var code = state.steps["9"].code;
+      var code = state.steps["7"].code;
       return parseAssetPaths(code[0], code[1]);
     }
 
     function writeAssetSlot(slot, valueLiteral) {
       var textareas = document.querySelectorAll("#mainPanel .code-textarea");
       var ta = textareas[slot.partIndex];
-      var code = ta ? ta.value : state.steps["9"].code[slot.partIndex];
+      var code = ta ? ta.value : state.steps["7"].code[slot.partIndex];
       var re = new RegExp("(" + slot.key + "\\s*=\\s*)(None|\"[^\"]*\"|'[^']*')");
       var newCode = re.test(code) ? code.replace(re, "$1" + valueLiteral) : (code + "\n" + slot.key + " = " + valueLiteral);
       if (ta) { ta.value = newCode; ta.dispatchEvent(new Event("input")); }
-      else { state.steps["9"].code[slot.partIndex] = newCode; persist(); }
+      else { state.steps["7"].code[slot.partIndex] = newCode; persist(); }
       renderAllPanels();
     }
 
@@ -5000,28 +4527,30 @@
   // here is faked either.
 
   var PLAY_ROUND_CONFIGS = [
-    { rows: 11, cols: 15, cellSize: 30, extraOpenWalls: 5, itemCount: 8, swampCount: 3, bombCount: 2, customItemCount: 2, customTerrainCount: 2, monsterCount: 1, timeLimitSeconds: 70 },
-    { rows: 15, cols: 21, cellSize: 24, extraOpenWalls: 6, itemCount: 10, swampCount: 5, bombCount: 4, customItemCount: 3, customTerrainCount: 3, monsterCount: 1, timeLimitSeconds: 55 },
-    { rows: 17, cols: 25, cellSize: 20, extraOpenWalls: 8, itemCount: 12, swampCount: 7, bombCount: 6, customItemCount: 4, customTerrainCount: 4, monsterCount: 2, timeLimitSeconds: 45 },
+    { rows: 11, cols: 15, cellSize: 30, extraOpenWalls: 5, bombCount: 2, customItemCount: 2, timeLimitSeconds: 70 },
+    { rows: 15, cols: 21, cellSize: 24, extraOpenWalls: 6, bombCount: 4, customItemCount: 3, timeLimitSeconds: 55 },
+    { rows: 17, cols: 25, cellSize: 20, extraOpenWalls: 8, bombCount: 6, customItemCount: 4, timeLimitSeconds: 45 },
   ];
-  var PLAY_ITEM_SCORE = 100;
-  var PLAY_SWAMP_PENALTY = 100;
-  var PLAY_BOMB_PENALTY = 150;
-  var PLAY_MONSTER_PENALTY = 60;
+  var PLAY_MAX_HINT_COUNT = 2; // mirrors settings.py's MAX_HINT_COUNT
   var PLAY_MOVE_DELAY_MS = 100;
 
   var PlayEngine = (function () {
     var refs = null;
     var roundIndex = 0;
-    var maze = null, terrain = null, rows = 0, cols = 0, cellSize = 0;
+    var maze = null, rows = 0, cols = 0, cellSize = 0;
     var player = { row: 0, col: 0 };
     var playerStart = { row: 0, col: 0 };
     var goal = { row: 0, col: 0 };
-    var items = [], bombs = [], monsters = [];
-    var score = 0, timeLeft = 0, timerId = null;
+    var items = [], bombs = [];
+    var timeLeft = 0, timerId = null;
+    var hintsRemaining = PLAY_MAX_HINT_COUNT;
     var running = false;
     var soundOn = false;
-    var customValues = null;
+    // The student's parsed CUSTOM_ITEMS (TODO 8) - a list of {name, color,
+    // effect, amount}, or null until TODO 8 is complete and loaded once via
+    // loadCustomItems(). Each spawned item randomly picks one entry, same
+    // as the real game's create_game_objects() (random.choice(CUSTOM_ITEMS)).
+    var customItemDefs = null;
     var hintPath = [];
     var hintTimeout = null;
     var busyMove = false;
@@ -5033,17 +4562,11 @@
       return {
         title: isDoneExact("1"),
         movement: isDoneExact("2") && isDoneExact("3") && isDoneExact("4"),
-        swampPlacement: isDoneExact("5"),
-        scoring: isDoneExact("6") && isDoneExact("7"),
         hint: isDoneExact("5"),
-        mapEditor: isDoneExact("8"),
-        assets: isDoneExact("9"),
-        customItem: isDoneExact("10"),
-        customTerrain: isDoneExact("11"),
-        monsterTuning: isDoneExact("12"),
-        monsterFsm: isDoneExact("13"),
-        monsterChase: isDoneExact("13") && isDoneExact("14"),
-        rules: isDoneExact("15"),
+        mapEditor: isDoneExact("6"),
+        assets: isDoneExact("7"),
+        customItem: isDoneExact("8"),
+        rules: isDoneExact("9"),
       };
     }
     function allRequiredCompleteExact() { return REQUIRED_ORDER.every(isDoneExact); }
@@ -5075,11 +4598,8 @@
       }
       return g;
     }
-    function blankTerrain(r, c) {
-      var g = [];
-      for (var i = 0; i < r; i++) { var row = []; for (var j = 0; j < c; j++) row.push("NORMAL"); g.push(row); }
-      return g;
-    }
+    // (blankTerrain used to exist here - terrain is gone entirely now, see
+    // maze.py's get_terrain(), which always returns "NORMAL".)
 
     // Randomized DFS / recursive-backtracker maze generation - a direct JS
     // port of the given (non-TODO) algorithm in maze.py's generate_step().
@@ -5159,42 +4679,8 @@
       return out;
     }
 
-    // Monster wander/catch (Bonus feature, simplified for the browser
-    // preview): this is a plain JS random-walk each tick, standing in for
-    // monster.py's given patrol_step - the real, graded FSM/CHASE-toward-
-    // player behaviour (TODO 13/14) only runs inside the actual pygame
-    // project, not in this in-browser mini preview. Disclosed scope cut.
-    function openNeighborsFor(r, c) {
-      var cell = maze[r][c];
-      var out = [];
-      if (!cell.top && r - 1 >= 0) out.push([r - 1, c]);
-      if (!cell.right && c + 1 < cols) out.push([r, c + 1]);
-      if (!cell.bottom && r + 1 < rows) out.push([r + 1, c]);
-      if (!cell.left && c - 1 >= 0) out.push([r, c - 1]);
-      return out;
-    }
-
-    function wanderMonsters() {
-      monsters.forEach(function (m) {
-        var nbrs = openNeighborsFor(m.row, m.col);
-        if (nbrs.length) {
-          var pick = nbrs[Math.floor(Math.random() * nbrs.length)];
-          m.row = pick[0]; m.col = pick[1];
-        }
-      });
-    }
-
-    function checkMonsterCatch() {
-      var caught = monsters.some(function (m) { return m.row === player.row && m.col === player.col; });
-      if (caught) {
-        player.row = playerStart.row; player.col = playerStart.col;
-        score -= PLAY_MONSTER_PENALTY;
-        statusLine("The monster caught you! -" + PLAY_MONSTER_PENALTY + ", back to start.", true);
-        updateStatusGrid();
-        draw();
-      }
-      return caught;
-    }
+    // (The monster wander/catch simulation used to live here - deleted
+    // along with the monster feature entirely, see D1's changelog note.)
 
     function statusLine(text, isError) {
       if (!refs) return;
@@ -5221,17 +4707,11 @@
       var items2 = [
         ["title", "Title screen shows your title (TODO 1)"],
         ["movement", "Player moves & respects walls (TODO 2/3/4)"],
-        ["swampPlacement", "Swamps placed along shortest path (TODO 5)"],
-        ["scoring", "Treasure/swamp scoring (TODO 6/7)"],
-        ["hint", "Dijkstra hint route (unlocks with TODO 5)"],
-        ["mapEditor", "Your painted rounds are used instead of random generation (TODO 8)"],
-        ["assets", "Your chosen images/sounds are used (TODO 9)"],
-        ["customItem", "Custom item(s) (TODO 10)"],
-        ["customTerrain", "Custom terrain (TODO 11)"],
-        ["monsterTuning", "Monster constants tuned (TODO 12)"],
-        ["monsterFsm", "Monster FSM (PATROL/CHASE/ATTACK) (TODO 13)"],
-        ["monsterChase", "Monster chases the player (TODO 13+14)"],
-        ["rules", "Your game's rules (TODO 15, capstone)"],
+        ["hint", "Hint button computes a bomb-avoiding route (TODO 5)"],
+        ["mapEditor", "Your painted rounds are used instead of random generation (TODO 6)"],
+        ["assets", "Your chosen images/sounds are used (TODO 7)"],
+        ["customItem", "Custom item(s) (TODO 8)"],
+        ["rules", "Your game's rules (TODO 9, capstone)"],
       ];
       refs.checklist.innerHTML = "";
       items2.forEach(function (pair) {
@@ -5241,15 +4721,25 @@
       refs.liveBanner.hidden = !allRequiredCompleteExact();
     }
 
+    // pickCustomItemDef(): every spawned item randomly draws ONE entry from
+    // the student's own CUSTOM_ITEMS (TODO 8) - random.choice(CUSTOM_ITEMS)
+    // in the real game's create_game_objects(). Falls back to a plain
+    // generic "no effect yet" item until TODO 8 is complete/loaded, exactly
+    // like the real game would if CUSTOM_ITEMS were left empty.
+    function pickCustomItemDef() {
+      var list = (customItemDefs && customItemDefs.length) ? customItemDefs : [{ name: "Custom Item", color: [180, 180, 180], effect: null, amount: 0 }];
+      return list[Math.floor(Math.random() * list.length)];
+    }
+
     function startRound(index) {
       roundIndex = index;
       var cfg = PLAY_ROUND_CONFIGS[roundIndex];
       var caps = capabilities();
-      score = 0;
+      hintsRemaining = PLAY_MAX_HINT_COUNT;
       hintPath = [];
       running = false;
 
-      // A completed TODO 7 with a painted layout for this round REPLACES
+      // A completed TODO 6 with a painted layout for this round REPLACES
       // procedural DFS generation entirely - no Pyodide maze-gen call at
       // all, the student's own hand-painted map is the round.
       if (caps.mapEditor && state.mapEditorData.rounds[index]) {
@@ -5258,16 +4748,14 @@
         var pw = fitWidth(refs ? refs.container : document.body, playBoardMaxWidth());
         cellSize = Math.max(6, Math.min(playBoardCellCap(), Math.floor(pw / cols)));
         maze = paintedGridToWallGrid(painted.grid);
-        terrain = paintedTerrainGrid(painted.grid);
         var extracted = paintedItemsAndBombs(painted.grid);
-        items = extracted.items.map(function (p) { return { row: p[0], col: p[1], active: true, kind: "treasure" }; });
+        items = extracted.items.map(function (p) { return { row: p[0], col: p[1], active: true, itemDef: pickCustomItemDef() }; });
         bombs = extracted.bombs.map(function (p) { return { row: p[0], col: p[1], active: true }; });
-        monsters = extracted.monsters.map(function (p) { return { row: p[0], col: p[1] }; });
         player = { row: painted.start[0], col: painted.start[1] };
         playerStart = { row: painted.start[0], col: painted.start[1] };
         goal = { row: painted.goal[0], col: painted.goal[1] };
         timeLeft = cfg.timeLimitSeconds;
-        statusLine(teachingNote("Using your hand-painted map for this round (TODO 8)."));
+        statusLine(teachingNote("Using your hand-painted map for this round (TODO 6)."));
         renderAll();
         return;
       }
@@ -5278,7 +4766,7 @@
       player = { row: 0, col: 0 };
       playerStart = { row: 0, col: 0 };
       goal = { row: rows - 1, col: cols - 1 };
-      items = []; bombs = []; monsters = [];
+      items = []; bombs = [];
       timeLeft = cfg.timeLimitSeconds;
 
       // Maze generation (randomized DFS / recursive backtracker) is given,
@@ -5292,62 +4780,12 @@
       var g = jsGenerateMazeWalls(rows, cols, rng);
       openExtraWalls(g, cfg.extraOpenWalls, rng);
       maze = g;
-      terrain = blankTerrain(rows, cols);
 
       var forbidden = {}; forbidden[player.row + "," + player.col] = true; forbidden[goal.row + "," + goal.col] = true;
-
-      function placeSwamps() {
-        if (!caps.swampPlacement) {
-          placeRandom(rng, forbidden, cfg.swampCount).forEach(function (p) { terrain[p[0]][p[1]] = "SWAMP"; });
-          statusLine(teachingNote("Swamps placed randomly — finish TODO 5 to place them along the shortest path instead."));
-          afterSwamps();
-          return;
-        }
-        var c5 = state.steps["5"].code;
-        ensurePyodide().then(function (py) {
-          return py.runPythonAsync(traceHarness_swampPlacement(c5[0], c5[1], maze, [player.row, player.col], [goal.row, goal.col], cfg.swampCount));
-        }).then(function (json2) {
-          var d2 = JSON.parse(json2);
-          if (d2.ok && d2.swamp_on_path) {
-            d2.swamp_cells.forEach(function (p) { var key = p[0] + "," + p[1]; if (!forbidden[key]) { terrain[p[0]][p[1]] = "SWAMP"; forbidden[key] = true; } });
-            statusLine("");
-          } else {
-            placeRandom(rng, forbidden, cfg.swampCount).forEach(function (p) { terrain[p[0]][p[1]] = "SWAMP"; });
-            statusLine(teachingNote("TODO 5 isn't reconstructing a route yet, so swamps were placed randomly this round."));
-          }
-          afterSwamps();
-        }).catch(function (err) {
-          placeRandom(rng, forbidden, cfg.swampCount).forEach(function (p) { terrain[p[0]][p[1]] = "SWAMP"; });
-          statusLine(teachingNote("Could not run TODO 5: " + (err && err.message ? err.message : err)), true);
-          afterSwamps();
-        });
-      }
-
-      function afterSwamps() {
-        if (caps.customTerrain) {
-          placeRandom(rng, forbidden, cfg.customTerrainCount).forEach(function (p) { terrain[p[0]][p[1]] = "CUSTOM"; });
-        }
-        var treasureSpots = placeRandom(rng, forbidden, cfg.itemCount);
-        items = treasureSpots.map(function (p) { return { row: p[0], col: p[1], active: true, kind: "treasure" }; });
-        if (caps.customItem) {
-          placeRandom(rng, forbidden, cfg.customItemCount).forEach(function (p) { items.push({ row: p[0], col: p[1], active: true, kind: "custom" }); });
-        }
-        bombs = placeRandom(rng, forbidden, cfg.bombCount).map(function (p) { return { row: p[0], col: p[1], active: true }; });
-        // Monsters always spawn (same as bombs) - this mirrors game.py, where
-        // Monster objects exist every round regardless of TODO completion;
-        // an unfinished FSM/chase TODO just leaves them wandering forever.
-        monsters = placeRandom(rng, forbidden, cfg.monsterCount).map(function (p) { return { row: p[0], col: p[1] }; });
-        renderAll();
-      }
-
-      placeSwamps();
-    }
-
-    function terrainColorFor(r, c) {
-      var t = terrain[r][c];
-      if (t === "SWAMP") return "rgba(134,180,146,0.45)";
-      if (t === "CUSTOM" && customValues && customValues.terrain) return "rgba(" + customValues.terrain.color.join(",") + ",0.45)";
-      return null;
+      var itemSpots = placeRandom(rng, forbidden, cfg.customItemCount);
+      items = itemSpots.map(function (p) { return { row: p[0], col: p[1], active: true, itemDef: pickCustomItemDef() }; });
+      bombs = placeRandom(rng, forbidden, cfg.bombCount).map(function (p) { return { row: p[0], col: p[1], active: true }; });
+      renderAll();
     }
 
     function draw() {
@@ -5361,7 +4799,7 @@
       drawMazeGrid(ctx, maze, cellSize, function (r, c) {
         var key = r + "," + c;
         if (hintSet[key]) return "rgba(139,92,246,0.35)";
-        return terrainColorFor(r, c);
+        return null;
       }, { wallColor: "#e8dcc4" });
       // bombs
       ctx.fillStyle = "#1c1a17";
@@ -5369,23 +4807,13 @@
         if (!b.active) return;
         ctx.beginPath(); ctx.arc((b.col + 0.5) * cellSize, (b.row + 0.5) * cellSize, cellSize * 0.24, 0, Math.PI * 2); ctx.fill();
       });
-      // items
+      // items (each one's swatch color comes from its own randomly-drawn
+      // CUSTOM_ITEMS entry, TODO 8 - see pickCustomItemDef())
       items.forEach(function (it) {
         if (!it.active) return;
-        if (it.kind === "custom" && customValues && customValues.item) ctx.fillStyle = "rgb(" + customValues.item.color.join(",") + ")";
-        else ctx.fillStyle = "#22c55e";
+        var color = it.itemDef && it.itemDef.color ? it.itemDef.color : [34, 197, 94];
+        ctx.fillStyle = "rgb(" + color.join(",") + ")";
         ctx.beginPath(); ctx.arc((it.col + 0.5) * cellSize, (it.row + 0.5) * cellSize, cellSize * 0.18, 0, Math.PI * 2); ctx.fill();
-      });
-      // monsters (Bonus) - simple triangle marker, same shape as monster.py's fallback draw
-      ctx.fillStyle = "#be1e3c";
-      monsters.forEach(function (m) {
-        var cx = (m.col + 0.5) * cellSize, top = m.row * cellSize + cellSize * 0.2, bottom = m.row * cellSize + cellSize * 0.8;
-        ctx.beginPath();
-        ctx.moveTo(cx, top);
-        ctx.lineTo(cx + cellSize * 0.28, bottom);
-        ctx.lineTo(cx - cellSize * 0.28, bottom);
-        ctx.closePath();
-        ctx.fill();
       });
       // goal
       ctx.fillStyle = "#f0c04a";
@@ -5398,11 +4826,9 @@
 
     function updateStatusGrid() {
       if (!refs) return;
-      refs.scoreEl.textContent = String(score);
-      refs.timeEl.textContent = String(timeLeft) + "s";
       refs.roundEl.textContent = (roundIndex + 1) + " / " + PLAY_ROUND_CONFIGS.length;
-      var t = terrain ? terrain[player.row][player.col] : "NORMAL";
-      refs.terrainEl.textContent = t;
+      refs.timeEl.textContent = String(Math.max(0, timeLeft)) + "s";
+      refs.hintsEl.textContent = hintsRemaining + " / " + PLAY_MAX_HINT_COUNT;
     }
 
     function renderAll() { draw(); updateStatusGrid(); refreshChecklist(); }
@@ -5410,9 +4836,8 @@
     function tickTimer() {
       if (!running) return;
       timeLeft--;
-      wanderMonsters();
       draw();
-      if (!checkMonsterCatch()) updateStatusGrid();
+      updateStatusGrid();
       if (timeLeft <= 0) {
         running = false;
         clearInterval(timerId); timerId = null;
@@ -5437,15 +4862,14 @@
       } catch (e) { /* ignore */ }
     }
     var SPRITE_SOUND = {
-      pickup: "assets/sounds/pickup_1.wav",
-      swamp: "assets/sounds/squish_1.wav",
+      pickup: "assets/sounds/pickup_3.wav",
       bomb: "assets/sounds/explosion_1.wav",
     };
 
+    // Mirrors game.py's check_items()/apply_custom_item_effect()/
+    // check_bombs()/check_goal() (D4's simplified game: pure maze-solving,
+    // goal + timer + bomb-reset only - no score, no swamp, no monster).
     function checkTileEffects() {
-      if (checkMonsterCatch()) return;
-      var caps = capabilities();
-      var here = terrain[player.row][player.col];
       var landedItemIdx = -1;
       for (var i = 0; i < items.length; i++) {
         if (items[i].active && items[i].row === player.row && items[i].col === player.col) { landedItemIdx = i; break; }
@@ -5453,68 +4877,47 @@
       if (landedItemIdx !== -1) {
         var it = items[landedItemIdx];
         it.active = false;
-        if (it.kind === "custom") {
-          if (caps.customItem && customValues && customValues.item) {
-            score += customValues.item.score;
-            statusLine("Collected " + customValues.item.name + "! +" + customValues.item.score);
-          }
-          playAudio("pickup");
-          updateStatusGrid();
-        } else if (caps.scoring) {
-          ensurePyodide().then(function (py) {
-            return py.runPythonAsync(traceHarness_scoreDelta(state.steps["6"].code, "ITEM_SCORE", PLAY_ITEM_SCORE, score));
-          }).then(function (json) {
-            var d = JSON.parse(json);
-            if (d.ok) score = d.score;
-            playAudio("pickup");
-            updateStatusGrid();
-          });
+        var def = it.itemDef || {};
+        var effect = def.effect, amount = def.amount || 0;
+        var name = def.name || "a custom item";
+        if (effect === "add_time") {
+          timeLeft += amount;
+          statusLine("Collected " + name + "! +" + amount + "s time");
+        } else if (effect === "add_hint") {
+          hintsRemaining += amount;
+          statusLine("Collected " + name + "! +" + amount + " hint use(s)");
+        } else if (effect) {
+          statusLine("Collected " + name + " (effect: " + effect + " - not a built-in effect, so it's a safe no-op here).");
         } else {
-          statusLine(teachingNote("Collected a treasure, but TODO 6 isn't finished yet, so it's worth nothing."));
+          statusLine(teachingNote("Collected an item, but TODO 8 isn't finished yet, so it has no effect."));
         }
+        playAudio("pickup");
+        updateStatusGrid();
       }
+      // A bomb touch is a one-shot trigger (matches Bomb.trigger() in
+      // items.py: ACTIVE -> EXPLODING -> INACTIVE, never re-triggers) that
+      // resets the player to the round's start position AND clears any
+      // shown hint route - exactly game.py's check_bombs(), unchanged (D2).
       bombs.forEach(function (b) {
         if (b.active && b.row === player.row && b.col === player.col) {
           b.active = false;
-          score -= PLAY_BOMB_PENALTY;
+          player.row = playerStart.row; player.col = playerStart.col;
+          hintPath = [];
           playAudio("bomb");
-          statusLine("Boom! -" + PLAY_BOMB_PENALTY);
+          statusLine("Boom! Back to the start.");
           updateStatusGrid();
+          draw();
         }
       });
-      if (here === "SWAMP") {
-        terrain[player.row][player.col] = "NORMAL";
-        if (caps.scoring) {
-          ensurePyodide().then(function (py) {
-            return py.runPythonAsync(traceHarness_scoreDelta(state.steps["7"].code, "SWAMP_SCORE_PENALTY", PLAY_SWAMP_PENALTY, score));
-          }).then(function (json) {
-            var d = JSON.parse(json);
-            if (d.ok) score = d.score;
-            playAudio("swamp");
-            updateStatusGrid();
-          });
-        } else {
-          statusLine(teachingNote("Stepped in a swamp, but TODO 7 isn't finished yet, so no penalty applied."));
-        }
-      } else if (here === "CUSTOM" && caps.customTerrain && customValues && customValues.terrain) {
-        terrain[player.row][player.col] = "NORMAL";
-        score += customValues.terrain.change;
-        statusLine("Stepped on " + customValues.terrain.name + " (" + (customValues.terrain.change >= 0 ? "+" : "") + customValues.terrain.change + ")");
-        updateStatusGrid();
-      }
       if (player.row === goal.row && player.col === goal.col) {
         running = false;
         clearInterval(timerId); timerId = null;
         setControlsRunning(false);
-        if (!capabilities().scoring || score > 0) {
-          if (roundIndex + 1 < PLAY_ROUND_CONFIGS.length) {
-            statusLine("Round " + (roundIndex + 1) + " clear! Starting round " + (roundIndex + 2) + "…");
-            setTimeout(function () { startRound(roundIndex + 1); }, prefersReducedMotion() ? 0 : 900);
-          } else {
-            statusLine("You reached the goal in the final round with a winning score — nice work!");
-          }
+        if (roundIndex + 1 < PLAY_ROUND_CONFIGS.length) {
+          statusLine("Round " + (roundIndex + 1) + " clear! Starting round " + (roundIndex + 2) + "…");
+          setTimeout(function () { startRound(roundIndex + 1); }, prefersReducedMotion() ? 0 : 900);
         } else {
-          statusLine("You reached the goal, but your score (" + score + ") isn't above 0 — press Restart to try again.", true);
+          statusLine("You reached the goal in the final round - maze complete!");
         }
       }
     }
@@ -5554,14 +4957,18 @@
     function onHint() {
       var caps = capabilities();
       if (!caps.hint) return;
-      var weightsByTerrain = { NORMAL: 0, SWAMP: 100, CUSTOM: (customValues && customValues.terrain ? customValues.terrain.weight : 0) };
+      if (hintsRemaining <= 0) { statusLine("No hint uses left this round."); return; }
+      var bombPositions = {};
+      bombs.forEach(function (b) { if (b.active) bombPositions[b.row + "," + b.col] = true; });
       ensurePyodide().then(function (py) {
         var c5 = state.steps["5"].code;
-        return py.runPythonAsync(traceHarness_dijkstraOnMaze(c5[0], c5[1], maze, weightsByTerrain, terrain, [player.row, player.col], [goal.row, goal.col]));
+        return py.runPythonAsync(traceHarness_hintRoute(c5[0], c5[1], maze, bombPositions, [player.row, player.col], [goal.row, goal.col]));
       }).then(function (json) {
         var d = JSON.parse(json);
         if (d.ok && d.path && d.path.length) {
           hintPath = d.path;
+          hintsRemaining -= 1;
+          updateStatusGrid();
           draw();
           if (hintTimeout) clearTimeout(hintTimeout);
           hintTimeout = setTimeout(function () { hintPath = []; draw(); }, 4000);
@@ -5571,12 +4978,15 @@
       });
     }
 
-    function loadCustomValues() {
+    // Loads the student's parsed CUSTOM_ITEMS (TODO 8) once (and again on
+    // refresh()) - see pickCustomItemDef(), which every spawned item uses.
+    function loadCustomItems() {
+      if (!isDoneExact("8")) { customItemDefs = null; return; }
       ensurePyodide().then(function (py) {
-        return py.runPythonAsync(traceHarness_customValues(state.steps["10"].code, state.steps["11"].code));
+        return py.runPythonAsync(traceHarness_customItems(state.steps["8"].code));
       }).then(function (json) {
         var d = JSON.parse(json);
-        if (d.ok) { customValues = { item: d.item, terrain: d.terrain }; draw(); }
+        if (d.ok) customItemDefs = d.items;
       }).catch(function () {});
     }
 
@@ -5609,11 +5019,10 @@
         var notice = el("div", { class: "play-broken-notice", hidden: "hidden" });
         frame.appendChild(notice);
         var statusGrid = el("div", { class: "play-status-grid" });
-        var scoreItem = el("div", { class: "play-status-item" }, [el("span", { class: "value", text: "0" }), el("span", { class: "label", text: "Score" })]);
-        var timeItem = el("div", { class: "play-status-item" }, [el("span", { class: "value", text: "0s" }), el("span", { class: "label", text: "Time" })]);
         var roundItem = el("div", { class: "play-status-item" }, [el("span", { class: "value", text: "1/3" }), el("span", { class: "label", text: "Round" })]);
-        var terrainItem = el("div", { class: "play-status-item" }, [el("span", { class: "value", text: "NORMAL" }), el("span", { class: "label", text: "Terrain" })]);
-        statusGrid.appendChild(scoreItem); statusGrid.appendChild(timeItem); statusGrid.appendChild(roundItem); statusGrid.appendChild(terrainItem);
+        var timeItem = el("div", { class: "play-status-item" }, [el("span", { class: "value", text: "0s" }), el("span", { class: "label", text: "Time" })]);
+        var hintsItem = el("div", { class: "play-status-item" }, [el("span", { class: "value", text: String(PLAY_MAX_HINT_COUNT) + " / " + String(PLAY_MAX_HINT_COUNT) }), el("span", { class: "label", text: "Hints" })]);
+        statusGrid.appendChild(roundItem); statusGrid.appendChild(timeItem); statusGrid.appendChild(hintsItem);
         frame.appendChild(statusGrid);
         var checklistHead = el("div", { class: "sidebar-group-title", text: "Capabilities" });
         var checklist = el("ul", { class: "play-checklist" });
@@ -5626,8 +5035,8 @@
         refs = {
           container: container, canvas: made.canvas, ctx: made.ctx,
           playBtn: playBtn, pauseBtn: pauseBtn, notice: notice,
-          scoreEl: scoreItem.querySelector(".value"), timeEl: timeItem.querySelector(".value"),
-          roundEl: roundItem.querySelector(".value"), terrainEl: terrainItem.querySelector(".value"),
+          roundEl: roundItem.querySelector(".value"), timeEl: timeItem.querySelector(".value"),
+          hintsEl: hintsItem.querySelector(".value"),
           checklist: checklist, liveBanner: liveBanner, titleBox: titleBox, hintBtn: hintBtn,
         };
 
@@ -5648,13 +5057,13 @@
         soundCheckbox.addEventListener("change", function () { soundOn = soundCheckbox.checked; });
 
         refreshTitleCard();
-        loadCustomValues();
+        loadCustomItems();
         startRound(0);
       },
       refresh: function () {
         if (!mounted) return;
         refreshTitleCard();
-        loadCustomValues();
+        loadCustomItems();
         refreshChecklist();
       },
       unmount: function () {
@@ -5833,6 +5242,71 @@
     return EXPORT_DATA.EXPORT_MARKERS.filter(function (m) { return m[1] === fileName; });
   }
 
+  // ---- C2: "View full file" read-only viewer -----------------------------
+  //
+  // Unlike getBodyForMarker (used by the REAL project export above, which
+  // only splices in a step's code once it's graded "completed" - everything
+  // else stays the starter body), this always splices in the student's
+  // CURRENT in-progress code for every TODO in the file, finished or not -
+  // the whole point is "show me my own file exactly as it stands right
+  // now", not a preview of the exported project.
+  function getBodyForMarkerLive(m) {
+    var stepId = m[0], partIndex = m[2], indent = m[3];
+    var stepData = state.steps[stepId];
+    var raw = partIndex != null ? stepData.code[partIndex] : stepData.code;
+    return reindentPython(raw, indent);
+  }
+
+  // Splices every TODO belonging to `fileName` into the real starter file,
+  // using each step's live (possibly unfinished) code - the same
+  // splice-by-marker-text mechanism the project export uses (spliceOneMarker
+  // finds each BEGIN/END marker by searching line text, never by counting
+  // lines - see B2's comment-indentation bug fix note on reindentPython for
+  // why naive line-counting is exactly what NOT to do here).
+  function buildFullFileLive(fileName) {
+    var original = EXPORT_DATA.EXPORT_FILES[fileName];
+    if (original == null) return null;
+    var markers = exportMarkersForFile(fileName);
+    var text = original;
+    markers.forEach(function (m) {
+      var body = getBodyForMarkerLive(m);
+      text = spliceOneMarker(text, m[4], m[5], body);
+    });
+    return text;
+  }
+
+  function openFullFileViewer(step) {
+    var fileName = step.file;
+    var fullText = buildFullFileLive(fileName);
+    var overlay = el("div", { class: "modal-overlay", role: "dialog", "aria-modal": "true", "aria-label": "Full file: " + fileName });
+    var box = el("div", { class: "modal-box fileview-modal" });
+    var closeBtn = el("button", { class: "icon-btn fileview-close", type: "button", "aria-label": "Close" }, [
+      svgIcon('<path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'),
+    ]);
+    box.appendChild(el("div", { class: "fileview-header" }, [
+      el("div", {}, [
+        el("div", { class: "fileview-title", text: fileName }),
+        el("div", { class: "small muted", text: "Read-only — the complete real file, with your own in-progress code for every TODO spliced into place. Editing still happens in the step editor above." }),
+      ]),
+      closeBtn,
+    ]));
+    var body = el("div", { class: "fileview-body" });
+    if (fullText == null) {
+      body.appendChild(el("p", { class: "small muted", text: "Could not load " + fileName + " right now." }));
+    } else {
+      body.appendChild(buildContextBlock(fullText, 1, "fileview-code"));
+    }
+    box.appendChild(body);
+    overlay.appendChild(box);
+    function close() { overlay.remove(); document.removeEventListener("keydown", onEsc); }
+    closeBtn.addEventListener("click", close);
+    overlay.addEventListener("click", function (e) { if (e.target === overlay) close(); });
+    function onEsc(e) { if (e.key === "Escape") close(); }
+    document.addEventListener("keydown", onEsc);
+    $("#modalRoot").appendChild(overlay);
+    closeBtn.focus();
+  }
+
   // Returns an array of {text, label} stages: stage[0] is the untouched
   // original file (guaranteed valid, since it's the real starter file);
   // each later stage cumulatively applies one more TODO's splice, so
@@ -5868,7 +5342,7 @@
     return step();
   }
 
-  var EXPORT_TODO_FILES = ["settings.py", "game.py", "player.py", "maze.py", "pathfinding.py", "monster.py"];
+  var EXPORT_TODO_FILES = ["settings.py", "game.py", "player.py", "maze.py", "pathfinding.py"];
 
   function validateAllFiles(py) {
     var results = {};
@@ -5949,7 +5423,7 @@
       "",
       "Your progress when this was exported: " + summary.summaryText,
       "",
-      "Custom images/sounds (TODO 9):",
+      "Custom images/sounds (TODO 7):",
       "  Bundled assets are already included in assets/images/ and",
       "  assets/sounds/. If you uploaded your OWN images/sounds on the",
       "  website, copy those same files into THIS project's assets/images/",
@@ -6052,7 +5526,7 @@
 
     getConnectedDirHandle().then(function (handle) {
       if (!handle) {
-        container.appendChild(el("p", { class: "small muted mt-8", text: "Connect your project folder from TODO 9 to write your answers directly into your files instead (with automatic .bak backups)." }));
+        container.appendChild(el("p", { class: "small muted mt-8", text: "Connect your project folder from TODO 7 to write your answers directly into your files instead (with automatic .bak backups)." }));
         return;
       }
       var willChange = EXPORT_TODO_FILES.slice();
@@ -6135,7 +5609,6 @@
   // ------------------------------------------------------- 13. bootstrap
 
   function initTopbar() {
-    $("#themeToggle").addEventListener("click", toggleTheme);
     $("#saveProgressBtn").addEventListener("click", exportProgress);
     var loadBtn = $("#loadProgressBtn");
     var loadInput = $("#loadProgressInput");
@@ -6268,6 +5741,92 @@
     });
   }
 
+  // E2: title/rules gate shown BEFORE gameplay starts in the kiosk popout.
+  // Reuses traceHarness_titleCard exactly as the in-page TitleCardViz does
+  // (see 14b) - once with TODO 1's own code (for TITLE/GAME_SUBTITLE; its
+  // mission/howto fields come back empty since TODO 1 doesn't define those,
+  // which is fine, they're ignored here) and once with TODO 9's own code
+  // (for MISSION_RULES/HOW_TO_PLAY_RULES; its title/subtitle fields come
+  // back as fallback placeholders, likewise ignored) - the gate needs both
+  // halves showing at once, regardless of which step a student happens to
+  // be editing in the main tab right now.
+  function refreshKioskGate() {
+    var refs = kioskGateRefs;
+    if (!refs) return;
+    var todo1Done = !!(state.steps["1"] && state.steps["1"].status === "completed");
+    ensurePyodide().then(function (py) {
+      return py.runPythonAsync(traceHarness_titleCard(state.steps["1"].code));
+    }).then(function (json) {
+      var data = JSON.parse(json);
+      refs.title.textContent = todo1Done && data.ok && data.title ? data.title : "Your Game";
+      var subtitle = todo1Done && data.ok ? data.subtitle : "";
+      if (subtitle) { refs.subtitle.hidden = false; refs.subtitle.textContent = subtitle; }
+      else { refs.subtitle.hidden = true; refs.subtitle.textContent = ""; }
+    }).catch(function () {
+      refs.title.textContent = "Your Game";
+      refs.subtitle.hidden = true;
+    });
+
+    // The rules capstone (CAPSTONE_BONUS_ID) is the ONE narrow, explicitly
+    // authorized exception to "never show TODO-numbered language in kiosk
+    // mode" (see teachingNote() in PlayEngine) - everywhere else in this
+    // window stays silent about unfinished work; this single placeholder
+    // is allowed because there is no non-TODO-referencing way to explain
+    // why the rules section is empty.
+    var rulesDone = !!(state.steps[CAPSTONE_BONUS_ID] && state.steps[CAPSTONE_BONUS_ID].status === "completed");
+    if (!rulesDone) {
+      refs.missionHead.hidden = true; refs.missionList.innerHTML = "";
+      refs.howtoHead.hidden = true; refs.howtoList.innerHTML = "";
+      refs.placeholder.hidden = false;
+      refs.placeholder.textContent = "Finish TODO " + CAPSTONE_BONUS_ID + " to see your own game's rules here!";
+      return;
+    }
+    refs.placeholder.hidden = true;
+    ensurePyodide().then(function (py) {
+      return py.runPythonAsync(traceHarness_titleCard(state.steps[CAPSTONE_BONUS_ID].code));
+    }).then(function (json) {
+      var data = JSON.parse(json);
+      var mission = data.ok ? data.mission : [];
+      var howto = data.ok ? data.howto : [];
+      refs.missionHead.hidden = mission.length === 0;
+      refs.missionList.innerHTML = "";
+      mission.forEach(function (line) { refs.missionList.appendChild(el("li", { text: line })); });
+      refs.howtoHead.hidden = howto.length === 0;
+      refs.howtoList.innerHTML = "";
+      howto.forEach(function (line) { refs.howtoList.appendChild(el("li", { text: line })); });
+    }).catch(function () {});
+  }
+
+  var kioskGateRefs = null;
+
+  function buildKioskGate(onStart) {
+    var container = $("#kioskGate");
+    if (!container) return;
+    container.innerHTML = "";
+    var box = el("div", { class: "titlecard-frame" });
+    var titleEl = el("div", { class: "titlecard-title", text: "Your Game" });
+    var subtitleEl = el("div", { class: "titlecard-subtitle", hidden: "hidden" });
+    var missionHead = el("div", { class: "titlecard-section-head", text: "Mission" });
+    var missionList = el("ul", { class: "titlecard-list" });
+    var howtoHead = el("div", { class: "titlecard-section-head", text: "How to play" });
+    var howtoList = el("ul", { class: "titlecard-list" });
+    var placeholder = el("p", { class: "small", style: "color:#d8cba4;" });
+    var startBtn = el("button", { class: "btn btn-primary kiosk-start-btn", type: "button" }, ["▶ Start Playing"]);
+    box.appendChild(titleEl); box.appendChild(subtitleEl);
+    box.appendChild(missionHead); box.appendChild(missionList);
+    box.appendChild(howtoHead); box.appendChild(howtoList);
+    box.appendChild(placeholder);
+    box.appendChild(startBtn);
+    container.appendChild(box);
+    startBtn.addEventListener("click", onStart);
+    kioskGateRefs = {
+      title: titleEl, subtitle: subtitleEl,
+      missionHead: missionHead, missionList: missionList,
+      howtoHead: howtoHead, howtoList: howtoList,
+      placeholder: placeholder,
+    };
+  }
+
   // NOTE (this session): the kiosk popout no longer has a "homework
   // checklist steps back once complete" state - the Capabilities checklist,
   // its heading, and the "YOUR GAME IS LIVE" banner are hidden
@@ -6278,24 +5837,36 @@
   // per-refresh kiosk-only concern has one obvious place to go.
   function refreshKioskChrome() {
     refreshKioskTitle();
+    refreshKioskGate();
   }
 
-  function initKioskFullscreenButton() {
-    var btn = $("#kioskFullscreenBtn");
-    var root = $("#kioskRoot");
+  // Generic Fullscreen API toggle, shared by the kiosk popout's board
+  // fullscreen button (#kioskFullscreenBtn / #kioskRoot) and the normal
+  // editor's Step View panel fullscreen button (#stepViewFullscreenBtn /
+  // #vizPanel, see C1). `btn` must already contain the "enter fullscreen"
+  // icon markup (read once as ENTER_ICON) before this runs; each button
+  // tracks fullscreen state for its OWN root independently, so having the
+  // Step View panel fullscreen doesn't affect the kiosk button's icon
+  // and vice versa - both listen to the same document-level
+  // fullscreenchange event but each only reacts to whether ITS root is
+  // the current fullscreen element.
+  function initFullscreenToggle(btnSelector, rootSelector) {
+    var btn = $(btnSelector);
+    var root = $(rootSelector);
     if (!btn || !root) return;
     var ENTER_ICON = btn.innerHTML;
     var EXIT_ICON = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3v4a1 1 0 0 1-1 1H4M15 3v4a1 1 0 0 0 1 1h4M9 21v-4a1 1 0 0 0-1-1H4M15 21v-4a1 1 0 0 1 1-1h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-    function isFs() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+    function currentFsElement() { return document.fullscreenElement || document.webkitFullscreenElement || null; }
+    function isThisFs() { return currentFsElement() === root; }
     function updateIcon() {
-      var fs = isFs();
+      var fs = isThisFs();
       btn.innerHTML = fs ? EXIT_ICON : ENTER_ICON;
       var label = fs ? "Exit fullscreen" : "Enter fullscreen";
       btn.title = label;
       btn.setAttribute("aria-label", label);
     }
     btn.addEventListener("click", function () {
-      if (!isFs()) {
+      if (!isThisFs()) {
         var req = root.requestFullscreen || root.webkitRequestFullscreen;
         if (req) req.call(root).catch(function () {});
       } else {
@@ -6312,14 +5883,22 @@
     var root = $("#kioskRoot");
     root.hidden = false;
     var playView = $("#kioskPlayView");
-    PlayEngine.mount(playView);
+    var gate = $("#kioskGate");
+    // E2: the gate (title/rules) shows first; PlayEngine isn't even mounted
+    // until "Start Playing" is pressed - the round timer/maze generation
+    // shouldn't start ticking while a student is still reading the rules.
+    buildKioskGate(function () {
+      gate.hidden = true;
+      playView.hidden = false;
+      PlayEngine.mount(playView);
+      // No code editor exists in this window to compete for focus, so
+      // (unlike the normal Play tab) there's no reason to require an extra
+      // click before arrow keys work - focus the board immediately.
+      var canvas = playView.querySelector(".viz-canvas");
+      if (canvas) canvas.focus();
+    });
     refreshKioskChrome();
-    initKioskFullscreenButton();
-    // No code editor exists in this window to compete for focus, so (unlike
-    // the normal Play tab) there's no reason to require an extra click
-    // before arrow keys work - focus the board immediately.
-    var canvas = playView.querySelector(".viz-canvas");
-    if (canvas) canvas.focus();
+    initFullscreenToggle("#kioskFullscreenBtn", "#kioskRoot");
     // Nice-to-have live sync: if the student keeps this window open and
     // then finishes a TODO / repaints a map / changes custom settings in
     // the main tab, `storage` fires here (it does NOT fire in the tab that
@@ -6337,7 +5916,6 @@
   }
 
   document.addEventListener("DOMContentLoaded", function () {
-    initTheme();
     state = loadState();
     if (computeStatus(state.currentStepId) === "locked") state.currentStepId = STEPS[0].id;
     if (isKioskMode()) {
@@ -6348,6 +5926,7 @@
     initVizTabs();
     initFileProtocolBanner();
     initPlayPopoutButton();
+    initFullscreenToggle("#stepViewFullscreenBtn", "#vizPanel");
     renderAll();
   });
 })();

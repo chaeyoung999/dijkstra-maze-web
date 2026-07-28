@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Dijkstra Maze — TODO Quest</title>
-<meta name="description" content="Step-by-step classroom exercise: finish the 15 TODOs of the Dijkstra Maze pygame project, graded live in your browser." />
+<meta name="description" content="Step-by-step classroom exercise: finish the 9 TODOs of the Dijkstra Maze pygame project, graded live in your browser." />
 <link rel="icon" href="data:," />
 <link rel="stylesheet" href="styles.css" />
 </head>
@@ -13,7 +13,7 @@
 
   <div id="fileProtocolBanner" class="banner banner-warning" role="alert" hidden>
     <strong>You opened this file directly (file://).</strong>
-    Grading, Pyodide, and the "Connect my project folder" feature (TODO 8 /
+    Grading, Pyodide, and the "Connect my project folder" feature (TODO 7 /
     project export) all need a local web server to work. Please close this
     tab and double-click <code>로컬서버_실행.bat</code> instead — it starts a
     server and opens <code>http://localhost:8000</code> automatically.
@@ -34,10 +34,6 @@
       </span>
     </div>
     <div class="topbar-actions">
-      <button id="themeToggle" class="icon-btn" type="button" aria-label="Toggle light/dark theme" title="Toggle light/dark theme">
-        <svg class="icon icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="2"/><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="1.5" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22.5"/><line x1="1.5" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22.5" y2="12"/><line x1="4.6" y1="4.6" x2="6.4" y2="6.4"/><line x1="17.6" y1="17.6" x2="19.4" y2="19.4"/><line x1="4.6" y1="19.4" x2="6.4" y2="17.6"/><line x1="17.6" y1="6.4" x2="19.4" y2="4.6"/></g></svg>
-        <svg class="icon icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
-      </button>
       <a id="playPopoutBtn" class="btn btn-accent" href="?mode=play" target="_blank" rel="noopener" title="Opens your game in its own window, ready to play — right-click to open in a new tab instead.">
         <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6v12l10-6z" fill="currentColor"/><rect x="3.5" y="4.5" width="17" height="15" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
         ▶ Play Game
@@ -86,6 +82,13 @@
       <div class="viz-tabs" role="tablist" aria-label="Visualization mode">
         <button role="tab" id="vizTabStep" class="viz-tab is-active" data-tab="step" aria-selected="true" aria-controls="vizStepView" type="button">Step view</button>
         <button role="tab" id="vizTabPlay" class="viz-tab" data-tab="play" aria-selected="false" aria-controls="vizPlayView" type="button">Play</button>
+        <!-- C1: reuses the exact same Fullscreen API mechanism as the
+             kiosk popout's board button (see initFullscreenToggle in
+             app.js) - lets a student blow up the visualizer/game board to
+             fill the screen without needing the separate popout window. -->
+        <button id="stepViewFullscreenBtn" class="icon-btn viz-fullscreen-btn" type="button" aria-label="Enter fullscreen" title="Enter fullscreen">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H4a1 1 0 0 0-1 1v4M16 3h4a1 1 0 0 1 1 1v4M8 21H4a1 1 0 0 1-1-1v-4M16 21h4a1 1 0 0 0 1-1v-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
       </div>
       <div id="vizStepView" class="viz-content" role="tabpanel" aria-labelledby="vizTabStep"></div>
       <div id="vizPlayView" class="viz-content" role="tabpanel" aria-labelledby="vizTabPlay" hidden></div>
@@ -93,11 +96,13 @@
   </div>
 
   <!-- Kiosk mode (?mode=play): a stripped, Play-tab-only render used by the
-       "▶ Play Game" popout. Hidden and empty until app.js detects the
-       mode flag and mounts PlayEngine straight into #kioskPlayView - the
-       normal .topbar/.layout (sidebar, editor, viz tabs) are hidden via
-       body.kiosk-mode instead of being removed, so no separate code path is
-       needed to build them.
+       "▶ Play Game" popout. Hidden and empty until app.js detects the mode
+       flag; it then opens on #kioskGate (title/rules, "Start Playing") and
+       only mounts PlayEngine into #kioskPlayView once that button is
+       pressed (see initKioskMode/buildKioskGate) - the normal .topbar/
+       .layout (sidebar, editor, viz tabs) are hidden via body.kiosk-mode
+       instead of being removed, so no separate code path is needed to
+       build them.
 
        The header shows the STUDENT'S OWN game title (from TODO 1), not any
        site/teaching branding - this window is meant to be shown to other
@@ -115,7 +120,12 @@
         <a class="kiosk-editor-link" href="?" title="Opens the full step-by-step editor in this window">Open full editor</a>
       </div>
     </div>
-    <div id="kioskPlayView" class="kiosk-play-view"></div>
+    <!-- E2: the kiosk popout opens here FIRST, not straight into gameplay -
+         a title/rules gate with a "Start Playing" button. #kioskPlayView
+         stays hidden (and PlayEngine unmounted) until the gate's button is
+         pressed. -->
+    <div id="kioskGate" class="kiosk-gate"></div>
+    <div id="kioskPlayView" class="kiosk-play-view" hidden></div>
   </div>
 
   <div id="modalRoot" aria-live="polite"></div>
