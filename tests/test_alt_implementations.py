@@ -147,6 +147,18 @@ CANONICAL_8B = (
     'elif effect == "add_hint":\n'
     '    self.hints_remaining += amount\n'
 )
+# TODO 8 Part 3/3 (the pickup itself). Every Part 1/Part 2 case below pairs
+# with this known-good body so a Part 2 result is never masked by a Part 3
+# problem; the Part 3 variants get their own cases further down.
+CANONICAL_8C = (
+    'for item in self.items:\n'
+    '    if item.active and item.get_position() == player_position:\n'
+    '        item.active = False\n'
+    '        self.apply_custom_item_effect(item.item_def)\n'
+    '        item_sound = self.get_custom_item_sound(item.item_def.get("sound"))\n'
+    '        if item_sound:\n'
+    '            item_sound.play()\n'
+)
 # Alt A: reversed branch order (add_hint checked first) - still correct.
 ALT_8B_REVERSED = (
     'if effect == "add_hint":\n'
@@ -174,10 +186,10 @@ ALT_8B_SEPARATE_IFS = (
     'if effect == "add_hint":\n'
     '    self.hints_remaining += amount\n'
 )
-case("8 Part2/2", "canonical (if/elif, add_time then add_hint)", "harness_customItems_8", (ITEM1_MINIMAL, CANONICAL_8B))
-case("8 Part2/2", "alt: reversed branch order", "harness_customItems_8", (ITEM1_MINIMAL, ALT_8B_REVERSED))
-case("8 Part2/2", "alt: dict-dispatch table instead of if/elif", "harness_customItems_8", (ITEM1_MINIMAL, ALT_8B_DICT_DISPATCH))
-case("8 Part2/2", "alt: two separate if statements (no elif)", "harness_customItems_8", (ITEM1_MINIMAL, ALT_8B_SEPARATE_IFS))
+case("8 Part2/2", "canonical (if/elif, add_time then add_hint)", "harness_customItems_8", (ITEM1_MINIMAL, CANONICAL_8B, CANONICAL_8C))
+case("8 Part2/2", "alt: reversed branch order", "harness_customItems_8", (ITEM1_MINIMAL, ALT_8B_REVERSED, CANONICAL_8C))
+case("8 Part2/2", "alt: dict-dispatch table instead of if/elif", "harness_customItems_8", (ITEM1_MINIMAL, ALT_8B_DICT_DISPATCH, CANONICAL_8C))
+case("8 Part2/2", "alt: two separate if statements (no elif)", "harness_customItems_8", (ITEM1_MINIMAL, ALT_8B_SEPARATE_IFS, CANONICAL_8C))
 
 # ---------------------------------------------- negative controls (must FAIL)
 # Proves the harnesses aren't just trivially permissive - a genuinely wrong
@@ -216,7 +228,7 @@ BAD_8B_SWAPPED = (
     'elif effect == "add_hint":\n'
     '    self.bonus_time_seconds += amount\n'  # wrong attribute
 )
-case("8 Part2/2", "BAD: add_time/add_hint effects swapped (negative control)", "harness_customItems_8", (ITEM1_MINIMAL, BAD_8B_SWAPPED), expect_ok=False)
+case("8 Part2/2", "BAD: add_time/add_hint effects swapped (negative control)", "harness_customItems_8", (ITEM1_MINIMAL, BAD_8B_SWAPPED, CANONICAL_8C), expect_ok=False)
 
 BAD_8B_CRASHES_ON_UNKNOWN = (
     'if effect == "add_time":\n'
@@ -226,10 +238,302 @@ BAD_8B_CRASHES_ON_UNKNOWN = (
     'else:\n'
     '    raise ValueError("unknown effect: " + effect)\n'  # must be a safe no-op instead
 )
-case("8 Part2/2", "BAD: raises on an unrecognized effect instead of a safe no-op (negative control)", "harness_customItems_8", (ITEM1_MINIMAL, BAD_8B_CRASHES_ON_UNKNOWN), expect_ok=False)
+case("8 Part2/2", "BAD: raises on an unrecognized effect instead of a safe no-op (negative control)", "harness_customItems_8", (ITEM1_MINIMAL, BAD_8B_CRASHES_ON_UNKNOWN, CANONICAL_8C), expect_ok=False)
 
 BAD_8B_ONLY_ADD_TIME = 'if effect == "add_time":\n    self.bonus_time_seconds += amount\n'  # forgets add_hint entirely
-case("8 Part2/2", "BAD: forgets the add_hint branch entirely (negative control)", "harness_customItems_8", (ITEM1_MINIMAL, BAD_8B_ONLY_ADD_TIME), expect_ok=False)
+case("8 Part2/2", "BAD: forgets the add_hint branch entirely (negative control)", "harness_customItems_8", (ITEM1_MINIMAL, BAD_8B_ONLY_ADD_TIME, CANONICAL_8C), expect_ok=False)
+
+
+# ================================================================ TODO 6
+# Part 1/3 ROUND_CONFIGS, Part 2/3 pacing, Part 3/3 the placement code.
+ROUNDS_3 = (
+    'ROUND_CONFIGS = [\n'
+    '    {"rows": 11, "cols": 15, "cell_size": 38, "extra_open_walls": 5,\n'
+    '     "bomb_count": 2, "custom_item_count": 2, "time_limit_seconds": 70},\n'
+    '    {"rows": 15, "cols": 21, "cell_size": 30, "extra_open_walls": 6,\n'
+    '     "bomb_count": 4, "custom_item_count": 3, "time_limit_seconds": 55},\n'
+    '    {"rows": 17, "cols": 25, "cell_size": 25, "extra_open_walls": 8,\n'
+    '     "bomb_count": 6, "custom_item_count": 4, "time_limit_seconds": 45},\n'
+    ']\n'
+)
+# Students are explicitly invited to add or remove rounds now.
+ROUNDS_5 = (
+    'ROUND_CONFIGS = [\n'
+    + ''.join(
+        '    {"rows": %d, "cols": %d, "cell_size": 30, "extra_open_walls": 4,\n'
+        '     "bomb_count": %d, "custom_item_count": %d, "time_limit_seconds": %d},\n'
+        % (7 + i * 2, 9 + i * 2, i, i + 1, 90 - i * 10) for i in range(5))
+    + ']\n'
+)
+ROUNDS_1 = (
+    'ROUND_CONFIGS = [\n'
+    '    {"rows": 5, "cols": 5, "cell_size": 30, "extra_open_walls": 1,\n'
+    '     "bomb_count": 1, "custom_item_count": 1, "time_limit_seconds": 40},\n'
+    ']\n'
+)
+PACING_6 = 'PLAYER_MOVE_DELAY_MS = 100\nALLOW_PATH_HINT = True\nMAX_HINT_COUNT = 2\n'
+PACING_6_NO_HINT = 'PLAYER_MOVE_DELAY_MS = 60\nALLOW_PATH_HINT = False\nMAX_HINT_COUNT = 0\n'
+
+CANONICAL_6C = (
+    'custom_positions = create_random_positions(\n'
+    '    self.config["rows"], self.config["cols"],\n'
+    '    self.config.get("custom_item_count", 0), forbidden,\n'
+    ')\n'
+    'self.items = [\n'
+    '    CustomItem(row, col, self.config["cell_size"], random.choice(CUSTOM_ITEMS))\n'
+    '    for row, col in custom_positions\n'
+    ']\n'
+    'forbidden.update(custom_positions)\n'
+    '\n'
+    'bomb_positions = create_random_positions(\n'
+    '    self.config["rows"], self.config["cols"],\n'
+    '    self.config["bomb_count"], forbidden,\n'
+    ')\n'
+    'self.bombs = [\n'
+    '    Bomb(row, col, self.config["cell_size"])\n'
+    '    for row, col in bomb_positions\n'
+    ']\n'
+    'forbidden.update(bomb_positions)\n'
+)
+# Alt A: a real rule change - bombs kept away from the start corner, and
+# every CUSTOM_ITEMS entry guaranteed to appear in turn instead of at random.
+ALT_6C_RULES = (
+    'spots = create_random_positions(\n'
+    '    self.config["rows"], self.config["cols"],\n'
+    '    self.config.get("custom_item_count", 0), forbidden,\n'
+    ')\n'
+    'self.items = []\n'
+    'for index, (row, col) in enumerate(spots):\n'
+    '    definition = CUSTOM_ITEMS[index % len(CUSTOM_ITEMS)]\n'
+    '    self.items.append(CustomItem(row, col, self.config["cell_size"], definition))\n'
+    'forbidden.update(spots)\n'
+    '\n'
+    'candidates = create_random_positions(\n'
+    '    self.config["rows"], self.config["cols"],\n'
+    '    self.config["bomb_count"] * 3, forbidden,\n'
+    ')\n'
+    'safe = [(r, c) for r, c in candidates if r + c >= 4]\n'
+    'chosen = safe[: self.config["bomb_count"]]\n'
+    'self.bombs = [Bomb(r, c, self.config["cell_size"]) for r, c in chosen]\n'
+    'forbidden.update(chosen)\n'
+)
+# Alt B: places nothing at all - empty lists are a legal (if dull) design.
+ALT_6C_EMPTY = 'self.items = []\nself.bombs = []\n'
+# Alt C: a while loop - legal, and proves the step-budget guard does not
+# trip on ordinary loop-based code.
+ALT_6C_WHILE = (
+    'self.items = []\n'
+    'self.bombs = []\n'
+    'wanted = self.config.get("custom_item_count", 0)\n'
+    'tries = 0\n'
+    'while len(self.items) < wanted and tries < 500:\n'
+    '    tries += 1\n'
+    '    spot = create_random_positions(self.config["rows"], self.config["cols"], 1, forbidden)\n'
+    '    if not spot:\n'
+    '        break\n'
+    '    row, col = spot[0]\n'
+    '    self.items.append(CustomItem(row, col, self.config["cell_size"], CUSTOM_ITEMS[0]))\n'
+    '    forbidden.add((row, col))\n'
+)
+case("6", "canonical (random placement, 3 rounds)", "harness_roundDesign_6", (ROUNDS_3, PACING_6, CANONICAL_6C))
+case("6", "alt: 5 rounds instead of 3", "harness_roundDesign_6", (ROUNDS_5, PACING_6, CANONICAL_6C))
+case("6", "alt: a single round", "harness_roundDesign_6", (ROUNDS_1, PACING_6, CANONICAL_6C))
+case("6", "alt: hints turned off entirely", "harness_roundDesign_6", (ROUNDS_3, PACING_6_NO_HINT, CANONICAL_6C))
+case("6", "alt: own placement rules (no bombs near start, items in turn)", "harness_roundDesign_6", (ROUNDS_3, PACING_6, ALT_6C_RULES))
+case("6", "alt: places nothing at all (empty lists)", "harness_roundDesign_6", (ROUNDS_3, PACING_6, ALT_6C_EMPTY))
+case("6", "alt: while loop placement (budget guard must not trip)", "harness_roundDesign_6", (ROUNDS_3, PACING_6, ALT_6C_WHILE))
+
+BAD_6C_NOT_A_LIST = 'self.items = None\nself.bombs = None\n'
+case("6 Part3/3", "BAD: leaves self.items/self.bombs as None (negative control)", "harness_roundDesign_6", (ROUNDS_3, PACING_6, BAD_6C_NOT_A_LIST), expect_ok=False)
+BAD_6C_INFINITE = 'self.items = []\nself.bombs = []\nwhile True:\n    pass\n'
+case("6 Part3/3", "BAD: infinite loop (must be stopped, not hang)", "harness_roundDesign_6", (ROUNDS_3, PACING_6, BAD_6C_INFINITE), expect_ok=False)
+BAD_6_MISSING_PACING = 'PLAYER_MOVE_DELAY_MS = 100\n'
+case("6 Part2/3", "BAD: missing ALLOW_PATH_HINT/MAX_HINT_COUNT (negative control)", "harness_roundDesign_6", (ROUNDS_3, BAD_6_MISSING_PACING, CANONICAL_6C), expect_ok=False)
+
+
+# ================================================================ TODO 7
+ASSETS_7A = (
+    'PLAYER_IMAGE_PATH = None\n'
+    'GOAL_IMAGE_PATH = None\n'
+    'BOMB_IMAGE_PATH = None\n'
+    'FLOOR_TILE_IMAGE_PATH = None\n'
+    'PLAYER_IMAGE_SCALE = 1.0\n'
+    'GOAL_IMAGE_SCALE = 1.0\n'
+    'BOMB_IMAGE_SCALE = 1.0\n'
+    'WALL_COLOR = (30, 41, 59)\n'
+    'PLAYER_COLOR = (37, 99, 235)\n'
+    'GOAL_COLOR = (250, 204, 21)\n'
+    'BOMB_COLOR = (15, 23, 42)\n'
+    'BOMB_EXPLOSION_COLOR = (239, 68, 68)\n'
+)
+ASSETS_7A_FILLED = (
+    'PLAYER_IMAGE_PATH = "assets/images/player_ninja.png"\n'
+    'GOAL_IMAGE_PATH = "assets/images/goal_chest.png"\n'
+    'BOMB_IMAGE_PATH = "assets/images/bomb_2.png"\n'
+    'FLOOR_TILE_IMAGE_PATH = "assets/images/floor_tile_1.png"\n'
+    'PLAYER_IMAGE_SCALE = 1.4\n'
+    'GOAL_IMAGE_SCALE = 0.8\n'
+    'BOMB_IMAGE_SCALE = 1.1\n'
+    'WALL_COLOR = (30, 41, 59)\n'
+    'PLAYER_COLOR = (37, 99, 235)\n'
+    'GOAL_COLOR = (250, 204, 21)\n'
+    'BOMB_COLOR = (15, 23, 42)\n'
+    'BOMB_EXPLOSION_COLOR = (239, 68, 68)\n'
+)
+SOUND_7B = (
+    'BOMB_SOUND_PATH = "assets/sounds/explosion_1.wav"\n'
+    'BACKGROUND_MUSIC_PATH = "assets/sounds/bgm_1.wav"\n'
+    'BOMB_EXPLOSION_DURATION_MS = 500\n'
+    'BACKGROUND_MUSIC_VOLUME = 0.25\n'
+)
+SOUND_7B_SILENT = (
+    'BOMB_SOUND_PATH = None\n'
+    'BACKGROUND_MUSIC_PATH = None\n'
+    'BOMB_EXPLOSION_DURATION_MS = 500\n'
+    'BACKGROUND_MUSIC_VOLUME = 0.0\n'
+)
+CANONICAL_7C = (
+    'if BACKGROUND_MUSIC_PATH is None:\n'
+    '    return\n'
+    'try:\n'
+    '    if not pygame.mixer.get_init():\n'
+    '        pygame.mixer.init()\n'
+    '    pygame.mixer.music.load(BACKGROUND_MUSIC_PATH)\n'
+    '    pygame.mixer.music.set_volume(BACKGROUND_MUSIC_VOLUME)\n'
+    '    pygame.mixer.music.play(-1)\n'
+    'except (pygame.error, FileNotFoundError, TypeError) as error:\n'
+    '    print("[Info] Background music load failed:", error)\n'
+)
+ALT_7C_PLAY_ONCE = CANONICAL_7C.replace('play(-1)', 'play(0)')
+ALT_7C_FADE_IN = CANONICAL_7C.replace('play(-1)', 'play(-1, fade_ms=3000)')
+# Silence on purpose: never starting the music is a valid design choice.
+ALT_7C_SILENT = 'return\n'
+case("7", "canonical (loop forever)", "harness_lookAndFeel_7", (ASSETS_7A, SOUND_7B, CANONICAL_7C))
+case("7", "alt: real images and non-default sizes", "harness_lookAndFeel_7", (ASSETS_7A_FILLED, SOUND_7B, CANONICAL_7C))
+case("7", "alt: play the music exactly once", "harness_lookAndFeel_7", (ASSETS_7A, SOUND_7B, ALT_7C_PLAY_ONCE))
+case("7", "alt: fade the music in", "harness_lookAndFeel_7", (ASSETS_7A, SOUND_7B, ALT_7C_FADE_IN))
+case("7", "alt: no music at all", "harness_lookAndFeel_7", (ASSETS_7A, SOUND_7B_SILENT, ALT_7C_SILENT))
+# No try/except is only a WARNING (open-ended grading), so this must PASS.
+ALT_7C_NO_TRY = (
+    'if BACKGROUND_MUSIC_PATH is None:\n'
+    '    return\n'
+    'pygame.mixer.init()\n'
+    'pygame.mixer.music.load(BACKGROUND_MUSIC_PATH)\n'
+    'pygame.mixer.music.play(-1)\n'
+)
+case("7", "alt: no try/except (warns, still passes)", "harness_lookAndFeel_7", (ASSETS_7A, SOUND_7B, ALT_7C_NO_TRY))
+
+BAD_7A_MISSING_SCALE = ASSETS_7A.replace('GOAL_IMAGE_SCALE = 1.0\n', '')
+case("7 Part1/3", "BAD: missing GOAL_IMAGE_SCALE (negative control)", "harness_lookAndFeel_7", (BAD_7A_MISSING_SCALE, SOUND_7B, CANONICAL_7C), expect_ok=False)
+BAD_7C_RAISES = 'raise RuntimeError("boom")\n'
+case("7 Part3/3", "BAD: always raises (negative control)", "harness_lookAndFeel_7", (ASSETS_7A, SOUND_7B, BAD_7C_RAISES), expect_ok=False)
+
+
+# ============================================== TODO 8 Part 3/3 (the pickup)
+ALT_8C_SOUND_BY_EFFECT = (
+    'for item in self.items:\n'
+    '    if item.active and item.get_position() == player_position:\n'
+    '        item.active = False\n'
+    '        self.apply_custom_item_effect(item.item_def)\n'
+    '        if item.item_def.get("effect") == "add_time":\n'
+    '            special = self.get_custom_item_sound(item.item_def.get("sound"))\n'
+    '            if special:\n'
+    '                special.play()\n'
+    '        else:\n'
+    '            normal = self.get_custom_item_sound(item.item_def.get("sound"))\n'
+    '            if normal:\n'
+    '                normal.play()\n'
+)
+ALT_8C_INDEX_LOOP = (
+    'for index in range(len(self.items)):\n'
+    '    item = self.items[index]\n'
+    '    if not item.active:\n'
+    '        continue\n'
+    '    if item.get_position() != player_position:\n'
+    '        continue\n'
+    '    item.active = False\n'
+    '    self.apply_custom_item_effect(item.item_def)\n'
+    '    sound = self.get_custom_item_sound(item.item_def.get("sound"))\n'
+    '    if sound is not None:\n'
+    '        sound.play()\n'
+)
+# Uses self.player.get_position() instead of the player_position local.
+ALT_8C_SELF_PLAYER = (
+    'here = self.player.get_position()\n'
+    'for item in self.items:\n'
+    '    if item.active and item.get_position() == here:\n'
+    '        item.active = False\n'
+    '        self.apply_custom_item_effect(item.item_def)\n'
+    '        sound = self.get_custom_item_sound(item.item_def.get("sound"))\n'
+    '        if sound:\n'
+    '            sound.play()\n'
+)
+case("8 Part3/3", "alt: a different sound per effect", "harness_customItems_8", (ITEM1_MINIMAL, CANONICAL_8B, ALT_8C_SOUND_BY_EFFECT))
+case("8 Part3/3", "alt: index loop with continue guards", "harness_customItems_8", (ITEM1_MINIMAL, CANONICAL_8B, ALT_8C_INDEX_LOOP))
+case("8 Part3/3", "alt: reads self.player.get_position() itself", "harness_customItems_8", (ITEM1_MINIMAL, CANONICAL_8B, ALT_8C_SELF_PLAYER))
+
+BAD_8C_NO_DEACTIVATE = (
+    'for item in self.items:\n'
+    '    if item.active and item.get_position() == player_position:\n'
+    '        self.apply_custom_item_effect(item.item_def)\n'
+)
+case("8 Part3/3", "BAD: never sets item.active = False (negative control)", "harness_customItems_8", (ITEM1_MINIMAL, CANONICAL_8B, BAD_8C_NO_DEACTIVATE), expect_ok=False)
+BAD_8C_NO_EFFECT = (
+    'for item in self.items:\n'
+    '    if item.active and item.get_position() == player_position:\n'
+    '        item.active = False\n'
+)
+case("8 Part3/3", "BAD: collects but never applies the effect (negative control)", "harness_customItems_8", (ITEM1_MINIMAL, CANONICAL_8B, BAD_8C_NO_EFFECT), expect_ok=False)
+
+
+# ================================================================ TODO 9
+RULES_9A = (
+    'MISSION_RULES = [\n'
+    '    "Collect every crystal, then reach the goal.",\n'
+    ']\n'
+    'HOW_TO_PLAY_RULES = [\n'
+    '    "Move with the arrow keys.",\n'
+    '    "Bombs send you back to the start.",\n'
+    ']\n'
+)
+CANONICAL_9B = (
+    'if self.player.get_position() != self.goal.get_position():\n'
+    '    return\n'
+    '\n'
+    'if self.current_round == len(ROUND_CONFIGS) - 1:\n'
+    '    self.game_clear = True\n'
+    'else:\n'
+    '    self.round_transition_time = pygame.time.get_ticks()\n'
+)
+# The headline "harder rule" the lead suggests: every item first.
+ALT_9B_ALL_ITEMS = (
+    'if self.player.get_position() != self.goal.get_position():\n'
+    '    return\n'
+    'if not all(not item.active for item in self.items):\n'
+    '    return\n'
+    'if self.current_round == len(ROUND_CONFIGS) - 1:\n'
+    '    self.game_clear = True\n'
+    'else:\n'
+    '    self.round_transition_time = pygame.time.get_ticks()\n'
+)
+# Inverted structure: positive condition instead of an early return.
+ALT_9B_POSITIVE = (
+    'if self.player.get_position() == self.goal.get_position():\n'
+    '    if self.current_round >= len(ROUND_CONFIGS) - 1:\n'
+    '        self.game_clear = True\n'
+    '    else:\n'
+    '        self.round_transition_time = pygame.time.get_ticks()\n'
+)
+case("9", "canonical (reach the goal)", "harness_gameRules_9", (RULES_9A, CANONICAL_9B))
+case("9", "alt: every item must be collected first", "harness_gameRules_9", (RULES_9A, ALT_9B_ALL_ITEMS))
+case("9", "alt: positive condition instead of early return", "harness_gameRules_9", (RULES_9A, ALT_9B_POSITIVE))
+
+BAD_9B_ALWAYS_CLEARS = 'self.game_clear = True\n'
+case("9 Part2/2", "BAD: clears the round from anywhere (negative control)", "harness_gameRules_9", (RULES_9A, BAD_9B_ALWAYS_CLEARS), expect_ok=False)
+BAD_9A_MISSING = 'MISSION_RULES = ["Reach the goal."]\n'
+case("9 Part1/2", "BAD: missing HOW_TO_PLAY_RULES (negative control)", "harness_gameRules_9", (BAD_9A_MISSING, CANONICAL_9B), expect_ok=False)
+BAD_9B_RAISES = 'raise ValueError("nope")\n'
+case("9 Part2/2", "BAD: raises (negative control)", "harness_gameRules_9", (RULES_9A, BAD_9B_RAISES), expect_ok=False)
 
 
 def main():

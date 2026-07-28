@@ -194,19 +194,95 @@ def extract_function(name):
 
 
 def extract_var_line(name):
-    m = re.search(r"^\s*var %s\s*=.*?;\s*$" % re.escape(name), SRC, re.M)
+    """Extracts `var NAME = ...;`, single-line or spanning many lines.
+
+    The multi-line case matters for PY_BONUS_HELPERS / PY_FAKE_PYGAME, which
+    are long `[ "...", "..." ].join("\\n");` array literals - so this scans
+    for the terminating semicolon at bracket depth 0, string- and
+    comment-aware, rather than relying on a single-line regex.
+    """
+    m = re.search(r"^[ \t]*var %s\s*=" % re.escape(name), SRC, re.M)
     if not m:
         raise SystemExit("var not found: %s" % name)
-    return m.group(0)
+    start = m.start()
+    i = m.end()
+    depth = 0
+    in_s = in_d = in_lc = in_bc = False
+    n = len(SRC)
+    while i < n:
+        c = SRC[i]
+        nx = SRC[i + 1] if i + 1 < n else ""
+        if in_lc:
+            if c == "\n":
+                in_lc = False
+            i += 1
+            continue
+        if in_bc:
+            if c == "*" and nx == "/":
+                in_bc = False
+                i += 2
+                continue
+            i += 1
+            continue
+        if in_s:
+            if c == "\\":
+                i += 2
+                continue
+            if c == "'":
+                in_s = False
+            i += 1
+            continue
+        if in_d:
+            if c == "\\":
+                i += 2
+                continue
+            if c == '"':
+                in_d = False
+            i += 1
+            continue
+        if c == "/" and nx == "/":
+            in_lc = True
+            i += 2
+            continue
+        if c == "/" and nx == "*":
+            in_bc = True
+            i += 2
+            continue
+        if c == "'":
+            in_s = True
+            i += 1
+            continue
+        if c == '"':
+            in_d = True
+            i += 1
+            continue
+        if c in "[({":
+            depth += 1
+        elif c in "])}":
+            depth -= 1
+        elif c == ";" and depth == 0:
+            return SRC[start:i + 1]
+        i += 1
+    raise SystemExit("unterminated var: %s" % name)
 
 
 FUNCS = [
     "toBase64Utf8", "isCommentOnlyLine", "reindentPython", "buildFnSource",
     "buildFnSourceTwoParts", "b64Line",
     "harness_movement_2", "harness_guardClause_3", "harness_positionDelta_4",
-    "harness_dijkstra_5", "harness_customItems_8",
+    "harness_dijkstra_5",
+    # The four multi-part Bonus harnesses: each mixes settings-block parts
+    # with real method-body parts (see app.js section 10).
+    "harness_roundDesign_6", "harness_lookAndFeel_7", "harness_customItems_8",
+    "harness_gameRules_9",
 ]
-VARS = ["PY_PRELUDE"]
+# PY_BONUS_HELPERS / PY_FAKE_PYGAME are the shared Python fragments those
+# four harnesses splice in (the step budget guard, the settings/body
+# runners, and the fake pygame used for sound and timing).
+VARS = [
+    "PY_PRELUDE", "PY_BONUS_HELPERS", "PY_FAKE_PYGAME",
+    "ROUND_CONFIG_KEY_ORDER", "MAX_DESIGNABLE_ROUNDS",
+]
 
 # harness_customItems_8 references the module-level KNOWN_ASSETS var (used
 # for its lenient optional image/sound path checks) - extracted straight

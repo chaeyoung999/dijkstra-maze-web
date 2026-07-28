@@ -243,8 +243,10 @@
     };
   }
 
-  // mapEditorData: { activeRound, rounds: [paintedRound|null x3] }. A painted
-  // round replaces DFS generation for that round once TODO 7 is completed.
+  // mapEditorData: { activeRound, rounds: [paintedRound|null ...] }. A
+  // painted round replaces DFS generation for that round once TODO 6 is
+  // completed. The list length follows the student's OWN ROUND_CONFIGS
+  // (they may add or remove rounds), grown on demand by ensureRoundSlots().
   // assetData: { uploadedFiles: [{name, kind, addedAt}] } - metadata only;
   // the actual uploaded bytes live on the student's disk, never in progress.
   function defaultMapEditorData() {
@@ -252,6 +254,33 @@
   }
   function defaultAssetData() {
     return { uploadedFiles: [] };
+  }
+
+  // Reshapes a step's saved code to whatever that step's parts look like
+  // NOW. `fresh` is the step's default code (a string, or one starter per
+  // part). Returns the reshaped code, or null when nothing can be salvaged.
+  //
+  //   single -> single   : keep it
+  //   single -> parts    : the old body becomes part 0, new parts start fresh
+  //   parts  -> parts    : keep every part that still exists, pad from fresh
+  //   parts  -> single   : keep part 0
+  function migrateSavedCode(step, savedCode, fresh) {
+    var wantParts = !!step.parts;
+    var savedIsArray = Array.isArray(savedCode);
+    if (!wantParts) {
+      if (typeof savedCode === "string") return savedCode;
+      if (savedIsArray && typeof savedCode[0] === "string") return savedCode[0];
+      return null;
+    }
+    var want = step.parts.length;
+    var out = [];
+    for (var i = 0; i < want; i++) {
+      var candidate;
+      if (savedIsArray) candidate = savedCode[i];
+      else candidate = i === 0 ? savedCode : undefined;
+      out.push(typeof candidate === "string" ? candidate : fresh[i]);
+    }
+    return out;
   }
 
   function freshState() {
@@ -273,19 +302,19 @@
         var saved = parsed.steps[step.id];
         if (!saved) return;
         var d = s.steps[step.id];
-        // A step whose parts-ness changed since this save was made (e.g.
-        // TODO 5 was split into two parts) leaves saved.code in the WRONG
-        // shape for what this step now expects - a plain string where a
-        // 2-element array is now needed, or vice versa. Restoring it
-        // anyway would either silently misbehave (indexing a string with
-        // [0] returns a character, not a part) or show "completed" next
-        // to starter code. Leave this ONE step at its fresh default
-        // instead - a clean redo of just that step, not a confusing
-        // half-migrated one.
-        var expectsArrayCode = !!step.parts;
-        var savedCodeIsArray = Array.isArray(saved.code);
-        if (saved.code !== undefined && expectsArrayCode !== savedCodeIsArray) return;
-        if (saved.code !== undefined) d.code = saved.code;
+        // A step's shape can change between releases: a single-part step
+        // gains parts (TODO 9), or a two-part step becomes three (TODO
+        // 6/7/8). Restoring saved.code blindly would either misbehave
+        // (indexing a string with [0] returns a character, not a part) or
+        // leave stepData.code[2] undefined and crash the editor. Salvage
+        // whatever still lines up and fill the rest from the new starters,
+        // so a student keeps the work they actually did and simply finds
+        // the new part waiting at its starter code.
+        if (saved.code !== undefined) {
+          var migrated = migrateSavedCode(step, saved.code, d.code);
+          if (migrated === null) return; // unusable shape: keep the fresh default
+          d.code = migrated;
+        }
         if (saved.status === "completed" || saved.status === "skipped") d.status = saved.status;
         // Clamp to this step's CURRENT hint count - a save made before a
         // hint-count content edit (e.g. a step trimmed from 3 hints to 1)
@@ -301,10 +330,15 @@
     }
     try {
       if (parsed && parsed.mapEditorData && Array.isArray(parsed.mapEditorData.rounds)) {
-        var rounds = parsed.mapEditorData.rounds.slice(0, 3).map(function (r) { return r || null; });
+        // Round count is the student's own choice now, so restore as many
+        // painted rounds as were saved (capped only by MAX_DESIGNABLE_ROUNDS)
+        // and let ensureRoundSlots() pad up to whatever ROUND_CONFIGS
+        // currently declares.
+        var rounds = parsed.mapEditorData.rounds.slice(0, MAX_DESIGNABLE_ROUNDS).map(function (r) { return r || null; });
         while (rounds.length < 3) rounds.push(null);
+        var savedActive = parsed.mapEditorData.activeRound;
         s.mapEditorData = {
-          activeRound: (typeof parsed.mapEditorData.activeRound === "number" && parsed.mapEditorData.activeRound >= 0 && parsed.mapEditorData.activeRound < 3) ? parsed.mapEditorData.activeRound : 0,
+          activeRound: (typeof savedActive === "number" && savedActive >= 0 && savedActive < rounds.length) ? savedActive : 0,
           rounds: rounds,
         };
       }
@@ -1435,16 +1469,20 @@
     if (step.grading.mode === "syntax") {
       var builder = SYNTAX_HARNESSES[step.id];
       if (!builder) return Promise.resolve(noHarnessFeedback());
-      var code = step.grading.twoParts ? stepData.code.join("\n\n") : stepData.code;
+      // Syntax mode only ever grades module-level settings, so every part
+      // can share one namespace - joining them is exactly right.
+      var code = step.parts ? stepData.code.join("\n\n") : stepData.code;
       return pyodide.runPythonAsync(builder(code)).then(parseHarnessResult);
     }
     var b = BEHAVIOUR_HARNESSES[step.grading.harness];
     if (!b) return Promise.resolve(noHarnessFeedback());
-    // twoParts behaviour steps (TODO 5) pass each part as its OWN argument,
-    // not joined into one string like syntax mode does - the harness needs
-    // to splice/grade each part separately so a mistake in one part can be
-    // attributed specifically to that part (see harness_dijkstra_5).
-    var src = step.grading.twoParts ? b(stepData.code[0], stepData.code[1]) : b(stepData.code);
+    // Multi-part behaviour steps pass each part as its OWN argument, not
+    // joined into one string like syntax mode does - the harness needs to
+    // splice/grade each part separately so a mistake in one part can be
+    // attributed specifically to that part (see harness_dijkstra_5). The
+    // number of parts is read from the step itself, so adding a Part 3/3
+    // needs no change here.
+    var src = step.parts ? b.apply(null, stepData.code) : b(stepData.code);
     return pyodide.runPythonAsync(src).then(parseHarnessResult);
   }
 
@@ -1840,7 +1878,10 @@
     guardClause_3: harness_guardClause_3,
     positionDelta_4: harness_positionDelta_4,
     dijkstra_5: harness_dijkstra_5,
+    roundDesign_6: harness_roundDesign_6,
+    lookAndFeel_7: harness_lookAndFeel_7,
     customItems_8: harness_customItems_8,
+    gameRules_9: harness_gameRules_9,
   };
 
   // ------------------------------------------------- 11. syntax harnesses
@@ -1903,161 +1944,464 @@
     ].join("\n");
   }
 
-  // TODO 6 is now two parts in the same file (Part 1/2: ROUND_CONFIGS,
-  // unchanged; Part 2/2: PLAYER_MOVE_DELAY_MS/ALLOW_PATH_HINT/MAX_HINT_COUNT,
-  // previously given code) - graded as one joined blob like TODO 7, since
-  // syntax mode just needs both parts' names in one namespace together.
-  function harness_syntax_6(code) {
-    var starter = linesOf(STEP_BY_ID["6"].parts[0].starter);
+  // ---- shared helpers for the multi-part Bonus harnesses ---------------
+  //
+  // TODO 6, 7, 8 and 9 each mix "settings block" parts (module-level
+  // constants in settings.py) with "method body" parts (real code in
+  // game.py), so they are all BEHAVIOUR harnesses that need the same few
+  // things: run a settings block safely, run a student method body safely,
+  // and describe a value without ever raising.
+  //
+  // _run_guarded is the important one. Every previous behaviour harness
+  // owned its own loop and could enforce a step budget directly; these new
+  // parts hand the loop to the STUDENT (`for row, col in ...`, and a
+  // `while` is entirely plausible), and Pyodide runs on the UI thread, so
+  // one runaway loop would freeze the whole tab with no way back. A
+  // line-counting trace function turns that into an ordinary graded
+  // failure after a fixed budget instead.
+  var PY_BONUS_HELPERS = [
+    "import sys",
+    "class _StepBudget(Exception):",
+    "    pass",
+    "def _run_guarded(fn, args, budget=300000):",
+    "    counter = [0]",
+    "    def _tracer(frame, event, arg):",
+    "        counter[0] += 1",
+    "        if counter[0] > budget:",
+    "            raise _StepBudget()",
+    "        return _tracer",
+    "    sys.settrace(_tracer)",
+    "    try:",
+    "        return fn(*args)",
+    "    finally:",
+    "        sys.settrace(None)",
+    "def _short_repr(v):",
+    "    try:",
+    "        r = repr(v)",
+    "    except Exception:",
+    "        r = '<value of type %s>' % type(v).__name__",
+    "    return r if len(r) <= 70 else r[:67] + '...'",
+    "IMAGE_EXT = ('.png', '.jpg', '.jpeg', '.gif', '.bmp')",
+    "SOUND_EXT = ('.wav', '.mp3', '.ogg')",
+    "def _new_result():",
+    "    return {'ok': False, 'passed': [], 'failed': [], 'warnings': [], 'error': None, 'traceback': None}",
+    // Run one settings block. Returns its namespace, or None after recording
+    // the error (syntax errors are reported against the student's own line
+    // numbers, since a settings block is spliced in verbatim).
+    "def _exec_settings(result, code, label):",
+    "    try:",
+    "        compile(code, '<student>', 'exec')",
+    "    except SyntaxError as e:",
+    "        result['error'] = '%s: Python syntax error on line %s: %s.' % (label, e.lineno, e.msg)",
+    "        return None",
+    "    ns = {}",
+    "    try:",
+    "        exec(compile(code, '<student>', 'exec'), {}, ns)",
+    "    except Exception as e:",
+    "        result['error'] = '%s: %s: %s' % (label, type(e).__name__, e)",
+    "        result['traceback'] = traceback.format_exc()",
+    "        return None",
+    "    return ns",
+    // Compile a buildFnSource()-wrapped method body into a callable. The
+    // wrapper adds one `def _fn(...)` line, so reported line numbers are
+    // shifted back by one to match what the student sees in the editor.
+    "def _compile_body(result, src, label):",
+    "    ns = {}",
+    "    try:",
+    "        exec(compile(src, '<student>', 'exec'), {}, ns)",
+    "    except SyntaxError as e:",
+    "        line = max(1, (e.lineno or 1) - 1)",
+    "        result['error'] = '%s: Python syntax error on line %s: %s.' % (label, line, e.msg)",
+    "        return None",
+    "    except Exception as e:",
+    "        result['error'] = '%s: %s: %s' % (label, type(e).__name__, e)",
+    "        result['traceback'] = traceback.format_exc()",
+    "        return None",
+    "    return ns.get('_fn')",
+    // Call a student body for one test case. Returns (ok, message): every
+    // possible failure mode - raising, looping forever, anything - comes
+    // back as a sentence a student can act on, never as a dead tab.
+    "def _call_body(fn, args, label):",
+    "    try:",
+    "        _run_guarded(fn, args)",
+    "        return True, None",
+    "    except _StepBudget:",
+    "        return False, ('%s: your code was still running after a very long time, so it was stopped. '",
+    "                       'This almost always means a loop that never ends - check that every while loop '",
+    "                       'can actually reach its stopping condition.') % label",
+    "    except Exception as e:",
+    "        return False, '%s: raised %s: %s' % (label, type(e).__name__, e)",
+    "def _check_path(result, label, val, folder, known):",
+    "    exts = IMAGE_EXT if folder == 'assets/images/' else SOUND_EXT",
+    "    if val is None:",
+    "        return",
+    "    if not isinstance(val, str):",
+    "        result['warnings'].append('Heads up: %s should be None or a string path — this still counts as complete, but the real game will error when it tries to load this.' % label)",
+    "        return",
+    "    norm = val.replace(chr(92), '/')",
+    "    if not norm.startswith(folder) or not norm.lower().endswith(exts):",
+    "        result['warnings'].append(\"Heads up: %s = %s doesn't look like a path under %s with a valid extension — double-check it, though this still counts as complete.\" % (label, _short_repr(val), folder))",
+    "        return",
+    "    base = norm.rsplit('/', 1)[-1]",
+    "    if base not in known:",
+    "        result['warnings'].append(\"%s = %s — this isn't one of the bundled files, but it will work once you add your own file at that path.\" % (label, _short_repr(val)))",
+    "def _check_color(result, label, val):",
+    "    if not (isinstance(val, tuple) and len(val) == 3 and all(isinstance(v, int) and not isinstance(v, bool) and 0 <= v <= 255 for v in val)):",
+    "        result['warnings'].append('Heads up: %s is usually a 3-tuple of ints 0-255, e.g. (37, 99, 235) — this still counts as complete, but double-check it renders correctly in the Play tab.' % label)",
+    "def _check_number(result, label, val, types, low=None, high=None):",
+    "    if isinstance(val, bool) or not isinstance(val, types):",
+    "        result['warnings'].append('Heads up: %s = %s is not the expected number type — this still counts as complete, but double-check it in the Play tab.' % (label, _short_repr(val)))",
+    "        return",
+    "    if (low is not None and val < low) or (high is not None and val > high):",
+    "        result['warnings'].append('Heads up: %s = %s is outside its usual range — this still counts as complete, but double-check it behaves as expected.' % (label, _short_repr(val)))",
+    "def _finish(result):",
+    "    result['ok'] = result['error'] is None and len(result['failed']) == 0",
+    "    return json.dumps(result)",
+  ].join("\n");
+
+  // A minimal stand-in for the pygame API the student's game.py code can
+  // touch, recording every call so a harness can report what happened
+  // without needing real audio (or a real display) in the browser.
+  var PY_FAKE_PYGAME = [
+    "class _FakePygameError(Exception):",
+    "    pass",
+    "class _FakeSound(object):",
+    "    def __init__(self, log, path):",
+    "        self._log = log; self.path = path",
+    "    def play(self, *a, **k):",
+    "        self._log.append(('sound_play', self.path))",
+    "    def set_volume(self, v):",
+    "        self._log.append(('sound_volume', v))",
+    "class _FakeMusic(object):",
+    "    def __init__(self, log, fail_on_load=False):",
+    "        self._log = log; self._fail = fail_on_load",
+    "    def load(self, path):",
+    "        self._log.append(('music_load', path))",
+    "        if self._fail:",
+    "            raise _FakePygameError('No file ' + str(path))",
+    "    def set_volume(self, v):",
+    "        self._log.append(('music_volume', v))",
+    "    def play(self, *a, **k):",
+    "        self._log.append(('music_play', a, sorted(k.items())))",
+    "    def stop(self):",
+    "        self._log.append(('music_stop',))",
+    "    def fadeout(self, ms):",
+    "        self._log.append(('music_fadeout', ms))",
+    "    def queue(self, path):",
+    "        self._log.append(('music_queue', path))",
+    "class _FakeMixer(object):",
+    "    def __init__(self, log, fail_on_load=False, inited=False):",
+    "        self._log = log; self._inited = inited",
+    "        self.music = _FakeMusic(log, fail_on_load)",
+    "    def get_init(self):",
+    "        return self._inited",
+    "    def init(self, *a, **k):",
+    "        self._inited = True; self._log.append(('mixer_init',))",
+    "    def quit(self):",
+    "        self._inited = False",
+    "    def Sound(self, path):",
+    "        self._log.append(('sound_load', path)); return _FakeSound(self._log, path)",
+    "class _FakeTime(object):",
+    "    def __init__(self):",
+    "        self._t = 1000",
+    "    def get_ticks(self):",
+    "        self._t += 16; return self._t",
+    "    def delay(self, ms):",
+    "        pass",
+    "class _FakePygame(object):",
+    "    error = _FakePygameError",
+    "    def __init__(self, log, fail_on_load=False, inited=False):",
+    "        self.mixer = _FakeMixer(log, fail_on_load, inited)",
+    "        self.time = _FakeTime()",
+  ].join("\n");
+
+  // ---- TODO 6: rounds + pacing + placement -----------------------------
+  //
+  // Parts 1 and 2 are the old open-ended settings checks, with one real
+  // change: ROUND_CONFIGS is no longer pinned to exactly 3 rounds, because
+  // students are now explicitly invited to add or remove rounds. Part 3 is
+  // the placement code, run for real against a stand-in Game.
+  function harness_roundDesign_6(code1, code2, code3) {
+    var fn3 = buildFnSource(
+      "self, forbidden, create_random_positions, CustomItem, Bomb, random, CUSTOM_ITEMS",
+      code3, "    ");
     return [
-      pySyntaxPrelude(code, starter),
+      PY_PRELUDE,
+      PY_BONUS_HELPERS,
+      b64Line("CODE1", code1),
+      b64Line("CODE2", code2),
+      b64Line("FN3_SRC", fn3),
+      "ROUND_KEYS = " + JSON.stringify(ROUND_CONFIG_KEY_ORDER).replace(/"/g, "'"),
+      "MAX_ROUNDS_UI = " + MAX_DESIGNABLE_ROUNDS,
+      "import random as _rnd",
+      "class _StubActor(object):",
+      "    def __init__(self, pos):",
+      "        self._pos = pos",
+      "    def get_position(self):",
+      "        return self._pos",
+      "class _StubItem(object):",
+      "    def __init__(self, row, col, cell_size, item_def):",
+      "        self.row = row; self.col = col; self.cell_size = cell_size",
+      "        self.item_def = item_def; self.active = True",
+      "    def get_position(self):",
+      "        return (self.row, self.col)",
+      "class _StubBomb(object):",
+      "    def __init__(self, row, col, cell_size):",
+      "        self.row = row; self.col = col; self.cell_size = cell_size",
+      "        self.state = 'ACTIVE'",
+      "    def get_position(self):",
+      "        return (self.row, self.col)",
+      "class _StubGame(object):",
+      "    def __init__(self, config, start, goal, round_index):",
+      "        self.config = config",
+      "        self.player = _StubActor(start)",
+      "        self.goal = _StubActor(goal)",
+      "        self.items = None",
+      "        self.bombs = None",
+      "        self.current_round = round_index",
+      "        self.objects_created = False",
+      "        self.start_time = None",
+      "def _stub_create_random_positions(rows, cols, count, forbidden):",
+      "    cands = [(r, c) for r in range(rows) for c in range(cols) if (r, c) not in forbidden]",
+      "    _rnd.shuffle(cands)",
+      "    try:",
+      "        n = int(count)",
+      "    except Exception:",
+      "        n = 0",
+      "    if n < 0:",
+      "        n = 0",
+      "    return cands[:n]",
+      "STUB_ITEMS = [",
+      "    {'name': 'A', 'color': (1, 2, 3), 'image': None, 'sound': None, 'size': 1.0, 'effect': 'add_time', 'amount': 5},",
+      "    {'name': 'B', 'color': (4, 5, 6), 'image': None, 'sound': None, 'size': 1.0, 'effect': 'add_hint', 'amount': 1},",
+      "]",
       "def _run():",
-      "    result = {'ok': False, 'passed': [], 'failed': [], 'warnings': [], 'error': None, 'traceback': None}",
-      "    try:",
-      "        compile(CODE, '<student>', 'exec')",
-      "    except SyntaxError as e:",
-      "        result['error'] = 'Python syntax error on line %s: %s.' % (e.lineno, e.msg)",
-      "        return json.dumps(result)",
-      "    try:",
-      "        ns = {}",
-      "        exec(compile(CODE, '<student>', 'exec'), {}, ns)",
-      "        starter_ns = {}",
-      "        exec(compile(STARTER, '<starter>', 'exec'), {}, starter_ns)",
-      "        if 'ROUND_CONFIGS' not in ns:",
-      "            result['failed'].append('Part 1: Missing definition: ROUND_CONFIGS.')",
-      "        else:",
+      "    result = _new_result()",
+      "    _rnd.seed(20260729)",
+      // ---------------- Part 1: ROUND_CONFIGS
+      "    ns1 = _exec_settings(result, CODE1, 'Part 1')",
+      "    if ns1 is None:",
+      "        return _finish(result)",
+      "    if 'ROUND_CONFIGS' not in ns1:",
+      "        result['failed'].append('Part 1: Missing definition: ROUND_CONFIGS. Keep the variable name exactly as given.')",
+      "    else:",
+      "        rc = ns1['ROUND_CONFIGS']",
+      "        if not isinstance(rc, list) or len(rc) == 0:",
+      "            result['warnings'].append('Heads up: ROUND_CONFIGS is usually a non-empty list of round dictionaries — this still counts as complete, but the game needs at least one round to play.')",
       "            result['passed'].append('Part 1: ROUND_CONFIGS is defined.')",
-      "            rc = ns['ROUND_CONFIGS']",
-      "            ref_keys = set(starter_ns['ROUND_CONFIGS'][0].keys())",
-      "            if not isinstance(rc, list) or len(rc) != 3:",
-      "                result['warnings'].append('Heads up: ROUND_CONFIGS is usually a list of exactly 3 round dictionaries — this still counts as complete, but the real game may not run correctly with this shape. Try it in the Play tab or your local pygame window to check.')",
-      "            else:",
-      "                for i, round_dict in enumerate(rc):",
-      "                    label = 'round %d' % (i + 1)",
-      "                    if not isinstance(round_dict, dict):",
-      "                        result['warnings'].append('Heads up: %s is not a dictionary.' % label)",
-      "                        continue",
-      "                    keys = set(round_dict.keys())",
-      "                    if keys != ref_keys:",
-      "                        missing = ref_keys - keys",
-      "                        extra = keys - ref_keys",
-      "                        msg = 'Heads up: %s has different keys than the starter.' % label",
-      "                        if missing:",
-      "                            msg += ' Missing: %s.' % ', '.join(sorted(missing))",
-      "                        if extra:",
-      "                            msg += ' Extra: %s.' % ', '.join(sorted(extra))",
-      "                        result['warnings'].append(msg + ' Removing a key the engine expects can crash the game — double-check this is intentional.')",
-      "                        continue",
-      "                    bad_types = [k for k, v in round_dict.items() if type(v) is not int]",
-      "                    if bad_types:",
-      "                        result['warnings'].append('Heads up: %s has non-integer value(s) for %s — the engine expects plain integers here.' % (label, ', '.join(bad_types)))",
-      "                        continue",
-      "                    result['passed'].append('%s: %s' % (label, _short_repr(round_dict)))",
-      "        pacing_names = ['PLAYER_MOVE_DELAY_MS', 'ALLOW_PATH_HINT', 'MAX_HINT_COUNT']",
-      "        missing_pacing = [n for n in pacing_names if n not in ns]",
-      "        if missing_pacing:",
-      "            result['failed'].append('Part 2: Missing definition(s): %s.' % ', '.join(missing_pacing))",
       "        else:",
-      "            result['passed'].append('Part 2: PLAYER_MOVE_DELAY_MS=%s, ALLOW_PATH_HINT=%s, MAX_HINT_COUNT=%s.' % (",
-      "                _short_repr(ns['PLAYER_MOVE_DELAY_MS']), _short_repr(ns['ALLOW_PATH_HINT']), _short_repr(ns['MAX_HINT_COUNT'])))",
-      "            if type(ns['PLAYER_MOVE_DELAY_MS']) is not int or ns['PLAYER_MOVE_DELAY_MS'] < 0:",
-      "                result['warnings'].append('Heads up: PLAYER_MOVE_DELAY_MS is usually a non-negative integer (milliseconds) — still counts as complete, but double-check it in the Play tab.')",
-      "            if not isinstance(ns['ALLOW_PATH_HINT'], bool):",
-      "                result['warnings'].append('Heads up: ALLOW_PATH_HINT is usually True or False — still counts as complete.')",
-      "            if type(ns['MAX_HINT_COUNT']) is not int or ns['MAX_HINT_COUNT'] < 0:",
-      "                result['warnings'].append('Heads up: MAX_HINT_COUNT is usually a non-negative integer — still counts as complete.')",
-      "    except Exception as e:",
-      "        result['error'] = '%s: %s' % (type(e).__name__, e)",
-      "        result['traceback'] = traceback.format_exc()",
-      "    result['ok'] = result['error'] is None and len(result['failed']) == 0",
-      "    return json.dumps(result)",
+      "            result['passed'].append('Part 1: ROUND_CONFIGS is defined with %d round(s).' % len(rc))",
+      "            if len(rc) > MAX_ROUNDS_UI:",
+      "                result['warnings'].append('You designed %d rounds. The downloaded pygame game plays all of them, but the map editor and Play tab here only show the first %d.' % (len(rc), MAX_ROUNDS_UI))",
+      "            ref_keys = set(ROUND_KEYS)",
+      "            for i, rd in enumerate(rc):",
+      "                label = 'round %d' % (i + 1)",
+      "                if not isinstance(rd, dict):",
+      "                    result['warnings'].append('Heads up: %s is not a dictionary.' % label)",
+      "                    continue",
+      "                keys = set(rd.keys())",
+      "                missing = ref_keys - keys",
+      "                extra = keys - ref_keys",
+      "                if missing or extra:",
+      "                    msg = 'Heads up: %s has different keys than the starter.' % label",
+      "                    if missing:",
+      "                        msg += ' Missing: %s.' % ', '.join(sorted(missing))",
+      "                    if extra:",
+      "                        msg += ' Extra: %s.' % ', '.join(sorted(extra))",
+      "                    result['warnings'].append(msg + ' Removing a key the engine expects can crash the game — double-check this is intentional.')",
+      "                    continue",
+      "                bad = [k for k, v in rd.items() if type(v) is not int]",
+      "                if bad:",
+      "                    result['warnings'].append('Heads up: %s has non-integer value(s) for %s — the engine expects plain integers here.' % (label, ', '.join(sorted(bad))))",
+      "                    continue",
+      "                if rd['rows'] < 2 or rd['cols'] < 2:",
+      "                    result['warnings'].append('Heads up: %s is smaller than 2x2, which leaves no maze to solve.' % label)",
+      "                cells = rd['rows'] * rd['cols']",
+      "                if rd['bomb_count'] + rd['custom_item_count'] > max(0, cells - 2):",
+      "                    result['warnings'].append('Heads up: %s asks for more bombs+items (%d) than it has free cells (%d) — the extras simply will not be placed.' % (label, rd['bomb_count'] + rd['custom_item_count'], max(0, cells - 2)))",
+      "                result['passed'].append('%s: %s' % (label, _short_repr(rd)))",
+      // ---------------- Part 2: pacing
+      "    ns2 = _exec_settings(result, CODE2, 'Part 2')",
+      "    if ns2 is None:",
+      "        return _finish(result)",
+      "    pacing = ['PLAYER_MOVE_DELAY_MS', 'ALLOW_PATH_HINT', 'MAX_HINT_COUNT']",
+      "    missing_pacing = [n for n in pacing if n not in ns2]",
+      "    if missing_pacing:",
+      "        result['failed'].append('Part 2: Missing definition(s): %s.' % ', '.join(missing_pacing))",
+      "    else:",
+      "        result['passed'].append('Part 2: PLAYER_MOVE_DELAY_MS=%s, ALLOW_PATH_HINT=%s, MAX_HINT_COUNT=%s.' % (",
+      "            _short_repr(ns2['PLAYER_MOVE_DELAY_MS']), _short_repr(ns2['ALLOW_PATH_HINT']), _short_repr(ns2['MAX_HINT_COUNT'])))",
+      "        _check_number(result, 'PLAYER_MOVE_DELAY_MS', ns2['PLAYER_MOVE_DELAY_MS'], int, low=0, high=2000)",
+      "        if not isinstance(ns2['ALLOW_PATH_HINT'], bool):",
+      "            result['warnings'].append('Heads up: ALLOW_PATH_HINT is usually True or False — this still counts as complete, but double-check the Hint button behaves as you expect.')",
+      "        _check_number(result, 'MAX_HINT_COUNT', ns2['MAX_HINT_COUNT'], int, low=0, high=99)",
+      // ---------------- Part 3: placement
+      "    fn3 = _compile_body(result, FN3_SRC, 'Part 3')",
+      "    if fn3 is None:",
+      "        return _finish(result)",
+      "    cases = [",
+      "        ('a normal round', {'rows': 9, 'cols': 11, 'cell_size': 30, 'extra_open_walls': 4, 'bomb_count': 3, 'custom_item_count': 2, 'time_limit_seconds': 60}, 0),",
+      "        ('a round with no bombs and no items', {'rows': 7, 'cols': 7, 'cell_size': 30, 'extra_open_walls': 0, 'bomb_count': 0, 'custom_item_count': 0, 'time_limit_seconds': 30}, 1),",
+      "        ('a tiny 3x3 round', {'rows': 3, 'cols': 3, 'cell_size': 30, 'extra_open_walls': 0, 'bomb_count': 1, 'custom_item_count': 1, 'time_limit_seconds': 20}, 2),",
+      "        ('a round asking for more objects than it has cells', {'rows': 4, 'cols': 4, 'cell_size': 30, 'extra_open_walls': 0, 'bomb_count': 40, 'custom_item_count': 40, 'time_limit_seconds': 20}, 0),",
+      "    ]",
+      "    part3_ok = True",
+      "    for label, cfg, rindex in cases:",
+      "        start = (0, 0)",
+      "        goal = (cfg['rows'] - 1, cfg['cols'] - 1)",
+      "        game = _StubGame(cfg, start, goal, rindex)",
+      "        forbidden = set([start, goal])",
+      "        ok, msg = _call_body(fn3, (game, forbidden, _stub_create_random_positions, _StubItem, _StubBomb, _rnd, STUB_ITEMS), 'Part 3 (%s)' % label)",
+      "        if not ok:",
+      "            result['failed'].append(msg)",
+      "            part3_ok = False",
+      "            continue",
+      "        if not isinstance(game.items, list):",
+      "            result['failed'].append('Part 3 (%s): self.items must end up as a list (an empty list is fine), got %s. The drawing code loops over it every frame.' % (label, _short_repr(game.items)))",
+      "            part3_ok = False",
+      "            continue",
+      "        if not isinstance(game.bombs, list):",
+      "            result['failed'].append('Part 3 (%s): self.bombs must end up as a list (an empty list is fine), got %s. The drawing code loops over it every frame.' % (label, _short_repr(game.bombs)))",
+      "            part3_ok = False",
+      "            continue",
+      "        placed = []",
+      "        bad_shape = False",
+      "        for obj in list(game.items) + list(game.bombs):",
+      "            try:",
+      "                pos = obj.get_position()",
+      "                rr, cc = pos",
+      "            except Exception:",
+      "                result['warnings'].append('Heads up: %s produced something in self.items/self.bombs that is not a CustomItem or Bomb (%s) — the real game will error when it tries to draw it.' % (label, _short_repr(obj)))",
+      "                bad_shape = True",
+      "                break",
+      "            placed.append((rr, cc))",
+      "        if bad_shape:",
+      "            continue",
+      "        outside = [p for p in placed if not (0 <= p[0] < cfg['rows'] and 0 <= p[1] < cfg['cols'])]",
+      "        if outside:",
+      "            result['warnings'].append('Heads up: %s put %d object(s) outside the %dx%d grid, e.g. %s — those will never be reachable.' % (label, len(outside), cfg['rows'], cfg['cols'], _short_repr(outside[0])))",
+      "        on_actor = [p for p in placed if p == start or p == goal]",
+      "        if on_actor:",
+      "            result['warnings'].append('Heads up: %s placed %d object(s) on the player start or the goal. Keep adding used positions to forbidden to avoid that.' % (label, len(on_actor)))",
+      "        if len(set(placed)) != len(placed):",
+      "            result['warnings'].append('Heads up: %s put two objects on the same cell. Remember forbidden.update(...) after each group you place.' % label)",
+      "        result['passed'].append('Part 3 (%s): placed %d item(s) and %d bomb(s), no errors.' % (label, len(game.items), len(game.bombs)))",
+      "    if part3_ok:",
+      "        result['passed'].append('Part 3: your placement code ran cleanly for every round shape it was given.')",
+      "    return _finish(result)",
       "_run()",
     ].join("\n");
   }
 
-  // TODO 7 Part 1/2 now also covers the 5 fallback shape colors (previously
-  // given code); Part 2/2 now also covers BOMB_EXPLOSION_DURATION_MS and
-  // BACKGROUND_MUSIC_VOLUME (previously given code) - all newly-exposed
-  // constants are checked leniently (missing name = fail, same as the
-  // asset paths already were; wrong shape/type = warning only, never a
-  // block), matching the existing convention for every other Bonus TODO.
-  function harness_syntax_7(code) {
+  // ---- TODO 7: images + sizes + sound + music playback -----------------
+  function harness_lookAndFeel_7(code1, code2, code3) {
     var imageVars = ["PLAYER_IMAGE_PATH", "GOAL_IMAGE_PATH", "BOMB_IMAGE_PATH", "FLOOR_TILE_IMAGE_PATH"];
+    var scaleVars = ["PLAYER_IMAGE_SCALE", "GOAL_IMAGE_SCALE", "BOMB_IMAGE_SCALE"];
     var colorVars = ["WALL_COLOR", "PLAYER_COLOR", "GOAL_COLOR", "BOMB_COLOR", "BOMB_EXPLOSION_COLOR"];
     var soundVars = ["BOMB_SOUND_PATH", "BACKGROUND_MUSIC_PATH"];
-    var tuningVars = ["BOMB_EXPLOSION_DURATION_MS", "BACKGROUND_MUSIC_VOLUME"];
+    var fn3 = buildFnSource("self, pygame, BACKGROUND_MUSIC_PATH, BACKGROUND_MUSIC_VOLUME", code3, "    ");
     return [
-      pySyntaxPrelude(code, ""),
+      PY_PRELUDE,
+      PY_BONUS_HELPERS,
+      PY_FAKE_PYGAME,
+      b64Line("CODE1", code1),
+      b64Line("CODE2", code2),
+      b64Line("FN3_SRC", fn3),
       "IMAGE_VARS = " + JSON.stringify(imageVars).replace(/"/g, "'"),
+      "SCALE_VARS = " + JSON.stringify(scaleVars).replace(/"/g, "'"),
       "COLOR_VARS = " + JSON.stringify(colorVars).replace(/"/g, "'"),
       "SOUND_VARS = " + JSON.stringify(soundVars).replace(/"/g, "'"),
-      "TUNING_VARS = " + JSON.stringify(tuningVars).replace(/"/g, "'"),
       "KNOWN_IMAGES = " + JSON.stringify(KNOWN_ASSETS.images).replace(/"/g, "'"),
       "KNOWN_SOUNDS = " + JSON.stringify(KNOWN_ASSETS.sounds).replace(/"/g, "'"),
-      "IMAGE_EXT = ('.png', '.jpg', '.jpeg', '.gif', '.bmp')",
-      "SOUND_EXT = ('.wav', '.mp3', '.ogg')",
+      "class _StubGame(object):",
+      "    pass",
       "def _run():",
-      "    result = {'ok': False, 'passed': [], 'failed': [], 'warnings': [], 'error': None, 'traceback': None}",
-      "    try:",
-      "        compile(CODE, '<student>', 'exec')",
-      "    except SyntaxError as e:",
-      "        result['error'] = 'Python syntax error on line %s: %s.' % (e.lineno, e.msg)",
-      "        return json.dumps(result)",
-      "    try:",
-      "        ns = {}",
-      "        exec(compile(CODE, '<student>', 'exec'), {}, ns)",
-      "        all_vars = IMAGE_VARS + COLOR_VARS + SOUND_VARS + TUNING_VARS",
-      "        missing = [n for n in all_vars if n not in ns]",
-      "        if missing:",
-      "            result['failed'].append('Missing definition(s): %s.' % ', '.join(missing))",
-      "            result['ok'] = False",
-      "            return json.dumps(result)",
-      "        result['passed'].append('All %d asset/color/tuning variables are defined.' % len(all_vars))",
-      "        def check_path(name, folder, exts, known):",
-      "            val = ns[name]",
-      "            if val is None:",
-      "                return",
-      "            if not isinstance(val, str):",
-      "                result['warnings'].append('Heads up: %s should be None or a string path, got %s — this still counts as complete, but the real game will likely error when it tries to load this.' % (name, type(val).__name__))",
-      "                return",
-      "            norm = val.replace(chr(92), '/')",
-      "            if not norm.startswith(folder) or not norm.lower().endswith(exts):",
-      "                result['warnings'].append('Heads up: %s = %s doesn\\'t look like a path under %s with a valid extension — double-check it, though this still counts as complete.' % (name, _short_repr(val), folder))",
-      "                return",
-      "            base = norm.rsplit('/', 1)[-1]",
-      "            if base not in known:",
-      "                result['warnings'].append('%s = %s — this isn\\'t one of the bundled files, but it will work once you add your own file at that path.' % (name, _short_repr(val)))",
-      "        def check_color(name):",
-      "            val = ns[name]",
-      "            if not (isinstance(val, tuple) and len(val) == 3 and all(isinstance(v, int) and 0 <= v <= 255 for v in val)):",
-      "                result['warnings'].append('Heads up: %s is usually a 3-tuple of ints 0-255, e.g. (37, 99, 235) — this still counts as complete, but double-check it renders correctly in the Play tab.' % name)",
-      "        def check_tuning(name, expect_types, low=None, high=None):",
-      "            val = ns[name]",
-      "            if not isinstance(val, expect_types) or isinstance(val, bool):",
-      "                result['warnings'].append('Heads up: %s = %s is not the expected number type — this still counts as complete, but double-check it in the Play tab.' % (name, _short_repr(val)))",
-      "                return",
-      "            if (low is not None and val < low) or (high is not None and val > high):",
-      "                result['warnings'].append('Heads up: %s = %s is outside its usual range — this still counts as complete, but double-check it behaves as expected.' % (name, _short_repr(val)))",
+      "    result = _new_result()",
+      // ---------------- Part 1: images, sizes, colors
+      "    ns1 = _exec_settings(result, CODE1, 'Part 1')",
+      "    if ns1 is None:",
+      "        return _finish(result)",
+      "    part1_names = IMAGE_VARS + SCALE_VARS + COLOR_VARS",
+      "    missing1 = [n for n in part1_names if n not in ns1]",
+      "    if missing1:",
+      "        result['failed'].append('Part 1: Missing definition(s): %s. Keep every variable name exactly as given.' % ', '.join(missing1))",
+      "    else:",
+      "        result['passed'].append('Part 1: all %d image/size/color settings are defined.' % len(part1_names))",
       "        for n in IMAGE_VARS:",
-      "            check_path(n, 'assets/images/', IMAGE_EXT, KNOWN_IMAGES)",
-      "        for n in SOUND_VARS:",
-      "            check_path(n, 'assets/sounds/', SOUND_EXT, KNOWN_SOUNDS)",
+      "            _check_path(result, n, ns1[n], 'assets/images/', KNOWN_IMAGES)",
       "        for n in COLOR_VARS:",
-      "            check_color(n)",
-      "        check_tuning('BOMB_EXPLOSION_DURATION_MS', int, low=0)",
-      "        check_tuning('BACKGROUND_MUSIC_VOLUME', (int, float), low=0, high=1)",
-      "    except Exception as e:",
-      "        result['error'] = '%s: %s' % (type(e).__name__, e)",
-      "        result['traceback'] = traceback.format_exc()",
-      "    result['ok'] = result['error'] is None and len(result['failed']) == 0",
-      "    return json.dumps(result)",
+      "            _check_color(result, n, ns1[n])",
+      "        for n in SCALE_VARS:",
+      "            _check_number(result, n, ns1[n], (int, float), low=0.1, high=3.0)",
+      // ---------------- Part 2: sound + tuning
+      "    ns2 = _exec_settings(result, CODE2, 'Part 2')",
+      "    if ns2 is None:",
+      "        return _finish(result)",
+      "    part2_names = SOUND_VARS + ['BOMB_EXPLOSION_DURATION_MS', 'BACKGROUND_MUSIC_VOLUME']",
+      "    missing2 = [n for n in part2_names if n not in ns2]",
+      "    if missing2:",
+      "        result['failed'].append('Part 2: Missing definition(s): %s. Keep every variable name exactly as given.' % ', '.join(missing2))",
+      "    else:",
+      "        result['passed'].append('Part 2: all %d sound/timing settings are defined.' % len(part2_names))",
+      "        for n in SOUND_VARS:",
+      "            _check_path(result, n, ns2[n], 'assets/sounds/', KNOWN_SOUNDS)",
+      "        _check_number(result, 'BOMB_EXPLOSION_DURATION_MS', ns2['BOMB_EXPLOSION_DURATION_MS'], int, low=0)",
+      "        _check_number(result, 'BACKGROUND_MUSIC_VOLUME', ns2['BACKGROUND_MUSIC_VOLUME'], (int, float), low=0, high=1)",
+      // ---------------- Part 3: music playback
+      "    fn3 = _compile_body(result, FN3_SRC, 'Part 3')",
+      "    if fn3 is None:",
+      "        return _finish(result)",
+      "    music_path = ns2.get('BACKGROUND_MUSIC_PATH') if isinstance(ns2, dict) else None",
+      "    if not isinstance(music_path, str):",
+      "        music_path = 'assets/sounds/bgm_1.wav'",
+      "    volume = ns2.get('BACKGROUND_MUSIC_VOLUME') if isinstance(ns2, dict) else 0.25",
+      "    if isinstance(volume, bool) or not isinstance(volume, (int, float)):",
+      "        volume = 0.25",
+      "    log = []",
+      "    fake = _FakePygame(log)",
+      "    ok, msg = _call_body(fn3, (_StubGame(), fake, music_path, volume), 'Part 3 (with a music file set)')",
+      "    if not ok:",
+      "        result['failed'].append(msg)",
+      "    else:",
+      "        plays = [e for e in log if e[0] == 'music_play']",
+      "        if plays:",
+      "            args = plays[0][1]",
+      "            loops = args[0] if args else None",
+      "            if loops == -1:",
+      "                result['passed'].append('Part 3: the music starts and loops forever (play(-1)).')",
+      "            elif loops == 0:",
+      "                result['passed'].append('Part 3: the music starts and plays through exactly once (play(0)).')",
+      "            else:",
+      "                result['passed'].append('Part 3: the music starts with play(%s).' % _short_repr(loops))",
+      "            if plays[0][2]:",
+      "                result['passed'].append('Part 3: extra playback options used: %s.' % ', '.join(k for k, v in plays[0][2]))",
+      "        else:",
+      "            result['warnings'].append('Heads up: your code ran fine, but it never called pygame.mixer.music.play(...), so no music will be heard. That is a valid choice if you meant it.')",
+      "        if not [e for e in log if e[0] == 'music_volume']:",
+      "            result['warnings'].append('Heads up: BACKGROUND_MUSIC_VOLUME is never applied (no set_volume call), so the music will play at full volume.')",
+      // no music file at all
+      "    log2 = []",
+      "    ok2, msg2 = _call_body(fn3, (_StubGame(), _FakePygame(log2), None, volume), 'Part 3 (with BACKGROUND_MUSIC_PATH = None)')",
+      "    if not ok2:",
+      "        result['failed'].append(msg2 + ' — with no music file chosen, this code still has to finish quietly instead of erroring.')",
+      "    else:",
+      "        result['passed'].append('Part 3: with no music file chosen, your code finishes quietly.')",
+      // a broken/missing file: warning only, per the open-ended grading policy
+      "    log3 = []",
+      "    ok3, msg3 = _call_body(fn3, (_StubGame(), _FakePygame(log3, fail_on_load=True), music_path, volume), 'Part 3 (music file missing)')",
+      "    if not ok3:",
+      "        result['warnings'].append('Heads up: if the music file is missing or broken, your code raises instead of handling it (%s). This still counts as complete, but keeping the try / except (pygame.error, FileNotFoundError, TypeError) lines means a classmate can open your project without your sound files and still play it.' % msg3)",
+      "    else:",
+      "        result['passed'].append('Part 3: a missing or broken music file is handled without crashing the game.')",
+      "    return _finish(result)",
       "_run()",
     ].join("\n");
   }
 
-  // TODO 8 now spans two files (Part 1/2 in settings.py: the CUSTOM_ITEMS
-  // data; Part 2/2 in game.py: apply_custom_item_effect's branching, now a
-  // real behaviour-graded TODO instead of given code) - graded together as
+  // TODO 8 now spans two files (Part 1/3 in settings.py: the CUSTOM_ITEMS
+  // data; Parts 2/3 and 3/3 in game.py: apply_custom_item_effect's
+  // branching and the pickup itself, both real behaviour-graded TODOs
+  // instead of given code) - graded together as
   // one BEHAVIOUR harness, same "Part 1: .../Part 2: ..." attribution
   // convention as TODO 5/7. Part 1 keeps the old open-ended/syntax-style
   // checks (compiles, defines CUSTOM_ITEMS, shape warnings only, no fixed
@@ -2066,30 +2410,65 @@
   // (effect, amount) pairs - including an unrecognized effect, which must
   // be a safe no-op (never a crash), preserving the exact flexibility
   // promise TODO 8 Part 1 makes about inventing new effect names.
-  function harness_customItems_8(code1, code2) {
-    // "image"/"sound" are intentionally NOT in ITEM_KEYS: they are
-    // optional-with-None, exactly like every other asset path in this
+  function harness_customItems_8(code1, code2, code3) {
+    // "image"/"sound"/"size" are intentionally NOT in ITEM_KEYS: they are
+    // optional-with-a-default, exactly like every other asset path in this
     // project (TODO 7) - an item simply omitting them is equivalent to
-    // explicitly writing None, so it must never warn or block just for
-    // being absent. Only checked (as a lenient warning) when present.
+    // explicitly writing None (or 1.0 for size), so it must never warn or
+    // block just for being absent. Only checked (as a lenient warning)
+    // when present.
     var itemKeys = ["name", "color", "effect", "amount"];
     var fn2Src = buildFnSource("self, effect, amount", code2, "    ");
+    var fn3Src = buildFnSource("self, player_position", code3, "    ");
     return [
       PY_PRELUDE,
+      PY_BONUS_HELPERS,
       b64Line("CODE1", code1),
       b64Line("FN2_SRC", fn2Src),
+      b64Line("FN3_SRC", fn3Src),
       "ITEM_KEYS = " + JSON.stringify(itemKeys).replace(/"/g, "'"),
       "KNOWN_EFFECTS = ['add_time', 'add_hint']",
       "KNOWN_IMAGES = " + JSON.stringify(KNOWN_ASSETS.images).replace(/"/g, "'"),
       "KNOWN_SOUNDS = " + JSON.stringify(KNOWN_ASSETS.sounds).replace(/"/g, "'"),
       "IMAGE_EXT = ('.png', '.jpg', '.jpeg', '.gif', '.bmp')",
       "SOUND_EXT = ('.wav', '.mp3', '.ogg')",
-      "def _short_repr(v):",
-      "    try:",
-      "        r = repr(v)",
-      "    except Exception:",
-      "        r = '<value of type %s>' % type(v).__name__",
-      "    return r if len(r) <= 70 else r[:67] + '...'",
+      // Stand-ins for Part 3/3: one spawned item, and just enough of Game
+      // for the pickup body to run. apply_custom_item_effect and
+      // get_custom_item_sound record what the student's code asked for,
+      // rather than re-running Part 2 or touching real audio.
+      "class _PickItem(object):",
+      "    def __init__(self, pos, item_def, active=True):",
+      "        self._pos = pos; self.item_def = item_def; self.active = active",
+      "        self.row = pos[0]; self.col = pos[1]",
+      "    def get_position(self):",
+      "        return self._pos",
+      "class _PickSound(object):",
+      "    def __init__(self, played, path):",
+      "        self._played = played; self.path = path",
+      "    def play(self, *a, **k):",
+      "        self._played.append(self.path)",
+      "class _PickPlayer(object):",
+      "    def __init__(self, pos):",
+      "        self._pos = pos",
+      "    def get_position(self):",
+      "        return self._pos",
+      "class _PickGame(object):",
+      "    def __init__(self, items, player_pos):",
+      // self.player mirrors the position passed in, so a student who writes
+      // self.player.get_position() instead of using the player_position
+      // local is graded on exactly the same scenario, not a different one.
+      "        self.items = items",
+      "        self.applied = []",
+      "        self.played = []",
+      "        self.bonus_time_seconds = 0",
+      "        self.hints_remaining = 2",
+      "        self.player = _PickPlayer(player_pos)",
+      "    def apply_custom_item_effect(self, item_def):",
+      "        self.applied.append(item_def)",
+      "    def get_custom_item_sound(self, path):",
+      "        if path is None or path == '<broken>':",
+      "            return None",
+      "        return _PickSound(self.played, path)",
       "def _run():",
       "    result = {'ok': False, 'passed': [], 'failed': [], 'warnings': [], 'error': None, 'traceback': None}",
       "    try:",
@@ -2127,6 +2506,12 @@
       "                        result['warnings'].append('Heads up: %s[\\'effect\\'] = %s is not one of the built-in effects (%s) — this still counts as complete (an unrecognized effect is a safe no-op in the real game), but double-check it is the effect you meant.' % (label, _short_repr(effect), ', '.join(KNOWN_EFFECTS)))",
       "                    if type(item_def.get('amount')) is not int:",
       "                        result['warnings'].append('Heads up: %s[\\'amount\\'] is usually a plain integer — this still counts as complete, but double-check it behaves as expected.' % label)",
+      "                    if 'size' in item_def:",
+      "                        sz = item_def.get('size')",
+      "                        if isinstance(sz, bool) or not isinstance(sz, (int, float)):",
+      "                            result['warnings'].append('Heads up: %s[\\'size\\'] should be a number like 1.0 — anything else is ignored and the item draws at its normal size.' % label)",
+      "                        elif sz < 0.1 or sz > 3.0:",
+      "                            result['warnings'].append('Heads up: %s[\\'size\\'] = %s is outside 0.1-3.0, so the game clamps it into that range — an item can never become invisible or fill the screen.' % (label, _short_repr(sz)))",
       "                    def _check_asset_field(field, folder, exts, known):",
       "                        val = item_def.get(field)",
       "                        if val is None:",
@@ -2182,52 +2567,198 @@
       "    except Exception as e:",
       "        result['error'] = 'Part 2: %s: %s' % (type(e).__name__, e)",
       "        result['traceback'] = traceback.format_exc()",
-      "    result['ok'] = result['error'] is None and len(result['failed']) == 0",
-      "    return json.dumps(result)",
-      "_run()",
-    ].join("\n");
-  }
-
-  function harness_syntax_9(code) {
-    var starter = linesOf(STEP_BY_ID["9"].starter);
-    return [
-      pySyntaxPrelude(code, starter),
-      "def _run():",
-      "    result = {'ok': False, 'passed': [], 'failed': [], 'warnings': [], 'error': None, 'traceback': None}",
-      "    try:",
-      "        compile(CODE, '<student>', 'exec')",
-      "    except SyntaxError as e:",
-      "        result['error'] = 'Python syntax error on line %s: %s.' % (e.lineno, e.msg)",
       "        return json.dumps(result)",
-      "    try:",
-      "        ns = {}",
-      "        exec(compile(CODE, '<student>', 'exec'), {}, ns)",
-      "        names = ['MISSION_RULES', 'HOW_TO_PLAY_RULES']",
-      "        missing = [n for n in names if n not in ns]",
-      "        if missing:",
-      "            result['failed'].append('Missing definition(s): %s. Keep the variable names exactly as given.' % ', '.join(missing))",
+      // ---------------- Part 3/3: the pickup itself
+      "    fn3 = _compile_body(result, FN3_SRC, 'Part 3')",
+      "    if fn3 is None:",
+      "        return _finish(result)",
+      "    def _mk_items(specs):",
+      "        return [_PickItem(pos, defn, active) for pos, defn, active in specs]",
+      "    DEF_A = {'name': 'A', 'color': (1, 2, 3), 'sound': 'assets/sounds/pickup_1.wav', 'size': 1.0, 'effect': 'add_time', 'amount': 5}",
+      "    DEF_B = {'name': 'B', 'color': (4, 5, 6), 'sound': None, 'size': 1.0, 'effect': 'add_hint', 'amount': 1}",
+      "    DEF_C = {'name': 'C', 'color': (7, 8, 9), 'sound': '<broken>', 'effect': 'mystery', 'amount': 2}",
+      "    scenarios = [",
+      "        ('the player is standing on an item', (1, 1), [((1, 1), DEF_A, True), ((4, 4), DEF_B, True)], 0),",
+      "        ('the player is standing on empty floor', (2, 2), [((1, 1), DEF_A, True), ((4, 4), DEF_B, True)], None),",
+      "        ('the item under the player has no sound', (3, 3), [((3, 3), DEF_B, True)], 0),",
+      "        ('the item under the player has a broken sound file', (3, 3), [((3, 3), DEF_C, True)], 0),",
+      "        ('there are no items at all this round', (0, 0), [], None),",
+      "        ('the item under the player was already collected', (5, 5), [((5, 5), DEF_A, False)], None),",
+      "    ]",
+      "    part3_clean = True",
+      "    for label, ppos, specs, expect_idx in scenarios:",
+      "        game = _PickGame(_mk_items(specs), ppos)",
+      "        ok3, msg3 = _call_body(fn3, (game, ppos), 'Part 3 (%s)' % label)",
+      "        if not ok3:",
+      "            result['failed'].append(msg3)",
+      "            part3_clean = False",
+      "            continue",
+      "        if expect_idx is None:",
+      "            wrongly = [i for i, it in enumerate(game.items) if specs[i][2] and not it.active]",
+      "            if wrongly:",
+      "                result['warnings'].append('Heads up: Part 3 (%s) still collected an item. Check the position comparison in your if statement.' % label)",
+      "            elif game.applied and not specs:",
+      "                pass",
+      "            if game.applied and label.startswith('the item under the player was already'):",
+      "                result['warnings'].append('Heads up: Part 3 (%s) applied the effect again for an item that was already collected. Checking item.active first prevents that.' % label)",
+      "            result['passed'].append('Part 3 (%s): nothing was collected, as expected.' % label)",
+      "            continue",
+      "        target = game.items[expect_idx]",
+      "        if target.active:",
+      "            result['failed'].append('Part 3 (%s): the item the player is standing on is still active. Set item.active = False when you collect it, or it gets collected again on every single frame.' % label)",
+      "            part3_clean = False",
+      "            continue",
+      "        if target.item_def not in game.applied:",
+      "            result['failed'].append('Part 3 (%s): the item was marked collected, but self.apply_custom_item_effect(item.item_def) was never called - so your Part 2/3 effect never runs.' % label)",
+      "            part3_clean = False",
+      "            continue",
+      "        others = [i for i, it in enumerate(game.items) if i != expect_idx and specs[i][2] and not it.active]",
+      "        if others:",
+      "            result['warnings'].append('Heads up: Part 3 (%s) also collected %d item(s) the player is not standing on.' % (label, len(others)))",
+      "        result['passed'].append('Part 3 (%s): collected correctly, and your effect was applied.' % label)",
+      "    if part3_clean:",
+      "        sound_game = _PickGame(_mk_items([((1, 1), DEF_A, True)]), (1, 1))",
+      "        _call_body(fn3, (sound_game, (1, 1)), 'Part 3 (sound check)')",
+      "        if sound_game.played:",
+      "            result['passed'].append(\"Part 3: the collected item's own sound is played (%s).\" % sound_game.played[0])",
       "        else:",
-      "            result['passed'].append('Both are defined: MISSION_RULES (%s item(s)), HOW_TO_PLAY_RULES (%s item(s)).' % (",
-      "                len(ns['MISSION_RULES']) if isinstance(ns['MISSION_RULES'], (list, tuple)) else '?',",
-      "                len(ns['HOW_TO_PLAY_RULES']) if isinstance(ns['HOW_TO_PLAY_RULES'], (list, tuple)) else '?',",
-      "            ))",
-      "            for rn in ('MISSION_RULES', 'HOW_TO_PLAY_RULES'):",
-      "                if not isinstance(ns[rn], list) or len(ns[rn]) == 0:",
-      "                    result['warnings'].append('Heads up: %s is usually a non-empty list of strings — this still counts as complete, but double-check it looks right in the preview.' % rn)",
-      "    except Exception as e:",
-      "        result['error'] = '%s: %s' % (type(e).__name__, e)",
-      "        result['traceback'] = traceback.format_exc()",
-      "    result['ok'] = result['error'] is None and len(result['failed']) == 0",
-      "    return json.dumps(result)",
+      "            result['warnings'].append('Heads up: your pickup works, but it never plays the item sound. Look up the sound with self.get_custom_item_sound(...) and call .play() on the result when it is not None.')",
+      "    return _finish(result)",
       "_run()",
     ].join("\n");
   }
 
+  // ---- TODO 9: the rules, written twice -------------------------------
+  //
+  // Part 1/2 is the rules as English (settings.py), Part 2/2 is the same
+  // rules as the win condition (game.py). The grading policy here is
+  // deliberately permissive: a student is allowed to invent a harder win
+  // condition, so "standing on the goal did not clear the round" is only
+  // ever a note. The two things that ARE failures are the ones that make a
+  // game unplayable: raising, and clearing the round while the player is
+  // nowhere near the goal.
+  function harness_gameRules_9(code1, code2) {
+    var fn2 = buildFnSource("self, pygame, ROUND_CONFIGS", code2, "    ");
+    return [
+      PY_PRELUDE,
+      PY_BONUS_HELPERS,
+      PY_FAKE_PYGAME,
+      b64Line("CODE1", code1),
+      b64Line("FN2_SRC", fn2),
+      "class _GoalActor(object):",
+      "    def __init__(self, pos):",
+      "        self._pos = pos",
+      "    def get_position(self):",
+      "        return self._pos",
+      "class _GoalItem(object):",
+      "    def __init__(self, active):",
+      "        self.active = active",
+      "        self.item_def = {'name': 'x', 'effect': 'add_time', 'amount': 1}",
+      "    def get_position(self):",
+      "        return (9, 9)",
+      "class _GoalGame(object):",
+      "    def __init__(self, player_pos, goal_pos, items, round_index, total):",
+      "        self.player = _GoalActor(player_pos)",
+      "        self.goal = _GoalActor(goal_pos)",
+      "        self.items = items",
+      "        self.current_round = round_index",
+      "        self.game_clear = False",
+      "        self.round_failed = False",
+      "        self.round_transition_time = None",
+      "        self.config = {'rows': 9, 'cols': 9, 'cell_size': 30, 'extra_open_walls': 3, 'bomb_count': 2, 'custom_item_count': 2, 'time_limit_seconds': 60}",
+      "        self.bonus_time_seconds = 0",
+      "        self.hints_remaining = 2",
+      "    def cleared(self):",
+      "        return bool(self.game_clear) or self.round_transition_time is not None",
+      "ROUNDS_STUB = [1, 2, 3]",
+      "def _run():",
+      "    result = _new_result()",
+      // ---------------- Part 1: the rules as text
+      "    ns1 = _exec_settings(result, CODE1, 'Part 1')",
+      "    if ns1 is None:",
+      "        return _finish(result)",
+      "    names = ['MISSION_RULES', 'HOW_TO_PLAY_RULES']",
+      "    missing = [n for n in names if n not in ns1]",
+      "    if missing:",
+      "        result['failed'].append('Part 1: Missing definition(s): %s. Keep the variable names exactly as given.' % ', '.join(missing))",
+      "    else:",
+      "        result['passed'].append('Part 1: MISSION_RULES (%s line(s)), HOW_TO_PLAY_RULES (%s line(s)).' % (",
+      "            len(ns1['MISSION_RULES']) if isinstance(ns1['MISSION_RULES'], (list, tuple)) else '?',",
+      "            len(ns1['HOW_TO_PLAY_RULES']) if isinstance(ns1['HOW_TO_PLAY_RULES'], (list, tuple)) else '?'))",
+      "        for rn in names:",
+      "            val = ns1[rn]",
+      "            if not isinstance(val, list) or len(val) == 0:",
+      "                result['warnings'].append('Heads up: %s is usually a non-empty list of strings — this still counts as complete, but the screen that shows it will be blank.' % rn)",
+      "            elif not all(isinstance(x, str) for x in val):",
+      "                result['warnings'].append('Heads up: every entry in %s is usually a quoted string.' % rn)",
+      // ---------------- Part 2: the rules as code
+      "    fn2 = _compile_body(result, FN2_SRC, 'Part 2')",
+      "    if fn2 is None:",
+      "        return _finish(result)",
+      "    GOAL = (8, 8)",
+      "    def _try(label, player_pos, items, round_index):",
+      "        game = _GoalGame(player_pos, GOAL, items, round_index, 3)",
+      "        ok, msg = _call_body(fn2, (game, _FakePygame([]), ROUNDS_STUB), 'Part 2 (%s)' % label)",
+      "        return game, ok, msg",
+      "    all_collected = [_GoalItem(False), _GoalItem(False)]",
+      "    some_left = [_GoalItem(False), _GoalItem(True)]",
+      "    part2_ok = True",
+      // Away from the goal: clearing here would make the game win itself.
+      "    for label, items, rindex in [('away from the goal, items left', some_left, 0),",
+      "                                 ('away from the goal, everything collected', all_collected, 0),",
+      "                                 ('away from the goal on the last round', all_collected, 2)]:",
+      "        game, ok, msg = _try(label, (0, 0), items, rindex)",
+      "        if not ok:",
+      "            result['failed'].append(msg)",
+      "            part2_ok = False",
+      "            continue",
+      "        if game.cleared():",
+      "            result['failed'].append('Part 2 (%s): the round was cleared even though the player is nowhere near the goal. Keep the first check - if the player is not on the goal, return early.' % label)",
+      "            part2_ok = False",
+      "        else:",
+      "            result['passed'].append('Part 2 (%s): correctly does nothing.' % label)",
+      // On the goal: any outcome is legal, but describe what happened.
+      "    on_goal_mid, ok_a, msg_a = _try('on the goal, mid-game, everything collected', GOAL, all_collected, 0)",
+      "    if not ok_a:",
+      "        result['failed'].append(msg_a)",
+      "        part2_ok = False",
+      "    on_goal_last, ok_b, msg_b = _try('on the goal, last round, everything collected', GOAL, all_collected, 2)",
+      "    if not ok_b:",
+      "        result['failed'].append(msg_b)",
+      "        part2_ok = False",
+      "    on_goal_left, ok_c, msg_c = _try('on the goal with items still uncollected', GOAL, some_left, 0)",
+      "    if not ok_c:",
+      "        result['failed'].append(msg_c)",
+      "        part2_ok = False",
+      "    no_items, ok_d, msg_d = _try('on the goal in a round with no items at all', GOAL, [], 2)",
+      "    if not ok_d:",
+      "        result['failed'].append(msg_d)",
+      "        part2_ok = False",
+      "    if part2_ok:",
+      "        if on_goal_last.game_clear:",
+      "            result['passed'].append('Part 2: reaching the goal on the final round finishes the game.')",
+      "        if on_goal_mid.round_transition_time is not None:",
+      "            result['passed'].append('Part 2: reaching the goal mid-game moves on to the next round.')",
+      "        if not on_goal_mid.cleared() and not on_goal_last.cleared():",
+      "            result['warnings'].append('Heads up: even with every item collected and the player standing on the goal, nothing clears the round — as written, this game cannot be won. Check that you still set self.game_clear or self.round_transition_time somewhere.')",
+      "        elif on_goal_left.cleared():",
+      "            result['passed'].append('Part 2: reaching the goal is enough to clear the round (no extra condition).')",
+      "        else:",
+      "            result['passed'].append('Part 2: you added an extra win condition — reaching the goal is not enough on its own until the rest is done. Make sure MISSION_RULES says so too!')",
+      "        if not no_items.cleared() and not on_goal_left.cleared():",
+      "            result['warnings'].append('Heads up: your extra win condition also blocks a round that has no items at all. If any round sets custom_item_count to 0, that round could never be finished.')",
+      "    return _finish(result)",
+      "_run()",
+    ].join("\n");
+  }
+
+  // TODO 6, 7 and 9 used to be graded here as pure "syntax" steps. They all
+  // gained a real code part in game.py, so they moved to BEHAVIOUR_HARNESSES
+  // (harness_roundDesign_6 / harness_lookAndFeel_7 / harness_gameRules_9),
+  // which still run the same open-ended settings checks for their
+  // settings.py parts. TODO 1 is the only step left that is settings-only.
   var SYNTAX_HARNESSES = {
     "1": harness_syntax_1,
-    "6": harness_syntax_6,
-    "7": harness_syntax_7,
-    "9": harness_syntax_9,
   };
 
   // -------------------------------------------- 12. hints/skip/reset/io
@@ -3565,6 +4096,13 @@
   var MAP_WINDOW_PIXEL_W = 976, MAP_WINDOW_PIXEL_H = 542;
   var MAP_MIN_COMFY_CELL = 16;
   var ROUND_CONFIG_KEY_ORDER = ["rows", "cols", "cell_size", "extra_open_walls", "bomb_count", "custom_item_count", "time_limit_seconds"];
+  // Students may add or remove rounds freely (TODO 6 Part 1/3). These caps
+  // exist only so the map editor stays usable and one stray paste can't
+  // make the browser draw a 500x500 board or 300 round tabs - the real
+  // pygame game has no such limit, and the grader only ever warns.
+  var MAX_DESIGNABLE_ROUNDS = 8;
+  var MAX_ROUND_ROWS = 41;
+  var MAX_ROUND_COLS = 61;
 
   function makeGrid(rows, cols, fill) {
     var g = [];
@@ -3782,9 +4320,10 @@
   }
 
   // Best-effort, whitespace/formatting-tolerant parse of ROUND_CONFIGS from
-  // raw source text. Returns an array of 3 plain dicts, or null if it can't
-  // find exactly 3. This is a convenience for live UI sync ONLY - the real
-  // grading in Prompt 1's syntax harness is still the authority.
+  // raw source text. Returns an array of plain dicts (ANY number of rounds -
+  // students are explicitly encouraged to add a 4th, 5th, ... round), or
+  // null when nothing usable is there. This is a convenience for live UI
+  // sync ONLY - the grading harness is still the authority.
   function parseRoundConfigsSource(code) {
     try {
       var m = code.match(/ROUND_CONFIGS\s*=\s*\[/);
@@ -3818,8 +4357,122 @@
         dicts.push(parseSimpleDict(listText.slice(openIdx, j + 1)));
         di = j + 1;
       }
-      return dicts.length === 3 ? dicts : null;
+      return dicts.length >= 1 ? dicts.slice(0, MAX_DESIGNABLE_ROUNDS) : null;
     } catch (e) { return null; }
+  }
+
+  // ---- variable round count -------------------------------------------
+  //
+  // ROUND_CONFIGS used to be pinned at exactly 3 rounds everywhere: the
+  // grader failed anything else, the map editor drew 3 fixed tabs, and the
+  // Play tab looped over a hardcoded 3-entry list. Students are now told
+  // they may add or remove rounds, so every one of those reads the
+  // student's OWN list instead, falling back to the shipped defaults while
+  // TODO 6 is untouched or unparseable. Capped only to keep the map editor
+  // usable (and one runaway paste from generating hundreds of tabs).
+  var PLAY_ROUND_DEFAULTS = [
+    { rows: 11, cols: 15, cellSize: 30, extraOpenWalls: 5, bombCount: 2, customItemCount: 2, timeLimitSeconds: 70 },
+    { rows: 15, cols: 21, cellSize: 24, extraOpenWalls: 6, bombCount: 4, customItemCount: 3, timeLimitSeconds: 55 },
+    { rows: 17, cols: 25, cellSize: 20, extraOpenWalls: 8, bombCount: 6, customItemCount: 4, timeLimitSeconds: 45 },
+  ];
+
+  function clampInt(v, lo, hi, fallback) {
+    var n = typeof v === "number" ? Math.round(v) : NaN;
+    if (!isFinite(n)) return fallback;
+    return Math.max(lo, Math.min(hi, n));
+  }
+
+  // One ROUND_CONFIGS dict -> the Play tab's own shape. Every value is
+  // clamped to something drawable: a student experimenting with rows: 900
+  // or a negative bomb_count gets a playable board and a grading warning,
+  // never a frozen tab or a crash.
+  function roundDictToPlayConfig(d, fallback) {
+    fallback = fallback || PLAY_ROUND_DEFAULTS[0];
+    var rows = clampInt(d.rows, 2, MAX_ROUND_ROWS, fallback.rows);
+    var cols = clampInt(d.cols, 2, MAX_ROUND_COLS, fallback.cols);
+    var cells = rows * cols;
+    return {
+      rows: rows,
+      cols: cols,
+      cellSize: clampInt(d.cell_size, 8, 60, fallback.cellSize),
+      extraOpenWalls: clampInt(d.extra_open_walls, 0, cells, fallback.extraOpenWalls),
+      // Leave room for the player, the goal, and at least one free cell so
+      // placement can never be asked for more cells than the grid has.
+      bombCount: clampInt(d.bomb_count, 0, Math.max(0, cells - 3), fallback.bombCount),
+      customItemCount: clampInt(d.custom_item_count, 0, Math.max(0, cells - 3), fallback.customItemCount),
+      timeLimitSeconds: clampInt(d.time_limit_seconds, 5, 3600, fallback.timeLimitSeconds),
+    };
+  }
+
+  // TODO 6 is a multi-part step: part 0 is the ROUND_CONFIGS block, part 1
+  // the pacing settings, part 2 the placement code in game.py. Anything
+  // reading "the student's rounds" goes through here so an older save (or
+  // a future re-split) can never index a string by mistake.
+  function step6PartCode(index) {
+    try {
+      var sd = state && state.steps && state.steps["6"];
+      if (!sd) return "";
+      if (Array.isArray(sd.code)) return sd.code[index] || "";
+      return index === 0 ? (sd.code || "") : "";
+    } catch (e) { return ""; }
+  }
+  function step6RoundConfigsCode() { return step6PartCode(0); }
+
+  // The rounds the Play tab and the map editor should show right now.
+  function playRounds() {
+    try {
+      var raw = step6RoundConfigsCode();
+      var parsed = raw ? parseRoundConfigsSource(raw) : null;
+      if (!parsed || !parsed.length) return PLAY_ROUND_DEFAULTS;
+      return parsed.map(function (d, i) {
+        return roundDictToPlayConfig(d, PLAY_ROUND_DEFAULTS[Math.min(i, PLAY_ROUND_DEFAULTS.length - 1)]);
+      });
+    } catch (e) {
+      return PLAY_ROUND_DEFAULTS;
+    }
+  }
+  function playRoundCount() { return playRounds().length; }
+  function playRoundAt(i) {
+    var list = playRounds();
+    return list[i] || list[list.length - 1] || PLAY_ROUND_DEFAULTS[0];
+  }
+
+  // TODO 6 Part 2/3's pacing numbers, read live the same way, so the Play
+  // tab actually feels like the game the student is designing.
+  function parseNumberSetting(code, name, lo, hi, fallback) {
+    try {
+      var m = String(code || "").match(new RegExp("^\\s*" + name + "\\s*=\\s*(-?\\d+(?:\\.\\d+)?)", "m"));
+      if (!m) return fallback;
+      var v = parseFloat(m[1]);
+      if (!isFinite(v)) return fallback;
+      return Math.max(lo, Math.min(hi, v));
+    } catch (e) { return fallback; }
+  }
+  function parseBoolSetting(code, name, fallback) {
+    try {
+      var m = String(code || "").match(new RegExp("^\\s*" + name + "\\s*=\\s*(True|False)", "m"));
+      return m ? m[1] === "True" : fallback;
+    } catch (e) { return fallback; }
+  }
+  function playPacing() {
+    var raw = step6PartCode(1);
+    return {
+      moveDelayMs: parseNumberSetting(raw, "PLAYER_MOVE_DELAY_MS", 0, 2000, 100),
+      allowHint: parseBoolSetting(raw, "ALLOW_PATH_HINT", true),
+      maxHints: Math.round(parseNumberSetting(raw, "MAX_HINT_COUNT", 0, 99, 2)),
+    };
+  }
+
+  // Grows/trims the map editor's saved rounds to match the current round
+  // count, and keeps activeRound inside it. Painted rounds are never
+  // discarded on shrink - a student who deletes round 4 and puts it back
+  // gets their drawing back.
+  function ensureRoundSlots() {
+    var md = state.mapEditorData;
+    var n = playRoundCount();
+    while (md.rounds.length < n) md.rounds.push(null);
+    if (md.activeRound >= n) md.activeRound = Math.max(0, n - 1);
+    return n;
   }
 
   function buildRoundConfigsSource(rounds) {
@@ -3862,6 +4515,10 @@
     // up here without a manual reload.
     var itemDefsCache = null;
     var selectedItemIndex = 0;
+    // Assigned by mount() to its own renderTabs(), so show()/update() (and
+    // the debounced hand-edit sync) can rebuild the round tabs when the
+    // student adds or removes a round in ROUND_CONFIGS.
+    var renderTabsActive = null;
 
     function loadItemDefs() {
       ensurePyodide().then(function (py) {
@@ -4025,7 +4682,10 @@
       var d = ad.round;
       if (!d || !refs) return;
       var ta = document.querySelector("#mainPanel .code-textarea");
-      var code = ta ? ta.value : (state.steps["6"].code || "");
+      // TODO 6 is a multi-part step, so its saved code is an ARRAY - part 0
+      // is the ROUND_CONFIGS block this editor owns (and the first
+      // .code-textarea on the page is that same part's editor).
+      var code = ta ? ta.value : step6RoundConfigsCode();
       var parsed = parseRoundConfigsSource(code);
       var derived = derivedCountsFromGrid(d.grid, parsed ? parsed[ad.idx] : null, parsed ? parsed[ad.idx] && parsed[ad.idx].time_limit_seconds : null);
       if (!force && parsed && d.lastSyncedDict && !dictsRoughlyEqual(parsed[ad.idx], d.lastSyncedDict)) {
@@ -4035,9 +4695,19 @@
       }
       syncConflict = null;
       renderConflict();
-      var rounds3 = parsed ? parsed.slice() : [derived, derived, derived];
-      rounds3[ad.idx] = derived;
-      var newCode = buildRoundConfigsSource(rounds3);
+      // Keep however many rounds the student actually declared - painting
+      // round 2 of a five-round game must not silently rewrite it down to
+      // three. When nothing parses, fall back to one entry per round tab.
+      var allRounds;
+      if (parsed) {
+        allRounds = parsed.slice();
+      } else {
+        allRounds = [];
+        for (var ri = 0; ri < Math.max(1, playRoundCount()); ri++) allRounds.push(derived);
+      }
+      while (allRounds.length <= ad.idx) allRounds.push(derived);
+      allRounds[ad.idx] = derived;
+      var newCode = buildRoundConfigsSource(allRounds);
       d.lastSyncedDict = derived;
       writeStep6Code(newCode);
       persist();
@@ -4049,7 +4719,11 @@
         ta.value = newCode;
         ta.dispatchEvent(new Event("input"));
       } else {
-        state.steps["6"].code = newCode;
+        // Multi-part step: only part 0 (ROUND_CONFIGS) belongs to the map
+        // editor. Assigning the whole `code` here would replace the parts
+        // array with a bare string and wipe Part 2/3 and Part 3/3.
+        var sd = state.steps["6"];
+        if (Array.isArray(sd.code)) sd.code[0] = newCode; else sd.code = newCode;
         persist();
       }
     }
@@ -4083,7 +4757,7 @@
     function refreshForRound() {
       var ad = activeRoundData();
       if (!ad.round) {
-        var cfg = PLAY_ROUND_CONFIGS[ad.idx];
+        var cfg = playRoundAt(ad.idx);
         ensureRound(ad.idx, cfg.rows, cfg.cols);
       }
       var width = fitWidth(refs ? refs.container : document.body, 340);
@@ -4178,9 +4852,18 @@
       var ta = document.querySelector("#mainPanel .code-textarea");
       if (!ta) return;
       var parsed = parseRoundConfigsSource(ta.value);
-      var ad = activeRoundData();
       if (!parsed) { if (refs) refs.parseNotice.textContent = "Couldn't read your ROUND_CONFIGS code right now — showing your last painted map."; return; }
-      if (refs) refs.parseNotice.textContent = "";
+      // The student may have just added or deleted a round: refresh the tab
+      // row (and clamp activeRound) BEFORE reading the active round, so the
+      // reconcile below never compares against a round that no longer exists.
+      if (renderTabsActive) renderTabsActive();
+      var ad = activeRoundData();
+      if (refs) {
+        refs.parseNotice.textContent = parsed.length === 1
+          ? "Your ROUND_CONFIGS has 1 round. Add another dictionary to the list to design more."
+          : "Your ROUND_CONFIGS has " + parsed.length + " rounds — one tab each above.";
+      }
+      if (!parsed[ad.idx]) return;
       if (!ad.round) {
         // Not painted yet (shouldn't normally happen - refreshForRound()
         // always ensures a round exists on mount) - nothing to reconcile
@@ -4196,17 +4879,13 @@
     return {
       mount: function (container) {
         container.innerHTML = "";
+        // One tab per round the student's OWN ROUND_CONFIGS declares, not a
+        // fixed three - adding a 4th dictionary in TODO 6 Part 1/3 makes a
+        // "Round 4" tab appear here as soon as it parses, so the map editor
+        // never silently ignores rounds they invented.
         var tabs = el("div", { class: "viz-controlbar" });
-        for (var i = 0; i < 3; i++) {
-          (function (idx) {
-            tabs.appendChild(el("button", {
-              class: "btn btn-small" + (state.mapEditorData.activeRound === idx ? " btn-primary" : ""),
-              type: "button", text: "Round " + (idx + 1),
-              onclick: function () { state.mapEditorData.activeRound = idx; persist(); refreshForRound(); renderTabsActive(); },
-            }));
-          })(i);
-        }
         container.appendChild(tabs);
+        var tabCountRendered = -1;
 
         // NOTE (this session): the teacher found rows/cols + "Apply size",
         // cluster size + seed + "Generate", and the brush-size selector to
@@ -4248,19 +4927,37 @@
           canvas: null, ctx: null,
         };
 
-        function renderTabsActive() {
+        function renderTabs() {
+          var n = ensureRoundSlots();
+          if (n !== tabCountRendered) {
+            tabs.innerHTML = "";
+            for (var i = 0; i < n; i++) {
+              (function (idx) {
+                tabs.appendChild(el("button", {
+                  class: "btn btn-small", type: "button", text: "Round " + (idx + 1),
+                  onclick: function () {
+                    state.mapEditorData.activeRound = idx;
+                    persist(); refreshForRound(); renderTabs();
+                  },
+                }));
+              })(i);
+            }
+            tabCountRendered = n;
+          }
           Array.prototype.forEach.call(tabs.querySelectorAll("button"), function (btn, idx) {
             btn.className = "btn btn-small" + (state.mapEditorData.activeRound === idx ? " btn-primary" : "");
           });
         }
+        renderTabsActive = renderTabs;
 
         debouncedTextSync = debounce(onHandEdit, 500);
         attachTextSync();
+        renderTabs();
         refreshForRound();
         loadItemDefs();
       },
-      show: function () { attachTextSync(); refreshForRound(); loadItemDefs(); },
-      update: function () { attachTextSync(); refreshForRound(); loadItemDefs(); },
+      show: function () { attachTextSync(); if (renderTabsActive) renderTabsActive(); refreshForRound(); loadItemDefs(); },
+      update: function () { attachTextSync(); if (renderTabsActive) renderTabsActive(); refreshForRound(); loadItemDefs(); },
       unmount: function () {
         if (boundTextarea && onInputHandler) boundTextarea.removeEventListener("input", onInputHandler);
         refs = null; boundTextarea = null;
@@ -4804,11 +5501,9 @@
   // pure maze-solving game (goal + timer + bomb-reset only, see D4's
   // changelog note) - no score, no swamp, no monster.
 
-  var PLAY_ROUND_CONFIGS = [
-    { rows: 11, cols: 15, cellSize: 30, extraOpenWalls: 5, bombCount: 2, customItemCount: 2, timeLimitSeconds: 70 },
-    { rows: 15, cols: 21, cellSize: 24, extraOpenWalls: 6, bombCount: 4, customItemCount: 3, timeLimitSeconds: 55 },
-    { rows: 17, cols: 25, cellSize: 20, extraOpenWalls: 8, bombCount: 6, customItemCount: 4, timeLimitSeconds: 45 },
-  ];
+  // The round list and the pacing numbers both come from the student's own
+  // TODO 6 code now (see playRounds() / playPacing() above) - these are only
+  // the values used before TODO 6 has been touched.
   var PLAY_MAX_HINT_COUNT = 2; // mirrors settings.py's MAX_HINT_COUNT
   var PLAY_MOVE_DELAY_MS = 100;
 
@@ -5017,9 +5712,9 @@
 
     function startRound(index) {
       roundIndex = index;
-      var cfg = PLAY_ROUND_CONFIGS[roundIndex];
+      var cfg = playRoundAt(roundIndex);
       var caps = capabilities();
-      hintsRemaining = PLAY_MAX_HINT_COUNT;
+      hintsRemaining = playPacing().maxHints;
       hintPath = [];
       running = false;
 
@@ -5110,9 +5805,9 @@
 
     function updateStatusGrid() {
       if (!refs) return;
-      refs.roundEl.textContent = (roundIndex + 1) + " / " + PLAY_ROUND_CONFIGS.length;
+      refs.roundEl.textContent = (roundIndex + 1) + " / " + playRoundCount();
       refs.timeEl.textContent = String(Math.max(0, timeLeft)) + "s";
-      refs.hintsEl.textContent = hintsRemaining + " / " + PLAY_MAX_HINT_COUNT;
+      refs.hintsEl.textContent = hintsRemaining + " / " + playPacing().maxHints;
     }
 
     function renderAll() { draw(); updateStatusGrid(); refreshChecklist(); }
@@ -5197,7 +5892,7 @@
         running = false;
         clearInterval(timerId); timerId = null;
         setControlsRunning(false);
-        if (roundIndex + 1 < PLAY_ROUND_CONFIGS.length) {
+        if (roundIndex + 1 < playRoundCount()) {
           statusLine("Round " + (roundIndex + 1) + " clear! Starting round " + (roundIndex + 2) + "…");
           setTimeout(function () { startRound(roundIndex + 1); }, prefersReducedMotion() ? 0 : 900);
         } else {
@@ -5221,7 +5916,7 @@
       var caps = capabilities();
       if (!caps.movement) { statusLine(teachingNote("Finish TODO 2, 3 and 4 to make the player move.")); return; }
       var now = performance.now();
-      if (busyMove || now - lastMoveAt < PLAY_MOVE_DELAY_MS) return;
+      if (busyMove || now - lastMoveAt < playPacing().moveDelayMs) return;
       busyMove = true;
       var codes = { c21: state.steps["2"].code, c22: state.steps["3"].code, c23: state.steps["4"].code };
       ensurePyodide().then(function (py) {
@@ -5241,6 +5936,13 @@
     function onHint() {
       var caps = capabilities();
       if (!caps.hint) return;
+      // ALLOW_PATH_HINT (TODO 6 Part 2/3) can switch the Hint button off
+      // entirely - the Play tab has to respect the student's own setting,
+      // or the game they are designing isn't the game they are testing.
+      if (!playPacing().allowHint) {
+        statusLine("Hints are switched off in your settings (ALLOW_PATH_HINT = False).");
+        return;
+      }
       if (hintsRemaining <= 0) { statusLine("No hint uses left this round."); return; }
       var bombPositions = {};
       bombs.forEach(function (b) { if (b.active) bombPositions[b.row + "," + b.col] = true; });
