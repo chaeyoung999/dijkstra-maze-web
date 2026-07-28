@@ -1,0 +1,261 @@
+# -*- coding: utf-8 -*-
+"""Extracts the REAL grading-harness generator functions straight out of
+../app.js (regex, not retyped) and runs them for real under cscript (ES3
+JScript) with a given student "code" string, producing the exact Python
+source text app.js would send to Pyodide for it. That Python source can
+then be executed with a real Python interpreter to check the grading
+result - this proves the real, shipped harness logic (not a hand
+re-typed stand-in) behaves as expected for a given implementation.
+
+Requires: Windows with cscript (part of every Windows install).
+
+Importable as a module: exposes generate_harness_source(fn_name, *args)
+which returns the real Python source string app.js would produce for
+harness function `fn_name` called with the given student-code string
+argument(s).
+
+See test_alt_implementations.py in this same directory for the permanent
+regression suite built on top of this (verifies alternate-but-equivalent
+implementations are accepted, and genuinely wrong ones are rejected, for
+every behaviour-graded TODO).
+"""
+import re
+import subprocess
+import os
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+APP_JS = os.path.join(HERE, "..", "app.js")
+with open(APP_JS, encoding="utf-8") as f:
+    SRC = f.read()
+
+
+def extract_function(name):
+    m = re.search(r"function %s\s*\(" % re.escape(name), SRC)
+    if not m:
+        raise SystemExit("function not found: %s" % name)
+    start = m.start()
+    open_brace = SRC.index("{", m.end())
+    depth = 0
+    i = open_brace
+    in_s = in_d = in_lc = in_bc = False
+    n = len(SRC)
+    while i < n:
+        c = SRC[i]
+        nx = SRC[i + 1] if i + 1 < n else ""
+        if in_lc:
+            if c == "\n":
+                in_lc = False
+            i += 1
+            continue
+        if in_bc:
+            if c == "*" and nx == "/":
+                in_bc = False
+                i += 2
+                continue
+            i += 1
+            continue
+        if in_s:
+            if c == "\\":
+                i += 2
+                continue
+            if c == "'":
+                in_s = False
+            i += 1
+            continue
+        if in_d:
+            if c == "\\":
+                i += 2
+                continue
+            if c == '"':
+                in_d = False
+            i += 1
+            continue
+        if c == "/" and nx == "/":
+            in_lc = True
+            i += 2
+            continue
+        if c == "/" and nx == "*":
+            in_bc = True
+            i += 2
+            continue
+        if c == "/":
+            j = len(SRC[:i].rstrip())
+            prev = SRC[j - 1] if j > 0 else ""
+            if prev in "(,=:[!&|?;{" or prev == "":
+                k = i + 1
+                found_close = False
+                while k < n:
+                    if SRC[k] == "\\":
+                        k += 2
+                        continue
+                    if SRC[k] == "\n":
+                        break
+                    if SRC[k] == "/":
+                        found_close = True
+                        k += 1
+                        break
+                    k += 1
+                if found_close:
+                    while k < n and SRC[k].isalpha():
+                        k += 1
+                    i = k
+                    continue
+            i += 1
+            continue
+        if c == "'":
+            in_s = True
+            i += 1
+            continue
+        if c == '"':
+            in_d = True
+            i += 1
+            continue
+        if c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                return SRC[start:i + 1]
+        i += 1
+    raise SystemExit("unterminated function: %s" % name)
+
+
+def extract_var_line(name):
+    m = re.search(r"^\s*var %s\s*=.*?;\s*$" % re.escape(name), SRC, re.M)
+    if not m:
+        raise SystemExit("var not found: %s" % name)
+    return m.group(0)
+
+
+FUNCS = [
+    "toBase64Utf8", "isCommentOnlyLine", "reindentPython", "buildFnSource",
+    "buildFnSourceTwoParts", "b64Line",
+    "harness_movement_2", "harness_guardClause_3", "harness_positionDelta_4",
+    "harness_dijkstra_5",
+]
+VARS = ["PY_PRELUDE"]
+
+_pieces = [extract_var_line(v) for v in VARS] + [extract_function(f) for f in FUNCS]
+COMBINED_ES3 = "\n\n".join(_pieces)
+COMBINED_ES3 = COMBINED_ES3.replace("const ", "var ")
+COMBINED_ES3 = re.sub(r",(\s*\n\s*[}\]])", r"\1", COMBINED_ES3)
+
+_hm2 = [p for p in _pieces if p.startswith("function harness_movement_2")][0]
+assert "FakeMaze" in _hm2 and "FakePlayer" in _hm2, "extracted harness_movement_2 doesn't look like the current B1 (outcome-based) rewrite - has app.js changed shape?"
+
+POLYFILLS = r"""
+if (!Array.prototype.forEach) { Array.prototype.forEach = function (fn) { for (var i = 0; i < this.length; i++) fn(this[i], i, this); }; }
+if (!Array.prototype.map) { Array.prototype.map = function (fn) { var out = []; for (var i = 0; i < this.length; i++) out.push(fn(this[i], i, this)); return out; }; }
+if (!String.prototype.trim) { String.prototype.trim = function () { return this.replace(/^\s+|\s+$/g, ""); }; }
+
+function btoa(str) {
+  var b64chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  var out = "";
+  var i = 0;
+  while (i < str.length) {
+    var c1 = str.charCodeAt(i++) & 0xff;
+    var haveC2 = i < str.length;
+    var c2 = haveC2 ? (str.charCodeAt(i++) & 0xff) : 0;
+    var haveC3 = i < str.length;
+    var c3 = haveC3 ? (str.charCodeAt(i++) & 0xff) : 0;
+    var e1 = c1 >> 2;
+    var e2 = ((c1 & 3) << 4) | (c2 >> 4);
+    var e3 = ((c2 & 15) << 2) | (c3 >> 6);
+    var e4 = c3 & 63;
+    out += b64chars.charAt(e1) + b64chars.charAt(e2);
+    out += haveC2 ? b64chars.charAt(e3) : "=";
+    out += haveC3 ? b64chars.charAt(e4) : "=";
+  }
+  return out;
+}
+function encodeURIComponent(str) {
+  var unreserved = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.!~*'()";
+  var out = "";
+  for (var i = 0; i < str.length; i++) {
+    var ch = str.charAt(i);
+    var code = str.charCodeAt(i);
+    if (unreserved.indexOf(ch) !== -1) {
+      out += ch;
+    } else if (code < 0x80) {
+      var hex = code.toString(16).toUpperCase();
+      if (hex.length < 2) hex = "0" + hex;
+      out += "%" + hex;
+    } else {
+      var b1 = 0xC0 | (code >> 6);
+      var b2 = 0x80 | (code & 0x3F);
+      var h1 = b1.toString(16).toUpperCase(); if (h1.length < 2) h1 = "0" + h1;
+      var h2 = b2.toString(16).toUpperCase(); if (h2.length < 2) h2 = "0" + h2;
+      out += "%" + h1 + "%" + h2;
+    }
+  }
+  return out;
+}
+function unescape(str) {
+  var out = "";
+  var i = 0;
+  while (i < str.length) {
+    if (str.charAt(i) === "%" && i + 2 < str.length) {
+      out += String.fromCharCode(parseInt(str.substr(i + 1, 2), 16));
+      i += 3;
+    } else {
+      out += str.charAt(i);
+      i++;
+    }
+  }
+  return out;
+}
+"""
+
+SCRIPT_TEMPLATE = r"""
+var window = this;
+__POLYFILLS__
+
+__COMBINED__
+
+var fso = new ActiveXObject("Scripting.FileSystemObject");
+var f = fso.CreateTextFile("__OUTFILE__", true, true);
+f.WriteLine(__CALL__);
+f.Close();
+"""
+
+
+def _js_string_literal(s):
+    """JScript-safe double-quoted string literal for a Python source blob."""
+    out = s.replace("\\", "\\\\").replace('"', '\\"')
+    out = out.replace("\r\n", "\\n").replace("\n", "\\n").replace("\r", "\\n")
+    return '"' + out + '"'
+
+
+def generate_harness_source(fn_name, *code_args):
+    """Calls the REAL, extracted app.js harness generator fn_name with the
+    given student-code string argument(s) and returns the exact Python
+    source text app.js would hand to Pyodide."""
+    args_js = ", ".join(_js_string_literal(a) for a in code_args)
+    call = "%s(%s)" % (fn_name, args_js)
+    out_file = os.path.join(HERE, "_harness_out.py")
+    if os.path.exists(out_file):
+        os.remove(out_file)
+    script = (SCRIPT_TEMPLATE
+              .replace("__POLYFILLS__", POLYFILLS)
+              .replace("__COMBINED__", COMBINED_ES3)
+              .replace("__OUTFILE__", "_harness_out.py")
+              .replace("__CALL__", call))
+    js_path = os.path.join(HERE, "_harness_call.js")
+    with open(js_path, "w", encoding="utf-16") as f:
+        f.write(script)
+    result = subprocess.run(
+        ["cscript", "//nologo", "//E:jscript", "_harness_call.js"],
+        cwd=HERE, capture_output=True, text=True,
+    )
+    if result.returncode != 0 or result.stderr.strip():
+        raise SystemExit("cscript failed for %s:\nSTDOUT: %s\nSTDERR: %s" % (fn_name, result.stdout, result.stderr))
+    with open(out_file, encoding="utf-16") as f:
+        text = f.read()
+    return text
+
+
+if __name__ == "__main__":
+    src = generate_harness_source("harness_movement_2", 'moved = self.player.try_move("left", self.maze)')
+    print(src[:400])
+    print("... (%d chars total)" % len(src))

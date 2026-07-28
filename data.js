@@ -391,10 +391,10 @@ const COURSE_STEPS = [
           "BOMB_EXPLOSION_DURATION_MS = 500",
         ],
         starter: [
-          'PLAYER_IMAGE_PATH = None  # Example: "assets/images/boy.png" (also try lion.png, duck.png, player_ninja.png, player_robot.png)',
-          'GOAL_IMAGE_PATH = None  # Example: "assets/images/house.png" (also try goal_flag.png, goal_door.png, goal_chest.png)',
-          'BOMB_IMAGE_PATH = None  # Example: "assets/images/bomb.png" (also try bomb_2.png)',
-          'FLOOR_TILE_IMAGE_PATH = None  # Background floor for open path cells. Example: "assets/images/floor_tile_1.png" (also try floor_tile_2.png)',
+          "PLAYER_IMAGE_PATH = None",
+          "GOAL_IMAGE_PATH = None",
+          "BOMB_IMAGE_PATH = None",
+          "FLOOR_TILE_IMAGE_PATH = None  # Background floor for open path cells.",
         ],
       },
       {
@@ -406,8 +406,8 @@ const COURSE_STEPS = [
           "CUSTOM_ITEM_SOUND_PATH = \"assets/sounds/pickup_3.wav\"",
         ],
         starter: [
-          'BOMB_SOUND_PATH = None  # Example: "assets/sounds/explosion_1.wav" (also try explosion_2.wav, explosion_3.wav)',
-          'BACKGROUND_MUSIC_PATH = None  # Example: "assets/sounds/bgm_1.wav" (also try bgm_2.wav)',
+          "BOMB_SOUND_PATH = None",
+          "BACKGROUND_MUSIC_PATH = None",
         ],
       },
     ],

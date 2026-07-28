@@ -463,9 +463,9 @@
   //                                     // trigger field instead)
   //
   // `name` is the step's `visualizer` field from data.js (one of:
-  // titleCard, playerMove, bfsFlood, scoreBoard, dijkstraFrontier,
-  // mapEditor, assetPicker). Steps whose visualizer has no registered
-  // implementation yet fall back to a placeholder panel.
+  // titleCard, playerMove, dijkstraFrontier, mapEditor, assetPicker,
+  // customItemLab). Steps whose visualizer has no registered implementation
+  // yet fall back to a placeholder panel.
   var Visualizer = (function () {
     var registry = {};
     var activeName = null;
@@ -2148,11 +2148,12 @@
   //
   // Shared event vocabulary (fields vary by type, but reused across
   // visualizers so the playback code is generic):
-  //   {type:"carve", from:[r,c], to:[r,c], direction, stackDepth}   (DFS)
-  //   {type:"backtrack", to:[r,c], stackDepth}                     (DFS)
-  //   {type:"visit", cell:[r,c], cost:n, from:[r,c], queue:[...]}  (BFS/Dijkstra)
-  //   {type:"path", cells:[[r,c],...]}                             (BFS/Dijkstra)
-  //   {type:"score", kind, label, delta, total}                    (scoreboard)
+  //   {type:"visit", cell:[r,c], cost:n, from:[r,c], queue:[...]}  (Dijkstra)
+  //   {type:"path", cells:[[r,c],...]}                             (Dijkstra)
+  // (DFS carve/backtrack and scoreboard event types used to exist here too,
+  // back when maze generation was a graded TODO and the game had a score -
+  // both are given/non-TODO or removed now, see the comment just below and
+  // D4's changelog note, so no harness produces those event shapes any more.)
   //
   // Every harness that runs a student-code loop (BFS, Dijkstra) enforces a
   // hard step budget AND a hard cap on trace length, and reports a
@@ -2183,15 +2184,6 @@
     IMAGE_CACHE[path] = p;
     return p;
   }
-  var SPRITE = {
-    player: "assets/images/player_ninja.png",
-    goal: "assets/images/goal_chest.png",
-    swamp: "assets/images/terrain_swamp_1.png",
-    item: "assets/images/item_gem_1.png",
-    bomb: "assets/images/bomb.png",
-    floor: "assets/images/floor_tile_1.png",
-  };
-
   // ------------------------------------------------------ canvas helpers
   function makeCanvas(cssWidth, cssHeight) {
     var canvas = document.createElement("canvas");
@@ -3080,7 +3072,7 @@
   })();
   Visualizer.register("playerMove", PlayerMoveViz);
 
-  // -------------------------------------------------- 14f. scoreBoard viz
+  // -------------------------------------------------- 14f. customItemLab viz
 
   // D4 replacement for the old ScoreBoardViz (which animated a running
   // score across treasure/swamp/custom_item/custom_terrain tiles - none of
@@ -3377,10 +3369,11 @@
   // -------------------------------------------------- 14h. mapEditor viz
   //
   // Painted rounds use a simple TILE-obstacle model: a WALL tile blocks
-  // movement; every other tile is open floor with a terrain effect
-  // (NORMAL/SWAMP/CUSTOM) and may additionally carry a TREASURE or BOMB
-  // marker. This reads naturally as "click to paint a square" for a
-  // student - deliberately simpler than the edge-wall maze DFS generation
+  // movement; every other tile is open floor (NORMAL) and may additionally
+  // carry a CUSTOM_ITEM or BOMB marker - no terrain-effect tile types exist
+  // any more (SWAMP/CUSTOM terrain were removed along with score, see D4's
+  // changelog note). This reads naturally as "click to paint a square" for
+  // a student - deliberately simpler than the edge-wall maze DFS generation
   // uses. paintedGridToWallGrid() below converts a painted grid into the
   // exact same {top,right,bottom,left} wall format used everywhere else in
   // this file, so a painted round can be fed straight into the existing
@@ -3430,7 +3423,7 @@
     var itemCells = [];
     for (var r = 0; r < grid.length; r++) for (var c = 0; c < grid[r].length; c++) if (grid[r][c] === "CUSTOM_ITEM") itemCells.push([r, c]);
     var itemsReachable = itemCells.filter(function (p) { return !!reach[p[0] + "," + p[1]]; }).length;
-    return { goalReachable: goalReachable, treasuresTotal: itemCells.length, treasuresReachable: itemsReachable, reach: reach };
+    return { goalReachable: goalReachable, itemsTotal: itemCells.length, itemsReachable: itemsReachable, reach: reach };
   }
 
   function paintedGridToWallGrid(grid) {
@@ -3754,9 +3747,9 @@
         ctx.strokeRect(cursor.c * CELL + 1, cursor.r * CELL + 1, CELL - 2, CELL - 2);
       }
       refs.verdictLine.textContent = (verdict.goalReachable ? "Goal reachable ✓" : "Goal reachable ✗") + " · " +
-        verdict.treasuresReachable + "/" + verdict.treasuresTotal + " custom items reachable" +
-        (verdict.treasuresReachable < verdict.treasuresTotal ? " ✗" : (verdict.treasuresTotal > 0 ? " ✓" : ""));
-      refs.verdictLine.className = "small " + (verdict.goalReachable && verdict.treasuresReachable === verdict.treasuresTotal ? "verdict-good-text" : "verdict-bad-text");
+        verdict.itemsReachable + "/" + verdict.itemsTotal + " custom items reachable" +
+        (verdict.itemsReachable < verdict.itemsTotal ? " ✗" : (verdict.itemsTotal > 0 ? " ✓" : ""));
+      refs.verdictLine.className = "small " + (verdict.goalReachable && verdict.itemsReachable === verdict.itemsTotal ? "verdict-good-text" : "verdict-bad-text");
     }
 
     function renderPalette() {
@@ -4132,6 +4125,14 @@
   var AssetPickerViz = (function () {
     var refs = null;
     var activeSlotKey = ASSET_SLOTS[0].key;
+    // Bundled sounds get their OWN always-visible section (see
+    // renderAlwaysVisibleSounds) independent of activeSlotKey, since the
+    // default/most-common activeSlotKey is an image slot and a student
+    // browsing images would otherwise never see that a sound list exists
+    // at all (teacher report: "no way to listen to sounds in the sidebar"
+    // unless you happen to click a sound row in the slot list first).
+    var soundSlots = ASSET_SLOTS.filter(function (s) { return s.kind === "sound"; });
+    var activeSoundSlotKey = soundSlots.length ? soundSlots[0].key : null;
     var dirHandle = null;
     var dirStatus = "unchecked"; // unchecked | none | granted | denied | unsupported
     // The custom-upload flow (folder connect + drag/drop + uploaded list)
@@ -4395,6 +4396,31 @@
       }
     }
 
+    // Always rendered directly below the bundled images, regardless of
+    // which slot the main slot list has selected - a student browsing
+    // player/goal/bomb/floor-tile images should still see (and be able to
+    // preview + use) the bundled sounds without switching slots first. Has
+    // its own tiny slot selector (one button per sound-kind ASSET_SLOTS
+    // entry, e.g. "Bomb explosion sound" / "Background music") so "Use"
+    // still knows which of the two sound variables to write into.
+    function renderAlwaysVisibleSounds(container) {
+      if (!soundSlots.length) return;
+      var wrap = el("div", { class: "asset-sound-always" });
+      if (soundSlots.length > 1) {
+        var tabs = el("div", { class: "viz-controlbar" });
+        soundSlots.forEach(function (s) {
+          tabs.appendChild(el("button", {
+            class: "btn btn-small" + (s.key === activeSoundSlotKey ? " btn-primary" : ""),
+            type: "button",
+            onclick: function () { activeSoundSlotKey = s.key; renderAllPanels(); },
+          }, [s.label]));
+        });
+        wrap.appendChild(tabs);
+      }
+      renderBundledGrid(wrap, slotByKey(activeSoundSlotKey));
+      container.appendChild(wrap);
+    }
+
     function renderUploadArea(container, slot) {
       var box = el("div", { class: "asset-upload-box" });
       box.appendChild(el("div", { class: "sidebar-group-title", text: "Upload your own" }));
@@ -4498,6 +4524,11 @@
       var slot = slotByKey(activeSlotKey);
       renderPreview(refs.body, slot);
       renderBundledGrid(refs.body, slot);
+      // Skip the always-visible sounds section when the main slot list is
+      // ALREADY showing a sound slot (renderBundledGrid just rendered the
+      // sound list above) - otherwise the same sound list would render
+      // twice in a row.
+      if (slot.kind !== "sound") renderAlwaysVisibleSounds(refs.body);
       renderCustomUploadSection(refs.body, slot);
     }
 
@@ -4521,10 +4552,11 @@
   // One cumulative maze game, always mounted in the Play tab. It starts
   // deliberately broken and switches on real capabilities as Required steps
   // are COMPLETED (never for skipped steps). Every gated capability that
-  // touches game logic (movement, maze generation, swamp placement,
-  // scoring, the Dijkstra hint) runs the student's ACTUAL current code
-  // through Pyodide, exactly like the Step-view visualizers above - nothing
-  // here is faked either.
+  // touches game logic (movement, the Dijkstra hint route) runs the
+  // student's ACTUAL current code through Pyodide, exactly like the
+  // Step-view visualizers above - nothing here is faked either. This is a
+  // pure maze-solving game (goal + timer + bomb-reset only, see D4's
+  // changelog note) - no score, no swamp, no monster.
 
   var PLAY_ROUND_CONFIGS = [
     { rows: 11, cols: 15, cellSize: 30, extraOpenWalls: 5, bombCount: 2, customItemCount: 2, timeLimitSeconds: 70 },

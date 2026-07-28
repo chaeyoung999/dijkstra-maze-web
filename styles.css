@@ -305,7 +305,7 @@ body.kiosk-mode #kioskPlayView .play-live-banner {
 
 /* Slim HUD + dominant board: once the title card/checklist/banner are gone
    (above), the remaining play-frame content is just a compact controls
-   strip, a compact score/time/round/terrain strip, and the board itself -
+   strip, a compact round/time/hints strip, and the board itself -
    restyle those two strips to sit close together as one slim HUD, so the
    board (sized up separately in app.js's playBoardMaxWidth()/
    playBoardCellCap() for kiosk specifically) reads as the dominant,
@@ -1145,16 +1145,11 @@ a.btn { text-decoration: none; cursor: pointer; }
 .titlecard-status { margin-top: 12px; font-size: 0.76rem; }
 .titlecard-status.status-bad { color: #e0685f; }
 
-/* ------------------------------------------------------------ scoreboard */
-.score-strip { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
-.score-tile {
-  width: 34px; height: 34px;
-  border-radius: 6px;
-  border: 2px solid rgba(255,255,255,0.15);
-  opacity: 0.45;
-}
-.score-tile.is-done { opacity: 0.9; }
-.score-tile.is-current { opacity: 1; border-color: #f0c04a; box-shadow: 0 0 0 2px rgba(240,192,74,0.4); }
+/* (The old .score-strip/.score-tile rules used to live here, for the
+   ScoreBoardViz that animated a running score across treasure/swamp/
+   custom_item/custom_terrain tiles - deleted along with score itself; its
+   replacement, CustomItemLabViz, uses plain .viz-readout-style cards
+   instead, so these classes are gone too.) */
 
 /* --------------------------------------------------------------- Play tab */
 .play-frame { display: flex; flex-direction: column; gap: 10px; }
@@ -1331,6 +1326,10 @@ a.btn { text-decoration: none; cursor: pointer; }
 
 .asset-sound-list { list-style: none; margin: 8px 0 12px; padding: 0; font-size: 0.82rem; }
 .asset-sound-list li { display: flex; align-items: center; gap: 6px; padding: 4px 0; border-bottom: 1px dashed var(--panel-border); }
+/* The always-visible sounds section (see renderAlwaysVisibleSounds) sits
+   right below the bundled images regardless of the selected slot - a
+   top divider makes clear it's a separate, independent section. */
+.asset-sound-always { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--panel-border); }
 
 .asset-upload-box {
   border: 2px dashed var(--panel-border);
@@ -1387,8 +1386,8 @@ a.btn { text-decoration: none; cursor: pointer; }
    Applied a "UI UX Pro Max" tool audit (accessibility checklist only - its
    Hero-Centric/Claymorphism marketing-page recommendations and Google
    Fonts CDN imports were NOT adopted; this is an IDE-like app with a
-   working dungeon/treasure-hunt theme, not a landing page, and this
-   project stays 100% offline/no-external-CDN).
+   working dungeon/parchment-and-torch visual theme, not a landing page,
+   and this project stays 100% offline/no-external-CDN).
 
    Contrast (WCAG 1.4.3, 4.5:1 for normal text) - computed against actual
    hex values, not eyeballed. Found and fixed real failures:
