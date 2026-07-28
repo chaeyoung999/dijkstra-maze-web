@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Dijkstra Maze — 교사용 정답</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+  body { margin: 0; padding: 24px; }
+  .sheet { max-width: 980px; margin: 0 auto; }
+  .gate { max-width: 460px; margin: 12vh auto; text-align: center; }
+  .gate input { font-size: 20px; padding: 10px 14px; width: 160px; text-align: center;
+                letter-spacing: 6px; margin: 12px 0; }
+  .ans { border: 1px solid rgba(120, 90, 40, 0.35); border-radius: 10px;
+         padding: 14px 16px; margin: 0 0 16px; }
+  .ans h3 { margin: 0 0 2px; font-size: 17px; }
+  .ans .meta { font-size: 12px; opacity: 0.72; margin-bottom: 8px; }
+  .ans .note { font-size: 14px; margin: 0 0 10px; line-height: 1.55; }
+  .ans pre { margin: 0; padding: 12px; overflow-x: auto; border-radius: 8px;
+             background: rgba(20, 16, 10, 0.9); color: #f2e7cf;
+             font-family: ui-monospace, Consolas, monospace; font-size: 13px; line-height: 1.5; }
+  .tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 99px;
+         border: 1px solid currentColor; margin-right: 6px; }
+  .tag.req { color: #a8551b; }
+  .tag.bonus { color: #2f6f4f; }
+  .warn { border-left: 4px solid #c2410c; padding: 10px 14px; margin: 0 0 20px;
+          font-size: 14px; line-height: 1.6; }
+  .links a { display: inline-block; margin-right: 16px; }
+</style>
+</head>
+<body>
+<div class="sheet">
+  <div id="gate" class="gate">
+    <h1>교사용 정답</h1>
+    <p class="small muted">수업에서 쓰는 코드를 입력하세요.</p>
+    <div><input id="code" type="password" inputmode="numeric" autocomplete="off"
+                aria-label="교사용 코드"></div>
+    <div><button id="go" class="btn btn-primary" type="button">열기</button></div>
+    <p id="bad" class="small" style="color:#b91c1c" hidden>코드가 맞지 않습니다.</p>
+  </div>
+
+  <div id="body" hidden>
+    <h1>Dijkstra Maze — 교사용 정답 해설</h1>
+    <p class="warn">
+      <strong>학생에게 이 주소를 알려주지 마세요.</strong>
+      이 페이지는 순수 클라이언트 JavaScript라, 개발자도구를 열 줄 아는 학생은
+      코드 없이도 내용을 볼 수 있습니다. 진짜 접근 차단이 아니라
+      "우연히 발견되지는 않는" 수준의 장치입니다.
+    </p>
+    <p class="links">
+      <a href="index.html">← 학생용 사이트</a>
+      <a href="index.html?mode=play&amp;showcase=1" target="_blank" rel="noopener">
+        ▶ 완성본 시연 게임 열기</a>
+    </p>
+    <p class="small muted">
+      Required 5개는 정답이 정해져 있고, Bonus 4개는 개방형입니다 —
+      아래 코드는 "이렇게 하면 된다"는 한 가지 예일 뿐, 채점기는 동작만 맞으면 통과시킵니다.
+      채점이 잘못 걸릴 때는 각 단계의 <em>Trouble with grading?</em> 링크에 같은 코드를 넣으면
+      정답 처리됩니다.
+    </p>
+    <div id="list"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var ANSWERS = [
+ {
+  "label": "TODO 1",
+  "kind": "Required",
+  "file": "settings.py",
+  "title": "게임 이름 짓기",
+  "note": "문자열 두 개만 바꾸면 됩니다. 따옴표를 지우는 실수가 가장 흔합니다.",
+  "code": "TITLE = \"Maze Runner\"  # Modify this title to match your game.\nGAME_SUBTITLE = \"Solve the maze before time runs out\""
+ },
+ {
+  "label": "TODO 2 (Part 1)",
+  "kind": "Required",
+  "file": "game.py",
+  "title": "키 → 가속도",
+  "note": "Reach the Star에서 한 것과 똑같습니다. 왼쪽/위는 -=, 오른쪽/아래는 +=. elif가 아니라 if 네 개인 이유는 대각선 입력을 허용하기 위해서입니다.",
+  "code": "if keys[pygame.K_LEFT] or keys[pygame.K_e]:\n    self.player.velocity.x -= self.player.acceleration\nif keys[pygame.K_RIGHT] or keys[pygame.K_f]:\n    self.player.velocity.x += self.player.acceleration\nif keys[pygame.K_UP] or keys[pygame.K_c]:\n    self.player.velocity.y -= self.player.acceleration\nif keys[pygame.K_DOWN] or keys[pygame.K_d]:\n    self.player.velocity.y += self.player.acceleration"
+ },
+ {
+  "label": "TODO 2 (Part 2)",
+  "kind": "Required",
+  "file": "game.py",
+  "title": "마찰",
+  "note": "*= 로 제자리에서 줄여야 합니다. = 로 쓰면 속도가 통째로 바뀌어 버립니다. 이 부분을 비워두면 속도가 계속 커져서 조종이 안 됩니다.",
+  "code": "self.player.velocity.x *= self.player.friction\nself.player.velocity.y *= self.player.friction"
+ },
+ {
+  "label": "TODO 2 (Part 3)",
+  "kind": "Required",
+  "file": "game.py",
+  "title": "속도 → 한 칸 이동",
+  "note": "if 두 줄은 이미 주어져 있고, 학생은 try_move 호출 한 줄을 두 군데에 똑같이 쓰기만 하면 됩니다. moved에 반드시 대입해야 합니다.",
+  "code": "speed_x = self.player.velocity.x\nspeed_y = self.player.velocity.y\nif abs(speed_x) >= abs(speed_y) and abs(speed_x) >= PLAYER_MOVE_THRESHOLD:\n    direction = \"right\" if speed_x > 0 else \"left\"\n    moved = self.player.try_move(direction, self.maze)\nelif abs(speed_y) >= PLAYER_MOVE_THRESHOLD:\n    direction = \"bottom\" if speed_y > 0 else \"top\"\n    moved = self.player.try_move(direction, self.maze)"
+ },
+ {
+  "label": "TODO 3",
+  "kind": "Required",
+  "file": "player.py",
+  "title": "가드 절",
+  "note": "or 로 두 조건을 묶고 return False. `== None` 대신 `is None`을 쓰도록 안내하세요.",
+  "code": "if current is None or current.walls[direction]:\n    return False"
+ },
+ {
+  "label": "TODO 4",
+  "kind": "Required",
+  "file": "player.py",
+  "title": "행/열 갱신",
+  "note": "+= 두 줄. = 로 쓰면 이전 위치가 사라집니다.",
+  "code": "self.row += dr\nself.col += dc"
+ },
+ {
+  "label": "TODO 5 (Part 1)",
+  "kind": "Required",
+  "file": "pathfinding.py",
+  "title": "다익스트라 — 후보 비용",
+  "note": "한 줄. cost + step_cost.",
+  "code": "new_cost = cost + step_cost"
+ },
+ {
+  "label": "TODO 5 (Part 2)",
+  "kind": "Required",
+  "file": "pathfinding.py",
+  "title": "다익스트라 — 더 좋으면 갱신",
+  "note": "distance/parent를 함께 갱신하고 heappush까지 해야 탐색이 그 경로를 따라갑니다. heappush를 빠뜨리는 것이 가장 흔한 오답입니다.",
+  "code": "if neighbor not in distance or new_cost < distance[neighbor]:\n    distance[neighbor] = new_cost\n    parent[neighbor] = current\n    heapq.heappush(queue, (new_cost, neighbor))"
+ },
+ {
+  "label": "TODO 6 (Part 1)",
+  "kind": "Bonus",
+  "file": "settings.py",
+  "title": "라운드 설계",
+  "note": "정답 없음(개방형). 라운드 개수를 늘리거나 줄여도 됩니다. 키를 지우면 게임이 죽으므로 값만 바꾸도록 안내하세요.",
+  "code": "ROUND_CONFIGS = [\n    {\n        \"rows\": 11,\n        \"cols\": 15,\n        \"cell_size\": 38,\n        \"extra_open_walls\": 5,\n        \"bomb_count\": 2,\n        \"custom_item_count\": 2,\n        \"time_limit_seconds\": 70,\n    },\n    {\n        \"rows\": 15,\n        \"cols\": 21,\n        \"cell_size\": 30,\n        \"extra_open_walls\": 6,\n        \"bomb_count\": 4,\n        \"custom_item_count\": 3,\n        \"time_limit_seconds\": 55,\n    },\n    {\n        \"rows\": 17,\n        \"cols\": 25,\n        \"cell_size\": 25,\n        \"extra_open_walls\": 8,\n        \"bomb_count\": 6,\n        \"custom_item_count\": 4,\n        \"time_limit_seconds\": 45,\n    },\n]"
+ },
+ {
+  "label": "TODO 6 (Part 2)",
+  "kind": "Bonus",
+  "file": "settings.py",
+  "title": "이동 느낌 · 힌트",
+  "note": "정답 없음. 단, acceleration × friction ÷ (1 − friction) 이 PLAYER_MOVE_THRESHOLD 보다 작으면 플레이어가 아예 못 움직입니다. 채점기가 이 경우를 숫자와 함께 경고합니다.",
+  "code": "PLAYER_MOVE_DELAY_MS = 100\nPLAYER_ACCELERATION = 0.9\nPLAYER_FRICTION = 0.88\nPLAYER_MOVE_THRESHOLD = 1.5\nALLOW_PATH_HINT = True\nMAX_HINT_COUNT = 2"
+ },
+ {
+  "label": "TODO 6 (Part 3)",
+  "kind": "Bonus",
+  "file": "game.py",
+  "title": "아이템·폭탄 배치 규칙",
+  "note": "정답 없음. self.items / self.bombs 가 리스트이기만 하면 통과. 잘하는 학생에게는 '시작점 근처 폭탄 금지', 'CUSTOM_ITEMS[i % len(...)]로 모든 아이템 등장 보장'을 권해보세요.",
+  "code": "custom_positions = create_random_positions(\n    self.config[\"rows\"], self.config[\"cols\"],\n    self.config.get(\"custom_item_count\", 0), forbidden,\n)\nself.items = [\n    CustomItem(row, col, self.config[\"cell_size\"], random.choice(CUSTOM_ITEMS))\n    for row, col in custom_positions\n]\nforbidden.update(custom_positions)\n\nbomb_positions = create_random_positions(\n    self.config[\"rows\"],\n    self.config[\"cols\"],\n    self.config[\"bomb_count\"],\n    forbidden,\n)\nself.bombs = [\n    Bomb(row, col, self.config[\"cell_size\"])\n    for row, col in bomb_positions\n]"
+ },
+ {
+  "label": "TODO 7 (Part 1)",
+  "kind": "Bonus",
+  "file": "settings.py",
+  "title": "이미지 · 크기 · 색",
+  "note": "정답 없음. *_IMAGE_SCALE 은 배율(1.0이 기본). 이미지가 None이어도 기본 도형에 그대로 적용됩니다.",
+  "code": "PLAYER_IMAGE_PATH = \"assets/images/player_ninja.png\"\nGOAL_IMAGE_PATH = \"assets/images/goal_chest.png\"\nBOMB_IMAGE_PATH = \"assets/images/bomb_2.png\"\nFLOOR_TILE_IMAGE_PATH = \"assets/images/floor_tile_1.png\"  # Background floor for open path cells.\nPLAYER_IMAGE_SCALE = 1.0\nGOAL_IMAGE_SCALE = 1.0\nBOMB_IMAGE_SCALE = 1.0\nWALL_COLOR = (30, 41, 59)\nPLAYER_COLOR = (37, 99, 235)\nGOAL_COLOR = (250, 204, 21)\nBOMB_COLOR = (15, 23, 42)\nBOMB_EXPLOSION_COLOR = (239, 68, 68)"
+ },
+ {
+  "label": "TODO 7 (Part 2)",
+  "kind": "Bonus",
+  "file": "settings.py",
+  "title": "소리 · 타이밍",
+  "note": "정답 없음. 경로는 None 또는 따옴표 친 경로.",
+  "code": "BOMB_SOUND_PATH = \"assets/sounds/explosion_1.wav\"\nBACKGROUND_MUSIC_PATH = \"assets/sounds/bgm_1.wav\"\nBOMB_EXPLOSION_DURATION_MS = 500\nBACKGROUND_MUSIC_VOLUME = 0.25"
+ },
+ {
+  "label": "TODO 7 (Part 3)",
+  "kind": "Bonus",
+  "file": "game.py",
+  "title": "음악 재생 방식",
+  "note": "정답 없음. play(-1)은 무한 반복, play(0)은 한 번만. try/except를 지워도 통과하지만 경고가 뜹니다.",
+  "code": "if BACKGROUND_MUSIC_PATH is None:\n    return\ntry:\n    if not pygame.mixer.get_init():\n        pygame.mixer.init()\n    pygame.mixer.music.load(BACKGROUND_MUSIC_PATH)\n    pygame.mixer.music.set_volume(BACKGROUND_MUSIC_VOLUME)\n    pygame.mixer.music.play(-1)\nexcept (pygame.error, FileNotFoundError, TypeError) as error:\n    print(f\"[Info] Background music load failed: {error}\")"
+ },
+ {
+  "label": "TODO 8 (Part 1)",
+  "kind": "Bonus",
+  "file": "settings.py",
+  "title": "커스텀 아이템 설계",
+  "note": "정답 없음. 아이템 개수 제한 없음. 각 아이템이 자기만의 image / sound / size 를 가질 수 있습니다.",
+  "code": "CUSTOM_ITEMS = [\n    {\n        \"name\": \"Time Crystal\",\n        \"color\": (14, 165, 233),\n        \"image\": \"assets/images/item_gem_1.png\",\n        \"sound\": \"assets/sounds/pickup_1.wav\",\n        \"size\": 1.0,\n        \"effect\": \"add_time\",\n        \"amount\": 15,\n    },\n    {\n        \"name\": \"Hint Scroll\",\n        \"color\": (250, 204, 21),\n        \"image\": \"assets/images/item_star.png\",\n        \"sound\": \"assets/sounds/pickup_3.wav\",\n        \"size\": 1.0,\n        \"effect\": \"add_hint\",\n        \"amount\": 1,\n    },\n]"
+ },
+ {
+  "label": "TODO 8 (Part 2)",
+  "kind": "Bonus",
+  "file": "game.py",
+  "title": "효과 적용",
+  "note": "if/elif 두 갈래. 모르는 effect 문자열은 아무 일도 안 일어나야 하며, 여기서 raise 하면 오답 처리됩니다.",
+  "code": "if effect == \"add_time\":\n    self.bonus_time_seconds += amount\nelif effect == \"add_hint\":\n    self.hints_remaining += amount"
+ },
+ {
+  "label": "TODO 8 (Part 3)",
+  "kind": "Bonus",
+  "file": "game.py",
+  "title": "획득 처리 · 소리",
+  "note": "item.active = False 를 먼저 하는 것이 핵심입니다. 안 하면 매 프레임 다시 먹혀서 효과가 무한히 쌓입니다.",
+  "code": "for item in self.items:\n    if item.active and item.get_position() == player_position:\n        item.active = False\n        self.apply_custom_item_effect(item.item_def)\n        item_sound = self.get_custom_item_sound(item.item_def.get(\"sound\"))\n        if item_sound:\n            item_sound.play()"
+ },
+ {
+  "label": "TODO 9 (Part 1)",
+  "kind": "Bonus",
+  "file": "settings.py",
+  "title": "규칙 쓰기(글)",
+  "note": "정답 없음. Part 2/2의 코드와 내용이 일치하는지 확인해 주세요.",
+  "code": "MISSION_RULES = [\n    \"Reach the goal before time runs out.\",\n]\nHOW_TO_PLAY_RULES = [\n    \"Reach the goal to clear each round.\",\n    \"Move with the Arrow Keys (or E/F/C/D on a controller).\",\n    \"Bombs send you back to the start - avoid them.\",\n    \"Collect items for a helpful bonus effect.\",\n]"
+ },
+ {
+  "label": "TODO 9 (Part 2)",
+  "kind": "Bonus",
+  "file": "game.py",
+  "title": "승리 조건(코드)",
+  "note": "기본형은 목표 도달. 추가 조건을 넣어도 되지만, 목표에서 멀리 있는데도 클리어되면 오답입니다. '모든 아이템 수집' 조건을 넣을 때 아이템이 0개인 라운드가 있으면 클리어 불가가 되니 주의.",
+  "code": "if self.player.get_position() != self.goal.get_position():\n    return\n\nif self.current_round == len(ROUND_CONFIGS) - 1:\n    self.game_clear = True\nelse:\n    self.round_transition_time = pygame.time.get_ticks()"
+ }
+];
+  var CODE = "0924";
+
+  function render() {
+    var list = document.getElementById("list");
+    ANSWERS.forEach(function (a) {
+      var box = document.createElement("div");
+      box.className = "ans";
+      var h = document.createElement("h3");
+      var tag = document.createElement("span");
+      tag.className = "tag " + (a.kind === "Required" ? "req" : "bonus");
+      tag.textContent = a.kind;
+      h.appendChild(tag);
+      h.appendChild(document.createTextNode(a.label + (a.title ? " — " + a.title : "")));
+      box.appendChild(h);
+      var meta = document.createElement("div");
+      meta.className = "meta";
+      meta.textContent = a.file;
+      box.appendChild(meta);
+      if (a.note) {
+        var note = document.createElement("p");
+        note.className = "note";
+        note.textContent = a.note;
+        box.appendChild(note);
+      }
+      var pre = document.createElement("pre");
+      pre.textContent = a.code;
+      box.appendChild(pre);
+      list.appendChild(box);
+    });
+  }
+
+  function unlock() {
+    var entered = (document.getElementById("code").value || "").trim();
+    if (entered !== CODE) {
+      document.getElementById("bad").hidden = false;
+      return;
+    }
+    document.getElementById("gate").hidden = true;
+    document.getElementById("body").hidden = false;
+    render();
+  }
+
+  document.getElementById("go").addEventListener("click", unlock);
+  document.getElementById("code").addEventListener("keydown", function (e) {
+    if (e.key === "Enter") unlock();
+  });
+})();
+</script>
+</body>
+</html>

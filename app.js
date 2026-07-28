@@ -363,6 +363,9 @@
   }
 
   function saveState() {
+    // The showcase demo runs on a seeded in-memory state; writing it out
+    // would clobber whatever real progress is saved under this origin.
+    if (isShowcaseMode()) return;
     try {
       localStorage.setItem(LS_PROGRESS_KEY, JSON.stringify(state));
     } catch (e) {
@@ -3480,11 +3483,23 @@
       "        for item_def in items:",
       "            if not isinstance(item_def, dict):",
       "                continue",
+      // image/size travel with the preview too, so the Play tab and the
+      // custom-item lab can draw the student's OWN artwork at the size
+      // they chose rather than a generic swatch.
+      "            raw_size = item_def.get('size', 1.0)",
+      "            if isinstance(raw_size, bool) or not isinstance(raw_size, (int, float)):",
+      "                raw_size = 1.0",
+      "            size = max(0.1, min(3.0, float(raw_size)))",
+      "            image = item_def.get('image')",
+      "            sound = item_def.get('sound')",
       "            out.append({",
       "                'name': str(item_def.get('name', 'Custom Item')),",
       "                'color': list(item_def.get('color', (180, 180, 180))),",
       "                'effect': str(item_def.get('effect', '')),",
       "                'amount': item_def.get('amount', 0),",
+      "                'size': size,",
+      "                'image': image if isinstance(image, str) else None,",
+      "                'sound': sound if isinstance(sound, str) else None,",
       "            })",
       "        result['items'] = out",
       "    except Exception as e:",
@@ -3831,6 +3846,21 @@
       'self.row = self.row + dr',
       'self.col = self.col + dc',
     ].join("\n"),
+    // TODO 5's two relaxation blocks. Unlike 2/3/4 there is no meaningfully
+    // different way to write these, so this is close to the answer - but
+    // that is not a new disclosure: data.js's hint for TODO 5 already
+    // spells both parts out in full, deliberately (see its header comment
+    // about near-complete hints). Used only so the Hint button works in
+    // the showcase demo and in the Play tab while TODO 5 is unfinished.
+    "5": [
+      'new_cost = cost + step_cost',
+      [
+        'if neighbor not in distance or new_cost < distance[neighbor]:',
+        '    distance[neighbor] = new_cost',
+        '    parent[neighbor] = current',
+        '    heapq.heappush(queue, (new_cost, neighbor))',
+      ].join("\n"),
+    ],
   };
 
   var PlayerMoveViz = (function () {
@@ -6006,15 +6036,86 @@
       var itemSpots = placeRandom(rng, forbidden, cfg.customItemCount);
       items = itemSpots.map(function (p) { return { row: p[0], col: p[1], active: true, itemDef: pickCustomItemDef() }; });
       bombs = placeRandom(rng, forbidden, cfg.bombCount).map(function (p) { return { row: p[0], col: p[1], active: true }; });
+      refreshPlayImages();
       renderAll();
+    }
+
+    // --- the student's own artwork -----------------------------------
+    //
+    // TODO 7 picks image paths and *_IMAGE_SCALE sizes, TODO 8 gives each
+    // item its own image/size. The Play tab draws all of it, so the visual
+    // choices a student makes actually show up in the game they are
+    // testing - falling back to the built-in shapes for anything left as
+    // None or still loading, exactly like the real pygame code does.
+    var playImages = { player: null, goal: null, bomb: null, floor: null };
+    var playItemImages = {};
+
+    function playVisuals() {
+      var sd = state.steps["7"];
+      var code = Array.isArray(sd.code) ? sd.code : [sd.code || "", "", ""];
+      var paths = parseAssetPaths(code[0], code[1]);
+      return {
+        paths: paths,
+        playerScale: parseNumberSetting(code[0], "PLAYER_IMAGE_SCALE", 0.1, 3, 1),
+        goalScale: parseNumberSetting(code[0], "GOAL_IMAGE_SCALE", 0.1, 3, 1),
+        bombScale: parseNumberSetting(code[0], "BOMB_IMAGE_SCALE", 0.1, 3, 1),
+      };
+    }
+
+    // Kicks off (cached) loads for every path currently configured, then
+    // redraws once they arrive. Safe to call as often as you like.
+    function refreshPlayImages() {
+      var vis = playVisuals();
+      var wanted = {
+        player: vis.paths.PLAYER_IMAGE_PATH,
+        goal: vis.paths.GOAL_IMAGE_PATH,
+        bomb: vis.paths.BOMB_IMAGE_PATH,
+        floor: vis.paths.FLOOR_TILE_IMAGE_PATH,
+      };
+      Object.keys(wanted).forEach(function (slot) {
+        var path = wanted[slot];
+        if (!path) { playImages[slot] = null; return; }
+        loadImageCached(path).then(function (img) {
+          playImages[slot] = img || null;
+          if (refs) draw();
+        });
+      });
+      (customItemDefs || []).forEach(function (def) {
+        if (!def || !def.image || playItemImages[def.image] !== undefined) return;
+        playItemImages[def.image] = null;
+        loadImageCached(def.image).then(function (img) {
+          playItemImages[def.image] = img || null;
+          if (refs) draw();
+        });
+      });
+    }
+
+    // Draw an image centred on a cell at a given fraction of the cell,
+    // preserving its aspect ratio so a non-square sprite is never squashed.
+    function drawSpriteInCell(ctx, img, row, col, fraction) {
+      var box = cellSize * Math.max(0.05, Math.min(2.5, fraction));
+      var w = box, h = box;
+      if (img.naturalWidth && img.naturalHeight) {
+        var ratio = img.naturalWidth / img.naturalHeight;
+        if (ratio >= 1) h = box / ratio; else w = box * ratio;
+      }
+      ctx.drawImage(img, (col + 0.5) * cellSize - w / 2, (row + 0.5) * cellSize - h / 2, w, h);
     }
 
     function draw() {
       if (!refs || !maze) return;
       var ctx = refs.ctx;
+      var vis = playVisuals();
       ctx.clearRect(0, 0, refs.canvas.width, refs.canvas.height);
       ctx.fillStyle = "#12100c";
       ctx.fillRect(0, 0, refs.canvas.width, refs.canvas.height);
+      if (playImages.floor) {
+        for (var fr = 0; fr < rows; fr++) {
+          for (var fc = 0; fc < cols; fc++) {
+            ctx.drawImage(playImages.floor, fc * cellSize, fr * cellSize, cellSize, cellSize);
+          }
+        }
+      }
       var hintSet = {};
       hintPath.forEach(function (p) { hintSet[p[0] + "," + p[1]] = true; });
       drawMazeGrid(ctx, maze, cellSize, function (r, c) {
@@ -6023,26 +6124,45 @@
         return null;
       }, { wallColor: "#e8dcc4" });
       // bombs
-      ctx.fillStyle = "#1c1a17";
       bombs.forEach(function (b) {
         if (!b.active) return;
-        ctx.beginPath(); ctx.arc((b.col + 0.5) * cellSize, (b.row + 0.5) * cellSize, cellSize * 0.24, 0, Math.PI * 2); ctx.fill();
+        if (playImages.bomb) {
+          drawSpriteInCell(ctx, playImages.bomb, b.row, b.col, 0.8 * vis.bombScale);
+        } else {
+          ctx.fillStyle = "#1c1a17";
+          ctx.beginPath(); ctx.arc((b.col + 0.5) * cellSize, (b.row + 0.5) * cellSize, cellSize * 0.24 * vis.bombScale, 0, Math.PI * 2); ctx.fill();
+        }
       });
-      // items (each one's swatch color comes from its own randomly-drawn
-      // CUSTOM_ITEMS entry, TODO 8 - see pickCustomItemDef())
+      // items - each one's artwork, colour and size come from its own
+      // CUSTOM_ITEMS entry (TODO 8), see pickCustomItemDef()
       items.forEach(function (it) {
         if (!it.active) return;
-        var color = it.itemDef && it.itemDef.color ? it.itemDef.color : [34, 197, 94];
+        var def = it.itemDef || {};
+        var scale = typeof def.size === "number" ? Math.max(0.1, Math.min(3, def.size)) : 1;
+        var img = def.image ? playItemImages[def.image] : null;
+        if (img) {
+          drawSpriteInCell(ctx, img, it.row, it.col, 0.72 * scale);
+          return;
+        }
+        var color = def.color || [34, 197, 94];
         ctx.fillStyle = "rgb(" + color.join(",") + ")";
-        ctx.beginPath(); ctx.arc((it.col + 0.5) * cellSize, (it.row + 0.5) * cellSize, cellSize * 0.18, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc((it.col + 0.5) * cellSize, (it.row + 0.5) * cellSize, cellSize * 0.18 * scale, 0, Math.PI * 2); ctx.fill();
       });
       // goal
-      ctx.fillStyle = "#f0c04a";
-      ctx.beginPath(); ctx.arc((goal.col + 0.5) * cellSize, (goal.row + 0.5) * cellSize, cellSize * 0.26, 0, Math.PI * 2); ctx.fill();
+      if (playImages.goal) {
+        drawSpriteInCell(ctx, playImages.goal, goal.row, goal.col, 0.82 * vis.goalScale);
+      } else {
+        ctx.fillStyle = "#f0c04a";
+        ctx.beginPath(); ctx.arc((goal.col + 0.5) * cellSize, (goal.row + 0.5) * cellSize, cellSize * 0.26 * vis.goalScale, 0, Math.PI * 2); ctx.fill();
+      }
       // player
-      ctx.fillStyle = "#4fa3e3";
-      ctx.beginPath(); ctx.arc((player.col + 0.5) * cellSize, (player.row + 0.5) * cellSize, cellSize * 0.3, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = "#0e0d0a"; ctx.lineWidth = 2; ctx.stroke();
+      if (playImages.player) {
+        drawSpriteInCell(ctx, playImages.player, player.row, player.col, 0.86 * vis.playerScale);
+      } else {
+        ctx.fillStyle = "#4fa3e3";
+        ctx.beginPath(); ctx.arc((player.col + 0.5) * cellSize, (player.row + 0.5) * cellSize, cellSize * 0.3 * vis.playerScale, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = "#0e0d0a"; ctx.lineWidth = 2; ctx.stroke();
+      }
     }
 
     function updateStatusGrid() {
@@ -6237,7 +6357,12 @@
         return py.runPythonAsync(traceHarness_customItems(state.steps["8"].code[0]));
       }).then(function (json) {
         var d = JSON.parse(json);
-        if (d.ok) customItemDefs = d.items;
+        if (d.ok) {
+          customItemDefs = d.items;
+          // Each item can name its own picture, so newly-parsed defs may
+          // bring in images the cache has never seen.
+          refreshPlayImages();
+        }
       }).catch(function () {});
     }
 
@@ -6315,6 +6440,9 @@
         if (!mounted) return;
         refreshTitleCard();
         loadCustomItems();
+        // Picking a new sprite or size in TODO 7/8 should show up in the
+        // game immediately, without waiting for the next round to start.
+        refreshPlayImages();
         refreshChecklist();
       },
       unmount: function () {
@@ -6926,6 +7054,143 @@
     }
   }
 
+  // ---- showcase demo (?mode=play&showcase=1) ---------------------------
+  //
+  // A finished, playable version of the game for showing a class what they
+  // are about to build: real sprites, real pickup sounds, three different
+  // custom items, and two rounds. It runs the SAME PlayEngine students use,
+  // just seeded with a completed set of settings instead of localStorage -
+  // so it can never be out of step with the real thing, and it never
+  // touches (or is touched by) anybody's saved progress.
+  function isShowcaseMode() {
+    try {
+      return new URLSearchParams(window.location.search).get("showcase") === "1";
+    } catch (e) {
+      return false;
+    }
+  }
+
+  var SHOWCASE_CODE = {
+    "1": [
+      'TITLE = "Crystal Vault"',
+      'GAME_SUBTITLE = "Grab the crystals and reach the vault before the clock runs out"',
+    ].join("\n"),
+    "6": [
+      [
+        "ROUND_CONFIGS = [",
+        '    {"rows": 9, "cols": 13, "cell_size": 38, "extra_open_walls": 6,',
+        '     "bomb_count": 3, "custom_item_count": 3, "time_limit_seconds": 75},',
+        '    {"rows": 13, "cols": 19, "cell_size": 30, "extra_open_walls": 8,',
+        '     "bomb_count": 6, "custom_item_count": 4, "time_limit_seconds": 60},',
+        "]",
+      ].join("\n"),
+      [
+        "PLAYER_MOVE_DELAY_MS = 90",
+        "PLAYER_ACCELERATION = 0.9",
+        "PLAYER_FRICTION = 0.88",
+        "PLAYER_MOVE_THRESHOLD = 1.5",
+        "ALLOW_PATH_HINT = True",
+        "MAX_HINT_COUNT = 2",
+      ].join("\n"),
+      "",
+    ],
+    "7": [
+      [
+        'PLAYER_IMAGE_PATH = "assets/images/player_ninja.png"',
+        'GOAL_IMAGE_PATH = "assets/images/goal_chest.png"',
+        'BOMB_IMAGE_PATH = "assets/images/bomb_2.png"',
+        'FLOOR_TILE_IMAGE_PATH = "assets/images/floor_tile_1.png"',
+        "PLAYER_IMAGE_SCALE = 1.1",
+        "GOAL_IMAGE_SCALE = 1.0",
+        "BOMB_IMAGE_SCALE = 0.9",
+        "WALL_COLOR = (30, 41, 59)",
+        "PLAYER_COLOR = (37, 99, 235)",
+        "GOAL_COLOR = (250, 204, 21)",
+        "BOMB_COLOR = (15, 23, 42)",
+        "BOMB_EXPLOSION_COLOR = (239, 68, 68)",
+      ].join("\n"),
+      [
+        'BOMB_SOUND_PATH = "assets/sounds/explosion_1.wav"',
+        'BACKGROUND_MUSIC_PATH = "assets/sounds/bgm_1.wav"',
+        "BOMB_EXPLOSION_DURATION_MS = 500",
+        "BACKGROUND_MUSIC_VOLUME = 0.25",
+      ].join("\n"),
+      "",
+    ],
+    "8": [
+      [
+        "CUSTOM_ITEMS = [",
+        "    {",
+        '        "name": "Time Crystal",',
+        '        "color": (14, 165, 233),',
+        '        "image": "assets/images/item_gem_1.png",',
+        '        "sound": "assets/sounds/pickup_1.wav",',
+        '        "size": 1.2,',
+        '        "effect": "add_time",',
+        '        "amount": 12,',
+        "    },",
+        "    {",
+        '        "name": "Hint Scroll",',
+        '        "color": (250, 204, 21),',
+        '        "image": "assets/images/item_star.png",',
+        '        "sound": "assets/sounds/pickup_3.wav",',
+        '        "size": 0.9,',
+        '        "effect": "add_hint",',
+        '        "amount": 1,',
+        "    },",
+        "    {",
+        '        "name": "Lucky Coin",',
+        '        "color": (245, 158, 11),',
+        '        "image": "assets/images/item_coin.png",',
+        '        "sound": "assets/sounds/pickup_2.wav",',
+        '        "size": 0.7,',
+        '        "effect": "add_time",',
+        '        "amount": 4,',
+        "    },",
+        "]",
+      ].join("\n"),
+      "",
+      "",
+    ],
+    "9": [
+      [
+        "MISSION_RULES = [",
+        '    "Reach the vault before time runs out.",',
+        '    "Grab crystals along the way for extra seconds.",',
+        "]",
+        "HOW_TO_PLAY_RULES = [",
+        '    "Move with the Arrow Keys (or E/F/C/D on a controller).",',
+        '    "You build up speed, and slide a little when you let go.",',
+        '    "Bombs send you back to the start - avoid them.",',
+        '    "Time Crystals add time; Hint Scrolls add a hint use.",',
+        "]",
+      ].join("\n"),
+      "",
+    ],
+  };
+
+  function showcaseState() {
+    var s = freshState();
+    STEPS.forEach(function (step) {
+      var d = s.steps[step.id];
+      var preset = SHOWCASE_CODE[step.id] || REFERENCE_CODE[step.id];
+      if (preset !== undefined) {
+        // A preset only supplies the parts it cares about; anything left
+        // blank keeps that part's starter code (true for the game.py code
+        // parts, whose defaults are already the working behaviour).
+        if (step.parts && Array.isArray(preset)) {
+          d.code = step.parts.map(function (part, i) {
+            return preset[i] ? preset[i] : linesOf(part.starter);
+          });
+        } else if (!step.parts && typeof preset === "string") {
+          d.code = preset;
+        }
+      }
+      d.status = "completed";
+    });
+    return s;
+  }
+
   function showPopupBlockedNotice(anchorEl) {
     var existing = document.getElementById("popupBlockedNotice");
     if (existing) existing.remove();
@@ -7159,6 +7424,8 @@
     // board/HUD (PlayEngine.refresh()) and this window's own title (the
     // checklist/banner are unconditionally hidden now, nothing to chrome).
     window.addEventListener("storage", function (e) {
+      // The showcase window is deliberately frozen on its seeded state.
+      if (isShowcaseMode()) return;
       if (e.key && e.key !== LS_PROGRESS_KEY) return;
       state = loadState();
       if (computeStatus(state.currentStepId) === "locked") state.currentStepId = STEPS[0].id;
@@ -7168,6 +7435,13 @@
   }
 
   document.addEventListener("DOMContentLoaded", function () {
+    if (isShowcaseMode()) {
+      // Seeded in memory only: saveState() is disabled for this window, so
+      // opening the demo can never overwrite a student's real progress.
+      state = showcaseState();
+      initKioskMode();
+      return;
+    }
     state = loadState();
     if (computeStatus(state.currentStepId) === "locked") state.currentStepId = STEPS[0].id;
     if (isKioskMode()) {
