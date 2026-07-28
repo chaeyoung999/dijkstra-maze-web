@@ -28,6 +28,78 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 APP_JS = os.path.join(HERE, "..", "app.js")
 with open(APP_JS, encoding="utf-8") as f:
     SRC = f.read()
+DATA_JS = os.path.join(HERE, "..", "data.js")
+with open(DATA_JS, encoding="utf-8") as f:
+    DATA_SRC = f.read()
+
+
+def extract_const_object(src, name):
+    """Extracts `const NAME = { ... };` (a balanced-brace object literal)
+    from src, string/comment-aware, reusing the same scanning approach as
+    extract_function below."""
+    m = re.search(r"const\s+%s\s*=\s*" % re.escape(name), src)
+    if not m:
+        raise SystemExit("const object not found: %s" % name)
+    open_brace = src.index("{", m.end())
+    depth = 0
+    i = open_brace
+    in_s = in_d = in_lc = in_bc = False
+    n = len(src)
+    while i < n:
+        c = src[i]
+        nx = src[i + 1] if i + 1 < n else ""
+        if in_lc:
+            if c == "\n":
+                in_lc = False
+            i += 1
+            continue
+        if in_bc:
+            if c == "*" and nx == "/":
+                in_bc = False
+                i += 2
+                continue
+            i += 1
+            continue
+        if in_s:
+            if c == "\\":
+                i += 2
+                continue
+            if c == "'":
+                in_s = False
+            i += 1
+            continue
+        if in_d:
+            if c == "\\":
+                i += 2
+                continue
+            if c == '"':
+                in_d = False
+            i += 1
+            continue
+        if c == "/" and nx == "/":
+            in_lc = True
+            i += 2
+            continue
+        if c == "/" and nx == "*":
+            in_bc = True
+            i += 2
+            continue
+        if c == "'":
+            in_s = True
+            i += 1
+            continue
+        if c == '"':
+            in_d = True
+            i += 1
+            continue
+        if c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                return src[open_brace:i + 1]
+        i += 1
+    raise SystemExit("unterminated const object: %s" % name)
 
 
 def extract_function(name):
@@ -132,11 +204,18 @@ FUNCS = [
     "toBase64Utf8", "isCommentOnlyLine", "reindentPython", "buildFnSource",
     "buildFnSourceTwoParts", "b64Line",
     "harness_movement_2", "harness_guardClause_3", "harness_positionDelta_4",
-    "harness_dijkstra_5",
+    "harness_dijkstra_5", "harness_customItems_8",
 ]
 VARS = ["PY_PRELUDE"]
 
-_pieces = [extract_var_line(v) for v in VARS] + [extract_function(f) for f in FUNCS]
+# harness_customItems_8 references the module-level KNOWN_ASSETS var (used
+# for its lenient optional image/sound path checks) - extracted straight
+# from data.js's KNOWN_ASSET_FILES so the regression suite exercises the
+# exact real asset list, not a hand-typed stand-in.
+_known_assets_obj = extract_const_object(DATA_SRC, "KNOWN_ASSET_FILES")
+_known_assets_var_line = "var KNOWN_ASSETS = %s;" % _known_assets_obj
+
+_pieces = [extract_var_line(v) for v in VARS] + [_known_assets_var_line] + [extract_function(f) for f in FUNCS]
 COMBINED_ES3 = "\n\n".join(_pieces)
 COMBINED_ES3 = COMBINED_ES3.replace("const ", "var ")
 COMBINED_ES3 = re.sub(r",(\s*\n\s*[}\]])", r"\1", COMBINED_ES3)
@@ -191,6 +270,34 @@ function encodeURIComponent(str) {
   }
   return out;
 }
+// cscript's JScript engine has no built-in JSON object - minimal
+// stringify covering what the extracted harnesses actually need
+// (strings, numbers, booleans, null, arrays, and plain objects).
+var JSON = {
+  stringify: function (value) {
+    if (value === null || typeof value === "undefined") return "null";
+    var t = typeof value;
+    if (t === "string") {
+      return "\"" + value.replace(/\\/g, "\\\\").replace(/"/g, "\\\"").replace(/\n/g, "\\n") + "\"";
+    }
+    if (t === "number" || t === "boolean") return "" + value;
+    if (value instanceof Array) {
+      var itemsArr = [];
+      for (var i = 0; i < value.length; i++) itemsArr.push(JSON.stringify(value[i]));
+      return "[" + itemsArr.join(",") + "]";
+    }
+    if (t === "object") {
+      var itemsObj = [];
+      for (var key in value) {
+        if (value.hasOwnProperty(key)) {
+          itemsObj.push(JSON.stringify(key) + ":" + JSON.stringify(value[key]));
+        }
+      }
+      return "{" + itemsObj.join(",") + "}";
+    }
+    return "null";
+  }
+};
 function unescape(str) {
   var out = "";
   var i = 0;

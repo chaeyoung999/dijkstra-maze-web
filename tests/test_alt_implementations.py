@@ -131,6 +131,54 @@ case("5 Part1/2", "alt: accumulator variable", "harness_dijkstra_5", (ALT_5A_ACC
 case("5 Part2/2", "canonical (if/or, 3 updates)", "harness_dijkstra_5", (CANONICAL_5A, CANONICAL_5B))
 case("5 Part2/2", "alt: named boolean condition variable", "harness_dijkstra_5", (CANONICAL_5A, ALT_5B_NAMED))
 
+# ---------------------------------------------------------------- TODO 8 Part 2/2
+# apply_custom_item_effect(self, effect, amount): must branch on "add_time"
+# (self.bonus_time_seconds += amount) and "add_hint" (self.hints_remaining
+# += amount); any other effect string must be a safe no-op, never a crash
+# (the whole point of TODO 8 Part 1's "invent your own effect name"
+# promise). Part 1's code1 argument is intentionally a minimal but valid
+# CUSTOM_ITEMS list in every case below - these cases are only exercising
+# Part 2 grading.
+ITEM1_MINIMAL = 'CUSTOM_ITEMS = [{"name": "Custom Item", "color": (180, 180, 180), "image": None, "sound": None, "effect": "add_time", "amount": 0}]'
+
+CANONICAL_8B = (
+    'if effect == "add_time":\n'
+    '    self.bonus_time_seconds += amount\n'
+    'elif effect == "add_hint":\n'
+    '    self.hints_remaining += amount\n'
+)
+# Alt A: reversed branch order (add_hint checked first) - still correct.
+ALT_8B_REVERSED = (
+    'if effect == "add_hint":\n'
+    '    self.hints_remaining += amount\n'
+    'elif effect == "add_time":\n'
+    '    self.bonus_time_seconds += amount\n'
+)
+# Alt B: a dict-dispatch table instead of if/elif - genuinely different
+# control-flow shape, still correct behaviour.
+ALT_8B_DICT_DISPATCH = (
+    'def _add_time(amt):\n'
+    '    self.bonus_time_seconds += amt\n'
+    'def _add_hint(amt):\n'
+    '    self.hints_remaining += amt\n'
+    'handlers = {"add_time": _add_time, "add_hint": _add_hint}\n'
+    'handler = handlers.get(effect)\n'
+    'if handler is not None:\n'
+    '    handler(amount)\n'
+)
+# Alt C: separate independent if statements (no elif) - still correct
+# since effect can only ever equal one string at a time.
+ALT_8B_SEPARATE_IFS = (
+    'if effect == "add_time":\n'
+    '    self.bonus_time_seconds += amount\n'
+    'if effect == "add_hint":\n'
+    '    self.hints_remaining += amount\n'
+)
+case("8 Part2/2", "canonical (if/elif, add_time then add_hint)", "harness_customItems_8", (ITEM1_MINIMAL, CANONICAL_8B))
+case("8 Part2/2", "alt: reversed branch order", "harness_customItems_8", (ITEM1_MINIMAL, ALT_8B_REVERSED))
+case("8 Part2/2", "alt: dict-dispatch table instead of if/elif", "harness_customItems_8", (ITEM1_MINIMAL, ALT_8B_DICT_DISPATCH))
+case("8 Part2/2", "alt: two separate if statements (no elif)", "harness_customItems_8", (ITEM1_MINIMAL, ALT_8B_SEPARATE_IFS))
+
 # ---------------------------------------------- negative controls (must FAIL)
 # Proves the harnesses aren't just trivially permissive - a genuinely wrong
 # implementation must still be correctly rejected.
@@ -161,6 +209,27 @@ BAD_5B_NO_PUSH = (
     '    parent[neighbor] = current\n'
 )  # forgets heapq.heappush entirely
 case("5 Part2/2", "BAD: forgets heapq.heappush (negative control)", "harness_dijkstra_5", (CANONICAL_5A, BAD_5B_NO_PUSH), expect_ok=False)
+
+BAD_8B_SWAPPED = (
+    'if effect == "add_time":\n'
+    '    self.hints_remaining += amount\n'  # wrong attribute
+    'elif effect == "add_hint":\n'
+    '    self.bonus_time_seconds += amount\n'  # wrong attribute
+)
+case("8 Part2/2", "BAD: add_time/add_hint effects swapped (negative control)", "harness_customItems_8", (ITEM1_MINIMAL, BAD_8B_SWAPPED), expect_ok=False)
+
+BAD_8B_CRASHES_ON_UNKNOWN = (
+    'if effect == "add_time":\n'
+    '    self.bonus_time_seconds += amount\n'
+    'elif effect == "add_hint":\n'
+    '    self.hints_remaining += amount\n'
+    'else:\n'
+    '    raise ValueError("unknown effect: " + effect)\n'  # must be a safe no-op instead
+)
+case("8 Part2/2", "BAD: raises on an unrecognized effect instead of a safe no-op (negative control)", "harness_customItems_8", (ITEM1_MINIMAL, BAD_8B_CRASHES_ON_UNKNOWN), expect_ok=False)
+
+BAD_8B_ONLY_ADD_TIME = 'if effect == "add_time":\n    self.bonus_time_seconds += amount\n'  # forgets add_hint entirely
+case("8 Part2/2", "BAD: forgets the add_hint branch entirely (negative control)", "harness_customItems_8", (ITEM1_MINIMAL, BAD_8B_ONLY_ADD_TIME), expect_ok=False)
 
 
 def main():

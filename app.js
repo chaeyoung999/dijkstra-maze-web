@@ -31,10 +31,28 @@
   var STEPS = DATA.COURSE_STEPS;
   var REQUIRED_ORDER = DATA.REQUIRED_ORDER;
   var BONUS_ORDER = DATA.BONUS_ORDER;
-  var CAPSTONE_BONUS_ID = DATA.CAPSTONE_BONUS_ID;
   var KNOWN_ASSETS = DATA.KNOWN_ASSET_FILES;
   var STEP_BY_ID = {};
   STEPS.forEach(function (s) { STEP_BY_ID[s.id] = s; });
+
+  // Per-part file support (Bonus multi-file steps, e.g. TODO 8: Part 1/2 in
+  // settings.py, Part 2/2 in game.py): a part's own `file` wins when
+  // present, otherwise it falls back to the step-level `file` - so
+  // single-file steps (and every Required step) never need to repeat the
+  // same filename on every part. stepFiles() returns the DISTINCT files a
+  // step actually touches, in part order, for anything that needs to show
+  // "which file(s)" (file-tag header, "View full file" buttons, the export
+  // modal's unfinished-TODO list, the sidebar).
+  function partFile(step, part) { return (part && part.file) || step.file; }
+  function stepFiles(step) {
+    if (!step.parts) return [step.file];
+    var files = [];
+    step.parts.forEach(function (part) {
+      var f = partFile(step, part);
+      if (files.indexOf(f) === -1) files.push(f);
+    });
+    return files;
+  }
 
   var LS_PROGRESS_KEY = "dijkstraMaze.progress.v1";
   var PYODIDE_VERSION = "0.26.4";
@@ -325,15 +343,6 @@
   }
   function allRequiredDone() { return REQUIRED_ORDER.every(isRequiredDone); }
 
-  // Capstone one-off exception (TODO 9, "write your game's rules"): rules
-  // only make sense once the student's actually built their custom game, so
-  // this single Bonus step stays locked until every OTHER Bonus step is
-  // completed or skipped - independent of the normal "all Bonus unlocks
-  // together" rule the rest of Bonus follows.
-  function otherBonusAllDone() {
-    return BONUS_ORDER.every(function (bid) { return bid === CAPSTONE_BONUS_ID || isRequiredDone(bid); });
-  }
-
   function computeStatus(id) {
     var saved = state.steps[id].status;
     if (saved === "completed" || saved === "skipped") return saved;
@@ -344,9 +353,11 @@
       }
       return "available";
     }
-    if (id === CAPSTONE_BONUS_ID) {
-      return otherBonusAllDone() ? "available" : "locked";
-    }
+    // Every Bonus step (TODO 9, "write your game's rules", included) unlocks
+    // together, any order, the moment Required is fully completed/skipped -
+    // TODO 9 used to be a one-off "capstone" locked until every OTHER Bonus
+    // step was done first; that special case was removed per direct teacher
+    // request, so it now behaves exactly like TODO 6/7/8.
     return allRequiredDone() ? "available" : "locked";
   }
 
@@ -361,7 +372,6 @@
     for (var i = 1; i <= BONUS_ORDER.length; i++) {
       var cand = BONUS_ORDER[(bidx + i) % BONUS_ORDER.length];
       if (isRequiredDone(cand)) continue;
-      if (cand === CAPSTONE_BONUS_ID && !otherBonusAllDone()) continue; // still locked, don't auto-jump there
       return cand;
     }
     return null;
@@ -377,10 +387,10 @@
   }
 
   // Full course order for the "Next TODO ->" convenience button: Required in
-  // order, then Bonus in order (the exact same order the sidebar renders in,
-  // capstone included at the end) - independent of whether steps are
-  // currently unlocked, since the button itself shows a locked/disabled
-  // state rather than skipping over locked steps.
+  // order, then Bonus in order (the exact same order the sidebar renders in)
+  // - independent of whether steps are currently unlocked, since the button
+  // itself shows a locked/disabled state rather than skipping over locked
+  // steps.
   function nextTodoIdInFullOrder(id) {
     var order = REQUIRED_ORDER.concat(BONUS_ORDER);
     var idx = order.indexOf(id);
@@ -1101,7 +1111,7 @@
         el("span", { class: "sidebar-badge", "aria-hidden": "true", html: badgeSvg(displayStatus, step.step) }),
         el("span", { class: "sidebar-label" }, [
           el("span", { class: "sidebar-label-title", text: "TODO " + id + ". " + step.title }),
-          el("span", { class: "sidebar-label-file", text: step.file }),
+          el("span", { class: "sidebar-label-file", text: stepFiles(step).join(" + ") }),
         ]),
         status === "skipped" ? el("span", { class: "sidebar-tag tag-skipped", text: "Skipped" }) : null,
       ]);
@@ -1189,9 +1199,6 @@
   // instead of silently doing nothing when the next step isn't reachable
   // yet.
   function nextTodoLockReason(nextId) {
-    if (nextId === CAPSTONE_BONUS_ID) {
-      return "Finish every other Bonus challenge first, then come back and write the rules for the game you actually built.";
-    }
     if (REQUIRED_ORDER.indexOf(nextId) !== -1) {
       return "Complete or skip this step to continue.";
     }
@@ -1243,28 +1250,18 @@
       "Step " + step.step + " of " + STEPS.length,
     ]));
     card.appendChild(el("div", { class: "step-title", text: "TODO " + step.id + " — " + step.title }));
-    card.appendChild(el("div", { class: "step-file-tag", text: "File: " + step.file }));
+    var stepFileList = stepFiles(step);
+    card.appendChild(el("div", { class: "step-file-tag", text: (stepFileList.length > 1 ? "Files: " : "File: ") + stepFileList.join(", ") }));
     card.appendChild(el("div", { class: "step-lead rich-text", html: richTextToHtml(step.lead) }));
 
     // Generic "Required steps go in order" / "Bonus unlocks together" flow
     // banners were removed here (steps 1-8) - they duplicated the
     // sidebar's own permanent group headers/notes (see renderSidebarGroup),
     // which are visible at all times regardless of which step is open.
-    // TODO 9's capstone banners are NOT duplicated anywhere else, so they
-    // stay exactly as they were.
-    if (step.id === CAPSTONE_BONUS_ID) {
-      if (status === "locked") {
-        card.appendChild(el("div", { class: "flow-banner capstone-locked" }, [
-          svgIcon('<rect x="5" y="11" width="14" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2"/>'),
-          el("span", {}, ["Finish every other Bonus challenge first, then come back and write the rules for the game you actually built."]),
-        ]));
-      } else {
-        card.appendChild(el("div", { class: "flow-banner bonus" }, [
-          svgIcon('<path d="M4 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'),
-          el("span", {}, ["Capstone Bonus step — every other Bonus challenge is done, so it's time to write the rules for the game you actually built."]),
-        ]));
-      }
-    }
+    // TODO 9 used to have its own extra "capstone" banner here (locked
+    // until every other Bonus was done) - that lock was removed entirely
+    // per direct teacher request, so TODO 9 is a normal Bonus step now with
+    // no special banner either.
 
     var refDetails = el("details", { class: "code-reference" }, [
       el("summary", { text: "Code reference — identifiers you'll see (" + step.codeReference.length + ")" }),
@@ -1289,7 +1286,7 @@
       // just wrote if their own style/spacing differs.
       var partShells = [];
       step.parts.forEach(function (part, i) {
-        card.appendChild(el("div", { class: "editor-file-label" }, [step.file, el("span", { class: "editor-part-label", text: "Part " + part.part }), el("span", {}, [part.title || ""])]));
+        card.appendChild(el("div", { class: "editor-file-label" }, [partFile(step, part), el("span", { class: "editor-part-label", text: "Part " + part.part }), el("span", {}, [part.title || ""])]));
         if (part.lead) {
           card.appendChild(el("div", { class: "step-lead rich-text part-lead", html: richTextToHtml(part.lead) }));
         }
@@ -1335,21 +1332,37 @@
       class: "btn btn-outline-danger btn-small", type: "button",
       onclick: function () { resetStep(step.id); },
     }, ["Reset this step"]);
+    // Teacher-only escape hatch for a spurious grading bug (a student's
+    // code is genuinely correct but the grader throws an error anyway) -
+    // deliberately NOT a prominent button, just a small quiet link near
+    // Run/Grade. See promptTeacherOverride() for what "the code" does.
+    var overrideLink = el("button", {
+      class: "override-link small muted", type: "button",
+    }, ["Trouble with grading?"]);
+    overrideLink.addEventListener("click", function () { promptTeacherOverride(step.id); });
     // C2: opens a read-only, VS-Code-like view of the COMPLETE real file
     // (step.file) with this step's own live code (and every other TODO's
     // live code in that same file) spliced into place - see
     // openFullFileViewer/buildFullFileLive near the project-export code.
-    var viewFileBtn = el("button", {
-      class: "btn btn-small", type: "button",
-      onclick: function () { openFullFileViewer(step); },
-    }, ["📄 View full file"]);
+    // Multi-file Bonus steps (e.g. TODO 8: settings.py + game.py) get one
+    // button PER distinct file, each labeled with that filename so it's
+    // unambiguous which one it opens; single-file steps keep the plain
+    // "View full file" label.
+    var viewFileBtns = stepFileList.map(function (fname) {
+      return el("button", {
+        class: "btn btn-small", type: "button",
+        onclick: function () { openFullFileViewer(fname); },
+      }, [stepFileList.length > 1 ? "📄 View " + fname : "📄 View full file"]);
+    });
 
     card.appendChild(el("div", { class: "step-actions" }, [
-      gradeBtn, hintBtn, skipBtn, viewFileBtn,
+      gradeBtn, hintBtn, skipBtn,
+    ].concat(viewFileBtns).concat([
       el("span", { class: "spacer" }),
       el("span", { class: "attempt-count", text: stepData.attempts + " attempt" + (stepData.attempts === 1 ? "" : "s") }),
+      overrideLink,
       resetBtn,
-    ]));
+    ])));
 
     if (stepData.lastFeedback) card.appendChild(renderFeedback(stepData.lastFeedback, step));
 
@@ -1437,6 +1450,51 @@
 
   function noHarnessFeedback() {
     return { ok: false, passed: [], failed: ["No grading harness is registered for this step yet."], warnings: [], error: null, traceback: null };
+  }
+
+  // Teacher-only escape hatch: sometimes a student's code is genuinely
+  // correct but the grader throws a spurious error anyway (a bug) - typing
+  // the right code here marks the CURRENT step actually "completed" (never
+  // "skipped" - Skip is a distinct, visually-marked state elsewhere) and
+  // re-runs the exact same post-pass refresh a normal grade success
+  // triggers, so Required unlocking / Bonus availability / the Play tab's
+  // capabilities all update identically to a real pass.
+  //
+  // IMPORTANT (disclosed, not hidden): this whole site ships as plain
+  // client-side JavaScript any student can open in dev tools, so this code
+  // is not a real secret - a curious student could find the literal string
+  // below and use it themselves. That's an accepted tradeoff for what this
+  // is: a low-friction, accidental-discovery-deterrent convenience for a
+  // teacher mid-class, NOT a security boundary. Deliberately not making it
+  // MORE discoverable than necessary (unobtrusive link, no code shown in
+  // any visible label) is the right amount of caution for that scope - not
+  // pretending it's actually secret.
+  var TEACHER_OVERRIDE_CODE = "0924";
+
+  function applyTeacherOverride(id) {
+    var step = STEP_BY_ID[id];
+    var stepData = state.steps[id];
+    stepData.attempts += 1;
+    stepData.status = "completed";
+    stepData.lastFeedback = {
+      ok: true,
+      passed: ["Marked complete by teacher override - not a real grading pass."],
+      failed: [], warnings: [], error: null, traceback: null,
+    };
+    persist();
+    pendingVizTrigger = "grade";
+    renderAll();
+    if (typeof PlayEngine !== "undefined") PlayEngine.refresh();
+  }
+
+  function promptTeacherOverride(id) {
+    var entered = window.prompt("Grading trouble? Enter the code from your teacher to mark this step complete.");
+    if (entered === null) return; // cancelled
+    if (entered.trim() === TEACHER_OVERRIDE_CODE) {
+      applyTeacherOverride(id);
+    } else if (entered.trim() !== "") {
+      window.alert("That code didn't work.");
+    }
   }
 
   // ---------------------------------------- 10. behaviour harnesses
@@ -1782,11 +1840,12 @@
     guardClause_3: harness_guardClause_3,
     positionDelta_4: harness_positionDelta_4,
     dijkstra_5: harness_dijkstra_5,
+    customItems_8: harness_customItems_8,
   };
 
   // ------------------------------------------------- 11. syntax harnesses
   //
-  // These are the open-ended TODOs (1, 6, 7, 8, 9): there is no single
+  // These are the open-ended TODOs (1, 6, 7, 9): there is no single
   // "correct" value, so passing only requires two things:
   //   1. the code compiles and executes without a Python error, and
   //   2. every name in mustDefine actually got defined (so nothing crashes
@@ -1844,8 +1903,12 @@
     ].join("\n");
   }
 
+  // TODO 6 is now two parts in the same file (Part 1/2: ROUND_CONFIGS,
+  // unchanged; Part 2/2: PLAYER_MOVE_DELAY_MS/ALLOW_PATH_HINT/MAX_HINT_COUNT,
+  // previously given code) - graded as one joined blob like TODO 7, since
+  // syntax mode just needs both parts' names in one namespace together.
   function harness_syntax_6(code) {
-    var starter = linesOf(STEP_BY_ID["6"].starter);
+    var starter = linesOf(STEP_BY_ID["6"].parts[0].starter);
     return [
       pySyntaxPrelude(code, starter),
       "def _run():",
@@ -1861,36 +1924,48 @@
       "        starter_ns = {}",
       "        exec(compile(STARTER, '<starter>', 'exec'), {}, starter_ns)",
       "        if 'ROUND_CONFIGS' not in ns:",
-      "            result['failed'].append('Missing definition: ROUND_CONFIGS.')",
-      "            result['ok'] = False",
-      "            return json.dumps(result)",
-      "        result['passed'].append('ROUND_CONFIGS is defined.')",
-      "        rc = ns['ROUND_CONFIGS']",
-      "        ref_keys = set(starter_ns['ROUND_CONFIGS'][0].keys())",
-      "        if not isinstance(rc, list) or len(rc) != 3:",
-      "            result['warnings'].append('Heads up: ROUND_CONFIGS is usually a list of exactly 3 round dictionaries — this still counts as complete, but the real game may not run correctly with this shape. Try it in the Play tab or your local pygame window to check.')",
+      "            result['failed'].append('Part 1: Missing definition: ROUND_CONFIGS.')",
       "        else:",
-      "            for i, round_dict in enumerate(rc):",
-      "                label = 'round %d' % (i + 1)",
-      "                if not isinstance(round_dict, dict):",
-      "                    result['warnings'].append('Heads up: %s is not a dictionary.' % label)",
-      "                    continue",
-      "                keys = set(round_dict.keys())",
-      "                if keys != ref_keys:",
-      "                    missing = ref_keys - keys",
-      "                    extra = keys - ref_keys",
-      "                    msg = 'Heads up: %s has different keys than the starter.' % label",
-      "                    if missing:",
-      "                        msg += ' Missing: %s.' % ', '.join(sorted(missing))",
-      "                    if extra:",
-      "                        msg += ' Extra: %s.' % ', '.join(sorted(extra))",
-      "                    result['warnings'].append(msg + ' Removing a key the engine expects can crash the game — double-check this is intentional.')",
-      "                    continue",
-      "                bad_types = [k for k, v in round_dict.items() if type(v) is not int]",
-      "                if bad_types:",
-      "                    result['warnings'].append('Heads up: %s has non-integer value(s) for %s — the engine expects plain integers here.' % (label, ', '.join(bad_types)))",
-      "                    continue",
-      "                result['passed'].append('%s: %s' % (label, _short_repr(round_dict)))",
+      "            result['passed'].append('Part 1: ROUND_CONFIGS is defined.')",
+      "            rc = ns['ROUND_CONFIGS']",
+      "            ref_keys = set(starter_ns['ROUND_CONFIGS'][0].keys())",
+      "            if not isinstance(rc, list) or len(rc) != 3:",
+      "                result['warnings'].append('Heads up: ROUND_CONFIGS is usually a list of exactly 3 round dictionaries — this still counts as complete, but the real game may not run correctly with this shape. Try it in the Play tab or your local pygame window to check.')",
+      "            else:",
+      "                for i, round_dict in enumerate(rc):",
+      "                    label = 'round %d' % (i + 1)",
+      "                    if not isinstance(round_dict, dict):",
+      "                        result['warnings'].append('Heads up: %s is not a dictionary.' % label)",
+      "                        continue",
+      "                    keys = set(round_dict.keys())",
+      "                    if keys != ref_keys:",
+      "                        missing = ref_keys - keys",
+      "                        extra = keys - ref_keys",
+      "                        msg = 'Heads up: %s has different keys than the starter.' % label",
+      "                        if missing:",
+      "                            msg += ' Missing: %s.' % ', '.join(sorted(missing))",
+      "                        if extra:",
+      "                            msg += ' Extra: %s.' % ', '.join(sorted(extra))",
+      "                        result['warnings'].append(msg + ' Removing a key the engine expects can crash the game — double-check this is intentional.')",
+      "                        continue",
+      "                    bad_types = [k for k, v in round_dict.items() if type(v) is not int]",
+      "                    if bad_types:",
+      "                        result['warnings'].append('Heads up: %s has non-integer value(s) for %s — the engine expects plain integers here.' % (label, ', '.join(bad_types)))",
+      "                        continue",
+      "                    result['passed'].append('%s: %s' % (label, _short_repr(round_dict)))",
+      "        pacing_names = ['PLAYER_MOVE_DELAY_MS', 'ALLOW_PATH_HINT', 'MAX_HINT_COUNT']",
+      "        missing_pacing = [n for n in pacing_names if n not in ns]",
+      "        if missing_pacing:",
+      "            result['failed'].append('Part 2: Missing definition(s): %s.' % ', '.join(missing_pacing))",
+      "        else:",
+      "            result['passed'].append('Part 2: PLAYER_MOVE_DELAY_MS=%s, ALLOW_PATH_HINT=%s, MAX_HINT_COUNT=%s.' % (",
+      "                _short_repr(ns['PLAYER_MOVE_DELAY_MS']), _short_repr(ns['ALLOW_PATH_HINT']), _short_repr(ns['MAX_HINT_COUNT'])))",
+      "            if type(ns['PLAYER_MOVE_DELAY_MS']) is not int or ns['PLAYER_MOVE_DELAY_MS'] < 0:",
+      "                result['warnings'].append('Heads up: PLAYER_MOVE_DELAY_MS is usually a non-negative integer (milliseconds) — still counts as complete, but double-check it in the Play tab.')",
+      "            if not isinstance(ns['ALLOW_PATH_HINT'], bool):",
+      "                result['warnings'].append('Heads up: ALLOW_PATH_HINT is usually True or False — still counts as complete.')",
+      "            if type(ns['MAX_HINT_COUNT']) is not int or ns['MAX_HINT_COUNT'] < 0:",
+      "                result['warnings'].append('Heads up: MAX_HINT_COUNT is usually a non-negative integer — still counts as complete.')",
       "    except Exception as e:",
       "        result['error'] = '%s: %s' % (type(e).__name__, e)",
       "        result['traceback'] = traceback.format_exc()",
@@ -1900,13 +1975,23 @@
     ].join("\n");
   }
 
+  // TODO 7 Part 1/2 now also covers the 5 fallback shape colors (previously
+  // given code); Part 2/2 now also covers BOMB_EXPLOSION_DURATION_MS and
+  // BACKGROUND_MUSIC_VOLUME (previously given code) - all newly-exposed
+  // constants are checked leniently (missing name = fail, same as the
+  // asset paths already were; wrong shape/type = warning only, never a
+  // block), matching the existing convention for every other Bonus TODO.
   function harness_syntax_7(code) {
     var imageVars = ["PLAYER_IMAGE_PATH", "GOAL_IMAGE_PATH", "BOMB_IMAGE_PATH", "FLOOR_TILE_IMAGE_PATH"];
+    var colorVars = ["WALL_COLOR", "PLAYER_COLOR", "GOAL_COLOR", "BOMB_COLOR", "BOMB_EXPLOSION_COLOR"];
     var soundVars = ["BOMB_SOUND_PATH", "BACKGROUND_MUSIC_PATH"];
+    var tuningVars = ["BOMB_EXPLOSION_DURATION_MS", "BACKGROUND_MUSIC_VOLUME"];
     return [
       pySyntaxPrelude(code, ""),
       "IMAGE_VARS = " + JSON.stringify(imageVars).replace(/"/g, "'"),
+      "COLOR_VARS = " + JSON.stringify(colorVars).replace(/"/g, "'"),
       "SOUND_VARS = " + JSON.stringify(soundVars).replace(/"/g, "'"),
+      "TUNING_VARS = " + JSON.stringify(tuningVars).replace(/"/g, "'"),
       "KNOWN_IMAGES = " + JSON.stringify(KNOWN_ASSETS.images).replace(/"/g, "'"),
       "KNOWN_SOUNDS = " + JSON.stringify(KNOWN_ASSETS.sounds).replace(/"/g, "'"),
       "IMAGE_EXT = ('.png', '.jpg', '.jpeg', '.gif', '.bmp')",
@@ -1921,14 +2006,14 @@
       "    try:",
       "        ns = {}",
       "        exec(compile(CODE, '<student>', 'exec'), {}, ns)",
-      "        all_vars = IMAGE_VARS + SOUND_VARS",
+      "        all_vars = IMAGE_VARS + COLOR_VARS + SOUND_VARS + TUNING_VARS",
       "        missing = [n for n in all_vars if n not in ns]",
       "        if missing:",
       "            result['failed'].append('Missing definition(s): %s.' % ', '.join(missing))",
       "            result['ok'] = False",
       "            return json.dumps(result)",
-      "        result['passed'].append('All %d asset variables are defined.' % len(all_vars))",
-      "        def check(name, folder, exts, known):",
+      "        result['passed'].append('All %d asset/color/tuning variables are defined.' % len(all_vars))",
+      "        def check_path(name, folder, exts, known):",
       "            val = ns[name]",
       "            if val is None:",
       "                return",
@@ -1942,10 +2027,25 @@
       "            base = norm.rsplit('/', 1)[-1]",
       "            if base not in known:",
       "                result['warnings'].append('%s = %s — this isn\\'t one of the bundled files, but it will work once you add your own file at that path.' % (name, _short_repr(val)))",
+      "        def check_color(name):",
+      "            val = ns[name]",
+      "            if not (isinstance(val, tuple) and len(val) == 3 and all(isinstance(v, int) and 0 <= v <= 255 for v in val)):",
+      "                result['warnings'].append('Heads up: %s is usually a 3-tuple of ints 0-255, e.g. (37, 99, 235) — this still counts as complete, but double-check it renders correctly in the Play tab.' % name)",
+      "        def check_tuning(name, expect_types, low=None, high=None):",
+      "            val = ns[name]",
+      "            if not isinstance(val, expect_types) or isinstance(val, bool):",
+      "                result['warnings'].append('Heads up: %s = %s is not the expected number type — this still counts as complete, but double-check it in the Play tab.' % (name, _short_repr(val)))",
+      "                return",
+      "            if (low is not None and val < low) or (high is not None and val > high):",
+      "                result['warnings'].append('Heads up: %s = %s is outside its usual range — this still counts as complete, but double-check it behaves as expected.' % (name, _short_repr(val)))",
       "        for n in IMAGE_VARS:",
-      "            check(n, 'assets/images/', IMAGE_EXT, KNOWN_IMAGES)",
+      "            check_path(n, 'assets/images/', IMAGE_EXT, KNOWN_IMAGES)",
       "        for n in SOUND_VARS:",
-      "            check(n, 'assets/sounds/', SOUND_EXT, KNOWN_SOUNDS)",
+      "            check_path(n, 'assets/sounds/', SOUND_EXT, KNOWN_SOUNDS)",
+      "        for n in COLOR_VARS:",
+      "            check_color(n)",
+      "        check_tuning('BOMB_EXPLOSION_DURATION_MS', int, low=0)",
+      "        check_tuning('BACKGROUND_MUSIC_VOLUME', (int, float), low=0, high=1)",
       "    except Exception as e:",
       "        result['error'] = '%s: %s' % (type(e).__name__, e)",
       "        result['traceback'] = traceback.format_exc()",
@@ -1955,54 +2055,132 @@
     ].join("\n");
   }
 
-  function harness_syntax_8(code) {
-    var starter = linesOf(STEP_BY_ID["8"].starter);
+  // TODO 8 now spans two files (Part 1/2 in settings.py: the CUSTOM_ITEMS
+  // data; Part 2/2 in game.py: apply_custom_item_effect's branching, now a
+  // real behaviour-graded TODO instead of given code) - graded together as
+  // one BEHAVIOUR harness, same "Part 1: .../Part 2: ..." attribution
+  // convention as TODO 5/7. Part 1 keeps the old open-ended/syntax-style
+  // checks (compiles, defines CUSTOM_ITEMS, shape warnings only, no fixed
+  // answer). Part 2 is graded on REAL outcomes: self.bonus_time_seconds /
+  // self.hints_remaining after calling the student's code with a few
+  // (effect, amount) pairs - including an unrecognized effect, which must
+  // be a safe no-op (never a crash), preserving the exact flexibility
+  // promise TODO 8 Part 1 makes about inventing new effect names.
+  function harness_customItems_8(code1, code2) {
+    // "image"/"sound" are intentionally NOT in ITEM_KEYS: they are
+    // optional-with-None, exactly like every other asset path in this
+    // project (TODO 7) - an item simply omitting them is equivalent to
+    // explicitly writing None, so it must never warn or block just for
+    // being absent. Only checked (as a lenient warning) when present.
     var itemKeys = ["name", "color", "effect", "amount"];
+    var fn2Src = buildFnSource("self, effect, amount", code2, "    ");
     return [
-      pySyntaxPrelude(code, starter),
+      PY_PRELUDE,
+      b64Line("CODE1", code1),
+      b64Line("FN2_SRC", fn2Src),
       "ITEM_KEYS = " + JSON.stringify(itemKeys).replace(/"/g, "'"),
       "KNOWN_EFFECTS = ['add_time', 'add_hint']",
+      "KNOWN_IMAGES = " + JSON.stringify(KNOWN_ASSETS.images).replace(/"/g, "'"),
+      "KNOWN_SOUNDS = " + JSON.stringify(KNOWN_ASSETS.sounds).replace(/"/g, "'"),
+      "IMAGE_EXT = ('.png', '.jpg', '.jpeg', '.gif', '.bmp')",
+      "SOUND_EXT = ('.wav', '.mp3', '.ogg')",
+      "def _short_repr(v):",
+      "    try:",
+      "        r = repr(v)",
+      "    except Exception:",
+      "        r = '<value of type %s>' % type(v).__name__",
+      "    return r if len(r) <= 70 else r[:67] + '...'",
       "def _run():",
       "    result = {'ok': False, 'passed': [], 'failed': [], 'warnings': [], 'error': None, 'traceback': None}",
       "    try:",
-      "        compile(CODE, '<student>', 'exec')",
+      "        compile(CODE1, '<student-part1>', 'exec')",
       "    except SyntaxError as e:",
-      "        result['error'] = 'Python syntax error on line %s: %s.' % (e.lineno, e.msg)",
+      "        result['error'] = 'Part 1: Python syntax error on line %s: %s.' % (e.lineno, e.msg)",
       "        return json.dumps(result)",
       "    try:",
-      "        ns = {}",
-      "        exec(compile(CODE, '<student>', 'exec'), {}, ns)",
-      "        if 'CUSTOM_ITEMS' not in ns:",
-      "            result['failed'].append('Missing definition: CUSTOM_ITEMS.')",
-      "            result['ok'] = False",
-      "            return json.dumps(result)",
-      "        items_list = ns['CUSTOM_ITEMS']",
-      "        if not isinstance(items_list, list) or len(items_list) == 0:",
-      "            result['warnings'].append('Heads up: CUSTOM_ITEMS is usually a non-empty list of item dictionaries — this still counts as complete, but double-check it in the Play tab.')",
-      "            result['passed'].append('CUSTOM_ITEMS is defined.')",
+      "        ns1 = {}",
+      "        exec(compile(CODE1, '<student-part1>', 'exec'), {}, ns1)",
+      "        if 'CUSTOM_ITEMS' not in ns1:",
+      "            result['failed'].append('Part 1: Missing definition: CUSTOM_ITEMS.')",
       "        else:",
-      "            result['passed'].append('CUSTOM_ITEMS is defined with %d item(s).' % len(items_list))",
-      "            for i, item_def in enumerate(items_list):",
-      "                label = 'item %d' % (i + 1)",
-      "                if not isinstance(item_def, dict):",
-      "                    result['warnings'].append('Heads up: %s is not a dictionary.' % label)",
-      "                    continue",
-      "                keys = set(item_def.keys())",
-      "                missing_keys = set(ITEM_KEYS) - keys",
-      "                if missing_keys:",
-      "                    result['warnings'].append('Heads up: %s is missing key(s): %s.' % (label, ', '.join(sorted(missing_keys))))",
-      "                    continue",
-      "                color = item_def.get('color')",
-      "                if not (isinstance(color, tuple) and len(color) == 3 and all(isinstance(v, int) and 0 <= v <= 255 for v in color)):",
-      "                    result['warnings'].append('Heads up: %s color is usually a 3-tuple of ints 0-255, e.g. (255, 215, 0) — still counts as complete, but double-check it renders correctly.' % label)",
-      "                effect = item_def.get('effect')",
-      "                if effect not in KNOWN_EFFECTS:",
-      "                    result['warnings'].append('Heads up: %s[\\'effect\\'] = %s is not one of the built-in effects (%s) — this still counts as complete (an unrecognized effect is a safe no-op in the real game), but double-check it is the effect you meant.' % (label, _short_repr(effect), ', '.join(KNOWN_EFFECTS)))",
-      "                if type(item_def.get('amount')) is not int:",
-      "                    result['warnings'].append('Heads up: %s[\\'amount\\'] is usually a plain integer — this still counts as complete, but double-check it behaves as expected.' % label)",
-      "                result['passed'].append('%s: %s' % (label, _short_repr(item_def)))",
+      "            items_list = ns1['CUSTOM_ITEMS']",
+      "            if not isinstance(items_list, list) or len(items_list) == 0:",
+      "                result['warnings'].append('Heads up: CUSTOM_ITEMS is usually a non-empty list of item dictionaries — this still counts as complete, but double-check it in the Play tab.')",
+      "                result['passed'].append('Part 1: CUSTOM_ITEMS is defined.')",
+      "            else:",
+      "                result['passed'].append('Part 1: CUSTOM_ITEMS is defined with %d item(s).' % len(items_list))",
+      "                for i, item_def in enumerate(items_list):",
+      "                    label = 'item %d' % (i + 1)",
+      "                    if not isinstance(item_def, dict):",
+      "                        result['warnings'].append('Heads up: %s is not a dictionary.' % label)",
+      "                        continue",
+      "                    keys = set(item_def.keys())",
+      "                    missing_keys = set(ITEM_KEYS) - keys",
+      "                    if missing_keys:",
+      "                        result['warnings'].append('Heads up: %s is missing key(s): %s.' % (label, ', '.join(sorted(missing_keys))))",
+      "                        continue",
+      "                    color = item_def.get('color')",
+      "                    if not (isinstance(color, tuple) and len(color) == 3 and all(isinstance(v, int) and 0 <= v <= 255 for v in color)):",
+      "                        result['warnings'].append('Heads up: %s color is usually a 3-tuple of ints 0-255, e.g. (255, 215, 0) — still counts as complete, but double-check it renders correctly.' % label)",
+      "                    effect = item_def.get('effect')",
+      "                    if effect not in KNOWN_EFFECTS:",
+      "                        result['warnings'].append('Heads up: %s[\\'effect\\'] = %s is not one of the built-in effects (%s) — this still counts as complete (an unrecognized effect is a safe no-op in the real game), but double-check it is the effect you meant.' % (label, _short_repr(effect), ', '.join(KNOWN_EFFECTS)))",
+      "                    if type(item_def.get('amount')) is not int:",
+      "                        result['warnings'].append('Heads up: %s[\\'amount\\'] is usually a plain integer — this still counts as complete, but double-check it behaves as expected.' % label)",
+      "                    def _check_asset_field(field, folder, exts, known):",
+      "                        val = item_def.get(field)",
+      "                        if val is None:",
+      "                            return",
+      "                        if not isinstance(val, str):",
+      "                            result['warnings'].append(\"Heads up: %s['%s'] should be None or a string path — this still counts as complete, but the real game will likely error when it tries to load this.\" % (label, field))",
+      "                            return",
+      "                        norm = val.replace(chr(92), '/')",
+      "                        if not norm.startswith(folder) or not norm.lower().endswith(exts):",
+      "                            result['warnings'].append(\"Heads up: %s['%s'] = %s doesn't look like a path under %s with a valid extension — double-check it, though this still counts as complete.\" % (label, field, _short_repr(val), folder))",
+      "                            return",
+      "                        base = norm.rsplit('/', 1)[-1]",
+      "                        if base not in known:",
+      "                            result['warnings'].append(\"%s['%s'] = %s — this isn't one of the bundled files, but it will work once you add your own file at that path.\" % (label, field, _short_repr(val)))",
+      "                    _check_asset_field('image', 'assets/images/', IMAGE_EXT, KNOWN_IMAGES)",
+      "                    _check_asset_field('sound', 'assets/sounds/', SOUND_EXT, KNOWN_SOUNDS)",
+      "                    result['passed'].append('%s: %s' % (label, _short_repr(item_def)))",
       "    except Exception as e:",
-      "        result['error'] = '%s: %s' % (type(e).__name__, e)",
+      "        result['error'] = 'Part 1: %s: %s' % (type(e).__name__, e)",
+      "        result['traceback'] = traceback.format_exc()",
+      "        return json.dumps(result)",
+      "    try:",
+      "        exec(compile(FN2_SRC, '<student-part2>', 'exec'), {}, {})",
+      "    except SyntaxError as e:",
+      "        line = max(1, (e.lineno or 1) - 1)",
+      "        result['error'] = 'Part 2: Python syntax error on line %s: %s.' % (line, e.msg)",
+      "        return json.dumps(result)",
+      "    try:",
+      "        class SelfObj:",
+      "            def __init__(self, bonus_time_seconds, hints_remaining):",
+      "                self.bonus_time_seconds = bonus_time_seconds",
+      "                self.hints_remaining = hints_remaining",
+      "        cases = [",
+      "            ('add_time adds seconds', 'add_time', 15, (0, 2), (15, 2)),",
+      "            ('add_time stacks on existing bonus time', 'add_time', 10, (30, 1), (40, 1)),",
+      "            ('add_hint adds a hint use', 'add_hint', 1, (0, 2), (0, 3)),",
+      "            ('add_hint with a larger amount', 'add_hint', 2, (5, 0), (5, 2)),",
+      "            ('an unrecognized effect is a safe no-op', 'shrink_maze', 999, (3, 1), (3, 1)),",
+      "        ]",
+      "        for label, effect, amount, start, expect in cases:",
+      "            ns2 = {}",
+      "            exec(compile(FN2_SRC, '<student-part2>', 'exec'), {}, ns2)",
+      "            self_ = SelfObj(start[0], start[1])",
+      "            try:",
+      "                ns2['_fn'](self_, effect, amount)",
+      "            except Exception as e:",
+      "                result['failed'].append('Part 2 (%s): raised %s: %s - an unrecognized effect must be a safe no-op, never an error.' % (label, type(e).__name__, e))",
+      "                continue",
+      "            if self_.bonus_time_seconds == expect[0] and self_.hints_remaining == expect[1]:",
+      "                result['passed'].append('Part 2 (%s): OK' % label)",
+      "            else:",
+      "                result['failed'].append('Part 2 (%s): expected (bonus_time_seconds, hints_remaining) == %r, got %r.' % (label, expect, (self_.bonus_time_seconds, self_.hints_remaining)))",
+      "    except Exception as e:",
+      "        result['error'] = 'Part 2: %s: %s' % (type(e).__name__, e)",
       "        result['traceback'] = traceback.format_exc()",
       "    result['ok'] = result['error'] is None and len(result['failed']) == 0",
       "    return json.dumps(result)",
@@ -2049,7 +2227,6 @@
     "1": harness_syntax_1,
     "6": harness_syntax_6,
     "7": harness_syntax_7,
-    "8": harness_syntax_8,
     "9": harness_syntax_9,
   };
 
@@ -3113,7 +3290,9 @@
     }
 
     function runFresh() {
-      var code = state.steps["8"].code;
+      // TODO 8 is two parts now (Part 1/2 settings.py data, Part 2/2
+      // game.py effect code) - this preview only needs Part 1's data.
+      var code = state.steps["8"].code[0];
       if (refs) refs.verdict.info("Running your code…");
       ensurePyodide().then(function (py) {
         return py.runPythonAsync(traceHarness_customItems(code));
@@ -3446,12 +3625,22 @@
   // deleted along with terrain itself; maze.py's get_terrain() always
   // returns "NORMAL" now, so there is nothing left for a painted map to
   // encode about terrain.)
-  function paintedItemsAndBombs(grid) {
+  // itemAssignments (optional): the map editor's own {"r,c": itemIndex}
+  // record of which specific CUSTOM_ITEMS entry a student placed at each
+  // item cell (see MapEditorViz's selectedItemIndex/paintCell) - each
+  // returned item position carries its assigned index (or null if never
+  // assigned, e.g. a round painted before item placement existed), so the
+  // Play tab can spawn EXACTLY the item the student chose there instead of
+  // a random one.
+  function paintedItemsAndBombs(grid, itemAssignments) {
     var items = [], bombs = [];
     for (var r = 0; r < grid.length; r++) {
       for (var c = 0; c < grid[r].length; c++) {
-        if (grid[r][c] === "CUSTOM_ITEM") items.push([r, c]);
-        else if (grid[r][c] === "BOMB") bombs.push([r, c]);
+        if (grid[r][c] === "CUSTOM_ITEM") {
+          var key = r + "," + c;
+          var idx = itemAssignments && itemAssignments[key] != null ? itemAssignments[key] : null;
+          items.push([r, c, idx]);
+        } else if (grid[r][c] === "BOMB") bombs.push([r, c]);
       }
     }
     return { items: items, bombs: bombs };
@@ -3663,11 +3852,33 @@
     var syncConflict = null; // {codeDict} when a hand-edit conflicts with the painted round
     var boundTextarea = null, onInputHandler = null, debouncedTextSync = null;
     var windowMouseupAttached = false;
+    // Cross-file dependency (Task 3's "harder, multi-file" philosophy
+    // applied to TODO 6): the map editor reads the student's OWN CUSTOM_ITEMS
+    // (TODO 8 Part 1/2, settings.py) so a specific item from their own list
+    // can be placed on the map, not just a generic "an item goes here"
+    // marker. itemDefsCache is a plain preview cache (never authoritative -
+    // PlayEngine re-derives the real thing the same way at Play-tab time),
+    // refreshed whenever this panel becomes visible so edits to TODO 8 show
+    // up here without a manual reload.
+    var itemDefsCache = null;
+    var selectedItemIndex = 0;
+
+    function loadItemDefs() {
+      ensurePyodide().then(function (py) {
+        return py.runPythonAsync(traceHarness_customItems(state.steps["8"].code[0]));
+      }).then(function (json) {
+        var data = JSON.parse(json);
+        itemDefsCache = (data.ok && data.items && data.items.length) ? data.items : null;
+        if (itemDefsCache && selectedItemIndex >= itemDefsCache.length) selectedItemIndex = 0;
+        renderPalette();
+        draw();
+      }).catch(function () { itemDefsCache = null; });
+    }
 
     var TILE_META = {
       WALL: { label: "Wall", color: "#3a3327", desc: "Blocks movement." },
       NORMAL: { label: "Floor (eraser)", color: "#12100c", desc: "Open, no effect." },
-      CUSTOM_ITEM: { label: "Custom item", color: "#22c55e", desc: "Spawns one of your TODO 8 custom items here." },
+      CUSTOM_ITEM: { label: "Item", color: "#22c55e", desc: "Spawns a specific item from your own TODO 8 CUSTOM_ITEMS list here." },
       BOMB: { label: "Bomb", color: "#e0685f", desc: "Touching it resets the player to the start position." },
       GOAL: { label: "Goal", color: "#f0c04a", desc: "Round exit (exactly one)." },
       START: { label: "Start", color: "#4fa3e3", desc: "Player start (exactly one)." },
@@ -3675,7 +3886,11 @@
 
     function activeRoundData() {
       var idx = state.mapEditorData.activeRound;
-      return { idx: idx, round: state.mapEditorData.rounds[idx] };
+      var round = state.mapEditorData.rounds[idx];
+      // Defensive normalize: rounds painted/saved before item placement
+      // existed won't have this field yet.
+      if (round && !round.itemAssignments) round.itemAssignments = {};
+      return { idx: idx, round: round };
     }
 
     function paletteTypes() {
@@ -3686,7 +3901,7 @@
       var existing = state.mapEditorData.rounds[idx];
       if (existing && existing.rows === rows && existing.cols === cols) return existing;
       var gen = generatePaintedGrid(rows, cols, Math.floor(Math.random() * 1000000), 3, {});
-      var fresh = { rows: rows, cols: cols, seed: 1, clusterSize: 3, grid: gen.grid, start: gen.start, goal: gen.goal, lastSyncedDict: null };
+      var fresh = { rows: rows, cols: cols, seed: 1, clusterSize: 3, grid: gen.grid, start: gen.start, goal: gen.goal, lastSyncedDict: null, itemAssignments: {} };
       state.mapEditorData.rounds[idx] = fresh;
       return fresh;
     }
@@ -3694,23 +3909,30 @@
     function pushUndo() {
       var d = activeRoundData().round;
       if (!d) return;
-      undoStack.push({ grid: cloneGrid(d.grid), start: d.start.slice(), goal: d.goal.slice() });
+      undoStack.push({ grid: cloneGrid(d.grid), start: d.start.slice(), goal: d.goal.slice(), itemAssignments: Object.assign({}, d.itemAssignments) });
       if (undoStack.length > 20) undoStack.shift();
       redoStack = [];
     }
 
     // Always paints exactly one tile per click/drag step (no brush-size
     // concept any more - the simplified editor is strictly "pick a tool,
-    // click/drag the board").
+    // click/drag the board"). Painting CUSTOM_ITEM always (re)stamps the
+    // CURRENTLY SELECTED item (see selectedItemIndex/renderPalette) onto
+    // that cell - painting the same tool over an already-placed item cell
+    // with a newly-selected item is how you change which item is there,
+    // consistent with how every other tool already just "stamps" onto a
+    // cell with no separate first-click-vs-repeat-click behavior.
     function paintCell(r, c, typeOverride) {
       var d = activeRoundData().round;
       if (!d) return;
       var rows = d.rows, cols = d.cols;
       if (r < 0 || r >= rows || c < 0 || c >= cols) return;
       var t = typeOverride || (eraseMode ? "NORMAL" : tool);
-      if (t === "GOAL") { d.goal = [r, c]; if (d.grid[r][c] === "WALL") d.grid[r][c] = "NORMAL"; }
-      else if (t === "START") { d.start = [r, c]; if (d.grid[r][c] === "WALL") d.grid[r][c] = "NORMAL"; }
-      else { d.grid[r][c] = t; }
+      var key = r + "," + c;
+      if (t === "GOAL") { d.goal = [r, c]; if (d.grid[r][c] === "WALL") d.grid[r][c] = "NORMAL"; delete d.itemAssignments[key]; }
+      else if (t === "START") { d.start = [r, c]; if (d.grid[r][c] === "WALL") d.grid[r][c] = "NORMAL"; delete d.itemAssignments[key]; }
+      else if (t === "CUSTOM_ITEM") { d.grid[r][c] = t; d.itemAssignments[key] = selectedItemIndex; }
+      else { d.grid[r][c] = t; delete d.itemAssignments[key]; }
     }
 
     function draw() {
@@ -3727,7 +3949,13 @@
           var x = c * CELL, y = r * CELL;
           var t = d.grid[r][c];
           var meta = TILE_META[t] || TILE_META.NORMAL;
-          ctx.fillStyle = meta.color;
+          var fillColor = meta.color;
+          if (t === "CUSTOM_ITEM" && itemDefsCache && itemDefsCache.length) {
+            var assignedIdx = d.itemAssignments[r + "," + c];
+            var assignedDef = itemDefsCache[assignedIdx] || itemDefsCache[0];
+            if (assignedDef && assignedDef.color) fillColor = "rgb(" + assignedDef.color.join(",") + ")";
+          }
+          ctx.fillStyle = fillColor;
           ctx.fillRect(x, y, CELL - 1, CELL - 1);
           var reachable = !!verdict.reach[r + "," + c];
           if (t !== "WALL" && !reachable) {
@@ -3757,14 +3985,31 @@
       refs.palette.innerHTML = "";
       paletteTypes().forEach(function (t) {
         var meta = TILE_META[t] || TILE_META.NORMAL;
+        var label = meta.label, color = meta.color, title = meta.label + " — " + meta.desc;
+        var hasItems = t === "CUSTOM_ITEM" && itemDefsCache && itemDefsCache.length;
+        if (hasItems) {
+          var def = itemDefsCache[selectedItemIndex] || itemDefsCache[0];
+          label = "Item: " + def.name;
+          color = "rgb(" + def.color.join(",") + ")";
+          title = itemDefsCache.length > 1
+            ? "Paints \"" + def.name + "\" — click again while selected to cycle to your next item (" + itemDefsCache.length + " defined in TODO 8)"
+            : "Paints \"" + def.name + "\" here.";
+        } else if (t === "CUSTOM_ITEM") {
+          title = "Finish TODO 8 (Part 1/2) to define your own item(s) here — using a generic placeholder for now.";
+        }
         var swatch = el("button", {
           class: "map-palette-item" + (tool === t && !eraseMode ? " is-active" : ""),
           type: "button",
-          title: meta.label + " — " + meta.desc,
-          onclick: function () { tool = t; eraseMode = false; renderPalette(); },
+          title: title,
+          onclick: function () {
+            if (t === "CUSTOM_ITEM" && tool === "CUSTOM_ITEM" && !eraseMode && itemDefsCache && itemDefsCache.length > 1) {
+              selectedItemIndex = (selectedItemIndex + 1) % itemDefsCache.length;
+            }
+            tool = t; eraseMode = false; renderPalette();
+          },
         }, [
-          el("span", { class: "map-palette-swatch", style: "background:" + meta.color }),
-          el("span", { class: "map-palette-label", text: meta.label }),
+          el("span", { class: "map-palette-swatch", style: "background:" + color }),
+          el("span", { class: "map-palette-label", text: label }),
         ]);
         refs.palette.appendChild(swatch);
       });
@@ -3906,16 +4151,16 @@
       var ad = activeRoundData();
       if (!undoStack.length || !ad.round) return;
       var snap = undoStack.pop();
-      redoStack.push({ grid: cloneGrid(ad.round.grid), start: ad.round.start.slice(), goal: ad.round.goal.slice() });
-      ad.round.grid = snap.grid; ad.round.start = snap.start; ad.round.goal = snap.goal;
+      redoStack.push({ grid: cloneGrid(ad.round.grid), start: ad.round.start.slice(), goal: ad.round.goal.slice(), itemAssignments: Object.assign({}, ad.round.itemAssignments) });
+      ad.round.grid = snap.grid; ad.round.start = snap.start; ad.round.goal = snap.goal; ad.round.itemAssignments = snap.itemAssignments || {};
       draw(); syncCodeFromPaint(false); persist();
     }
     function doRedo() {
       var ad = activeRoundData();
       if (!redoStack.length || !ad.round) return;
       var snap = redoStack.pop();
-      undoStack.push({ grid: cloneGrid(ad.round.grid), start: ad.round.start.slice(), goal: ad.round.goal.slice() });
-      ad.round.grid = snap.grid; ad.round.start = snap.start; ad.round.goal = snap.goal;
+      undoStack.push({ grid: cloneGrid(ad.round.grid), start: ad.round.start.slice(), goal: ad.round.goal.slice(), itemAssignments: Object.assign({}, ad.round.itemAssignments) });
+      ad.round.grid = snap.grid; ad.round.start = snap.start; ad.round.goal = snap.goal; ad.round.itemAssignments = snap.itemAssignments || {};
       draw(); syncCodeFromPaint(false); persist();
     }
 
@@ -3995,7 +4240,7 @@
         container.appendChild(parseNotice);
         var conflictBox = el("div", { class: "viz-verdict verdict-info", hidden: "hidden" });
         container.appendChild(conflictBox);
-        container.appendChild(el("p", { class: "small muted mt-8", text: "Once TODO 6 is complete, this round uses your painted map in the Play tab instead of a randomly-generated one." }));
+        container.appendChild(el("p", { class: "small muted mt-8", text: "Once TODO 6 is complete, this round uses your painted map in the Play tab instead of a randomly-generated one — including exactly which of your own TODO 8 items you placed and where." }));
 
         refs = {
           container: container, boardWrap: boardWrap, palette: palette,
@@ -4012,9 +4257,10 @@
         debouncedTextSync = debounce(onHandEdit, 500);
         attachTextSync();
         refreshForRound();
+        loadItemDefs();
       },
-      show: function () { attachTextSync(); refreshForRound(); },
-      update: function () { attachTextSync(); refreshForRound(); },
+      show: function () { attachTextSync(); refreshForRound(); loadItemDefs(); },
+      update: function () { attachTextSync(); refreshForRound(); loadItemDefs(); },
       unmount: function () {
         if (boundTextarea && onInputHandler) boundTextarea.removeEventListener("input", onInputHandler);
         refs = null; boundTextarea = null;
@@ -4743,7 +4989,7 @@
         ["mapEditor", "Your painted rounds are used instead of random generation (TODO 6)"],
         ["assets", "Your chosen images/sounds are used (TODO 7)"],
         ["customItem", "Custom item(s) (TODO 8)"],
-        ["rules", "Your game's rules (TODO 9, capstone)"],
+        ["rules", "Your game's rules (TODO 9)"],
       ];
       refs.checklist.innerHTML = "";
       items2.forEach(function (pair) {
@@ -4758,8 +5004,14 @@
     // in the real game's create_game_objects(). Falls back to a plain
     // generic "no effect yet" item until TODO 8 is complete/loaded, exactly
     // like the real game would if CUSTOM_ITEMS were left empty.
-    function pickCustomItemDef() {
+    // explicitIndex (optional): a painted round's own assignment for this
+    // exact cell (see MapEditorViz's itemAssignments, TODO 6's item
+    // placement) - when present and in range, spawns EXACTLY that item
+    // instead of a random one, so a student's deliberate map-editor choice
+    // is honored in the real Play tab, not silently re-randomized.
+    function pickCustomItemDef(explicitIndex) {
       var list = (customItemDefs && customItemDefs.length) ? customItemDefs : [{ name: "Custom Item", color: [180, 180, 180], effect: null, amount: 0 }];
+      if (explicitIndex != null && list[explicitIndex]) return list[explicitIndex];
       return list[Math.floor(Math.random() * list.length)];
     }
 
@@ -4780,8 +5032,8 @@
         var pw = fitWidth(refs ? refs.container : document.body, playBoardMaxWidth());
         cellSize = Math.max(6, Math.min(playBoardCellCap(), Math.floor(pw / cols)));
         maze = paintedGridToWallGrid(painted.grid);
-        var extracted = paintedItemsAndBombs(painted.grid);
-        items = extracted.items.map(function (p) { return { row: p[0], col: p[1], active: true, itemDef: pickCustomItemDef() }; });
+        var extracted = paintedItemsAndBombs(painted.grid, painted.itemAssignments);
+        items = extracted.items.map(function (p) { return { row: p[0], col: p[1], active: true, itemDef: pickCustomItemDef(p[2]) }; });
         bombs = extracted.bombs.map(function (p) { return { row: p[0], col: p[1], active: true }; });
         player = { row: painted.start[0], col: painted.start[1] };
         playerStart = { row: painted.start[0], col: painted.start[1] };
@@ -5015,7 +5267,7 @@
     function loadCustomItems() {
       if (!isDoneExact("8")) { customItemDefs = null; return; }
       ensurePyodide().then(function (py) {
-        return py.runPythonAsync(traceHarness_customItems(state.steps["8"].code));
+        return py.runPythonAsync(traceHarness_customItems(state.steps["8"].code[0]));
       }).then(function (json) {
         var d = JSON.parse(json);
         if (d.ok) customItemDefs = d.items;
@@ -5307,8 +5559,7 @@
     return text;
   }
 
-  function openFullFileViewer(step) {
-    var fileName = step.file;
+  function openFullFileViewer(fileName) {
     var fullText = buildFullFileLive(fileName);
     var overlay = el("div", { class: "modal-overlay", role: "dialog", "aria-modal": "true", "aria-label": "Full file: " + fileName });
     var box = el("div", { class: "modal-box fileview-modal" });
@@ -5394,7 +5645,7 @@
     var unfinished = [];
     REQUIRED_ORDER.concat(BONUS_ORDER).forEach(function (id) {
       var st = state.steps[id].status;
-      if (st !== "completed") unfinished.push({ id: id, file: STEP_BY_ID[id].file, status: st === "skipped" ? "skipped" : "not attempted yet" });
+      if (st !== "completed") unfinished.push({ id: id, file: stepFiles(STEP_BY_ID[id]).join(", "), status: st === "skipped" ? "skipped" : "not attempted yet" });
     });
     return {
       reqDone: reqDone, reqTotal: REQUIRED_ORDER.length, reqSkipped: reqSkipped,
@@ -5799,23 +6050,25 @@
       refs.subtitle.hidden = true;
     });
 
-    // The rules capstone (CAPSTONE_BONUS_ID) is the ONE narrow, explicitly
-    // authorized exception to "never show TODO-numbered language in kiosk
-    // mode" (see teachingNote() in PlayEngine) - everywhere else in this
-    // window stays silent about unfinished work; this single placeholder
-    // is allowed because there is no non-TODO-referencing way to explain
-    // why the rules section is empty.
-    var rulesDone = !!(state.steps[CAPSTONE_BONUS_ID] && state.steps[CAPSTONE_BONUS_ID].status === "completed");
+    // The rules step (TODO 9, no longer a locked "capstone" - it unlocks
+    // with the rest of Bonus now) is the ONE narrow, explicitly authorized
+    // exception to "never show TODO-numbered language in kiosk mode" (see
+    // teachingNote() in PlayEngine) - everywhere else in this window stays
+    // silent about unfinished work; this single placeholder is allowed
+    // because there is no non-TODO-referencing way to explain why the
+    // rules section is empty.
+    var RULES_STEP_ID = "9";
+    var rulesDone = !!(state.steps[RULES_STEP_ID] && state.steps[RULES_STEP_ID].status === "completed");
     if (!rulesDone) {
       refs.missionHead.hidden = true; refs.missionList.innerHTML = "";
       refs.howtoHead.hidden = true; refs.howtoList.innerHTML = "";
       refs.placeholder.hidden = false;
-      refs.placeholder.textContent = "Finish TODO " + CAPSTONE_BONUS_ID + " to see your own game's rules here!";
+      refs.placeholder.textContent = "Finish TODO " + RULES_STEP_ID + " to see your own game's rules here!";
       return;
     }
     refs.placeholder.hidden = true;
     ensurePyodide().then(function (py) {
-      return py.runPythonAsync(traceHarness_titleCard(state.steps[CAPSTONE_BONUS_ID].code));
+      return py.runPythonAsync(traceHarness_titleCard(state.steps[RULES_STEP_ID].code));
     }).then(function (json) {
       var data = JSON.parse(json);
       var mission = data.ok ? data.mission : [];

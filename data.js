@@ -31,16 +31,12 @@ const REQUIRED_ORDER = ["1", "2", "3", "4", "5"];
 
 /**
  * Bonus TODOs. These all unlock together once Required is finished, any
- * order — EXCEPT "9" (write your game's rules), which is a capstone: it
- * stays locked until every OTHER Bonus id is completed or skipped, since
- * writing honest rules only makes sense once the student's own game
- * (custom item(s), map) actually exists. See app.js computeStatus()
- * for the one-off exception this requires.
+ * order - including "9" (write your game's rules), which used to be a
+ * "capstone" locked until every other Bonus id was done first; that
+ * one-off lock was removed per direct teacher request, so TODO 9 now
+ * behaves exactly like TODO 6/7/8.
  */
 const BONUS_ORDER = ["6", "7", "8", "9"];
-
-/** The capstone id that stays locked until every other Bonus id is done. */
-const CAPSTONE_BONUS_ID = "9";
 
 /**
  * Files students already have in assets/images and assets/sounds (see
@@ -316,112 +312,147 @@ const COURSE_STEPS = [
   // ------------------------------------------------------------------ TODO 6
   {
     id: "6", step: 6, kind: "Bonus", required: false, file: "settings.py",
-    title: "Redesign the three rounds.",
-    lead: "**`ROUND_CONFIGS`** is the difficulty curve of your whole game: one dictionary per round, read in order as the player advances. You can change `rows`, `cols`, `cell_size`, `extra_open_walls`, `bomb_count`, `custom_item_count`, and `time_limit_seconds` — bigger mazes, more bombs, and stricter timers raise the difficulty. Keep all three dictionaries, keep every key, and keep every value a plain integer — only change the numbers.\n\nPrefer not to hand-edit the numbers? The map editor on the right lets you paint a layout directly, tile by tile — pick a piece from the palette, then click or drag on the board, including exactly where the player starts and where the goal is.",
+    title: "Redesign the three rounds, and tune movement/hint pacing.",
+    lead: "Two settings blocks decide how your game plays: **`ROUND_CONFIGS`** is the difficulty curve of your whole game — one dictionary per round, read in order as the player advances. You can change `rows`, `cols`, `cell_size`, `extra_open_walls`, `bomb_count`, `custom_item_count`, and `time_limit_seconds` — bigger mazes, more bombs, and stricter timers raise the difficulty. Keep all three dictionaries, keep every key, and keep every value a plain integer — only change the numbers.\n\n**`PLAYER_MOVE_DELAY_MS`**, **`ALLOW_PATH_HINT`**, and **`MAX_HINT_COUNT`** control how the player moves and how much help they get: a smaller delay feels faster, and the Hint button can be limited or turned off entirely. Note this interacts with Bonus TODO 8's `\"add_hint\"` item effect — a very low `MAX_HINT_COUNT` makes an add_hint item much more valuable (and vice versa), which isn't a bug, just something to keep in mind when balancing your game.\n\nPrefer not to hand-edit `ROUND_CONFIGS`? The map editor on the right lets you paint a layout directly, tile by tile — pick a piece from the palette, then click or drag on the board, including exactly where the player starts, where the goal is, and (once Bonus TODO 8 has at least one item) which of your own custom items goes where.",
     codeReference: [
       ["ROUND_CONFIGS", "A list of exactly 3 dictionaries, one per round, read in order as the player clears rounds."],
       ["rows, cols, cell_size", "Grid dimensions and pixel size of one cell; bigger rows/cols means a bigger maze."],
       ["extra_open_walls", "Extra connections punched into the perfect maze so it has loops, not just one solution path."],
       ["bomb_count, custom_item_count", "How many of each object are placed on the map."],
       ["time_limit_seconds", "How long the player has to finish the round."],
+      ["PLAYER_MOVE_DELAY_MS", "Milliseconds between moves — smaller is faster (less waiting between steps)."],
+      ["ALLOW_PATH_HINT", "True/False — whether the Hint button exists at all."],
+      ["MAX_HINT_COUNT", "How many times Hint can be used per round; interacts with TODO 8's add_hint effect."],
     ],
-    contextBefore: [],
-    contextAfter: [
-      "# Use the built-in shape when an image path is None.",
-      "# TODO 7 [Bonus] (Part 1/2): Replace the player, goal, item, or bomb images.",
-      "# Detailed hint:",
-    ],
-    starter: [
-      "ROUND_CONFIGS = [",
-      "    {",
-      '        "rows": 11,',
-      '        "cols": 15,',
-      '        "cell_size": 38,',
-      '        "extra_open_walls": 5,',
-      '        "bomb_count": 2,',
-      '        "custom_item_count": 2,',
-      '        "time_limit_seconds": 70,',
-      "    },",
-      "    {",
-      '        "rows": 15,',
-      '        "cols": 21,',
-      '        "cell_size": 30,',
-      '        "extra_open_walls": 6,',
-      '        "bomb_count": 4,',
-      '        "custom_item_count": 3,',
-      '        "time_limit_seconds": 55,',
-      "    },",
-      "    {",
-      '        "rows": 17,',
-      '        "cols": 25,',
-      '        "cell_size": 25,',
-      '        "extra_open_walls": 8,',
-      '        "bomb_count": 6,',
-      '        "custom_item_count": 4,',
-      '        "time_limit_seconds": 45,',
-      "    },",
-      "]",
+    parts: [
+      {
+        part: "1/2", title: "Redesign the three rounds.",
+        contextBefore: [],
+        contextAfter: [
+          "# TODO 6 [Bonus] (Part 2/2): Tune movement speed and hint availability.",
+          "# Detailed hint:",
+        ],
+        starter: [
+          "ROUND_CONFIGS = [",
+          "    {",
+          '        "rows": 11,',
+          '        "cols": 15,',
+          '        "cell_size": 38,',
+          '        "extra_open_walls": 5,',
+          '        "bomb_count": 2,',
+          '        "custom_item_count": 2,',
+          '        "time_limit_seconds": 70,',
+          "    },",
+          "    {",
+          '        "rows": 15,',
+          '        "cols": 21,',
+          '        "cell_size": 30,',
+          '        "extra_open_walls": 6,',
+          '        "bomb_count": 4,',
+          '        "custom_item_count": 3,',
+          '        "time_limit_seconds": 55,',
+          "    },",
+          "    {",
+          '        "rows": 17,',
+          '        "cols": 25,',
+          '        "cell_size": 25,',
+          '        "extra_open_walls": 8,',
+          '        "bomb_count": 6,',
+          '        "custom_item_count": 4,',
+          '        "time_limit_seconds": 45,',
+          "    },",
+          "]",
+        ],
+      },
+      {
+        part: "2/2", title: "Tune movement speed and hint availability.",
+        contextBefore: [],
+        contextAfter: [
+          "# =========================================================",
+          "# Route weights for the Hint button's Dijkstra route (given, not a TODO)",
+          "# =========================================================",
+        ],
+        starter: [
+          "PLAYER_MOVE_DELAY_MS = 100",
+          "ALLOW_PATH_HINT = True",
+          "MAX_HINT_COUNT = 2",
+        ],
+      },
     ],
     hints: [
-      "Three dictionaries in a list, one per round. Every key already means something to the engine (deleting one will crash the game), so only change the numeric values, and keep them plain integers. Don't want to hand-edit the numbers? Use the map editor panel on the right: pick your rows and cols, paint the layout (plus the player/goal start tiles), then press Apply to write these numbers into the code for you automatically.",
+      "Part 1: Three dictionaries in a list, one per round. Every key already means something to the engine (deleting one will crash the game), so only change the numeric values, and keep them plain integers. Don't want to hand-edit the numbers? Use the map editor panel on the right: pick your rows and cols, paint the layout (plus the player/goal start tiles and your own custom items), then press Apply to write these numbers into the code for you automatically.\nPart 2: `PLAYER_MOVE_DELAY_MS` is milliseconds (a smaller number moves faster); `ALLOW_PATH_HINT` is `True` or `False`; `MAX_HINT_COUNT` is a plain integer — how many times Hint can be used per round.",
     ],
     visualizer: "mapEditor",
     grading: {
       mode: "syntax",
-      mustDefine: ["ROUND_CONFIGS"],
-      notes: "Open-ended: passes once the code runs with no Python error and ROUND_CONFIGS is defined. Shape issues (wrong count, missing keys, non-int values) surface as non-blocking warnings, not failures.",
+      mustDefine: ["ROUND_CONFIGS", "PLAYER_MOVE_DELAY_MS", "ALLOW_PATH_HINT", "MAX_HINT_COUNT"],
+      notes: "Open-ended: passes once the code runs with no Python error and ROUND_CONFIGS, PLAYER_MOVE_DELAY_MS, ALLOW_PATH_HINT, and MAX_HINT_COUNT are all defined. Shape issues (wrong count, missing keys, non-int values, out-of-range pacing numbers) surface as non-blocking warnings, not failures.",
+      twoParts: true,
     },
   },
 
   // ------------------------------------------------------------------ TODO 7
   {
     id: "7", step: 7, kind: "Bonus", required: false, file: "settings.py",
-    title: "Replace the player, goal, item, bomb images, and add sounds.",
-    lead: "Two settings blocks decide what the player sees and hears: image paths for the player, goal, floor tile, and bomb, then sound paths for the bomb and background music. Every value is either **`None`** (use the game's built-in shape/silence) or a quoted path to a file already provided in `assets/images/` or `assets/sounds/` — there's no third option, and you can change as many or as few lines as you like.",
+    title: "Replace images/colors, add sounds, and tune bomb/music timing.",
+    lead: "Two settings blocks decide what the player sees and hears. Part 1/2 covers images and their fallback colors: image paths for the player, goal, floor tile, and bomb, plus the **`_COLOR`** tuple each one falls back to when its image path is `None`. Part 2/2 covers sound: paths for the bomb and background music, plus **`BOMB_EXPLOSION_DURATION_MS`** (how long the explosion animation shows) and **`BACKGROUND_MUSIC_VOLUME`** (0.0-1.0). Every path value is either **`None`** (use the built-in shape/silence) or a quoted path to a file already provided in `assets/images/` or `assets/sounds/` — there's no third option, and you can change as many or as few lines as you like.",
     codeReference: [
       ["PLAYER_IMAGE_PATH / GOAL_IMAGE_PATH / BOMB_IMAGE_PATH / FLOOR_TILE_IMAGE_PATH", "Each is either None (use the built-in drawn shape) or a quoted path to a file under assets/images/."],
+      ["WALL_COLOR / PLAYER_COLOR / GOAL_COLOR / BOMB_COLOR / BOMB_EXPLOSION_COLOR", "(R, G, B) tuples, each 0-255 — what actually gets drawn whenever the matching image is None."],
       ["BOMB_SOUND_PATH / BACKGROUND_MUSIC_PATH", "Each is either None (silent) or a quoted path to a file under assets/sounds/."],
+      ["BOMB_EXPLOSION_DURATION_MS", "How long (milliseconds) the explosion animation shows before the bomb disappears."],
+      ["BACKGROUND_MUSIC_VOLUME", "0.0 (silent) to 1.0 (full volume)."],
     ],
     parts: [
       {
-        part: "1/2", title: "Replace the player, goal, floor tile, or bomb images.",
+        part: "1/2", title: "Replace the player, goal, floor tile, or bomb images, and their fallback colors.",
         contextBefore: [],
         contextAfter: [
           'BOMB_EXPLOSION_IMAGE_PATH = "assets/images/explode_2.png"  # also try explode.png',
-          "BOMB_EXPLOSION_DURATION_MS = 500",
+          "",
+          "# TODO 7 [Bonus] (Part 2/2): Add background music, a bomb sound effect, and tune their timing/volume.",
+          "# Detailed hint:",
         ],
         starter: [
           "PLAYER_IMAGE_PATH = None",
           "GOAL_IMAGE_PATH = None",
           "BOMB_IMAGE_PATH = None",
           "FLOOR_TILE_IMAGE_PATH = None  # Background floor for open path cells.",
+          "WALL_COLOR = (30, 41, 59)",
+          "PLAYER_COLOR = (37, 99, 235)",
+          "GOAL_COLOR = (250, 204, 21)",
+          "BOMB_COLOR = (15, 23, 42)",
+          "BOMB_EXPLOSION_COLOR = (239, 68, 68)",
         ],
       },
       {
-        part: "2/2", title: "Add background music and a bomb sound effect.",
+        part: "2/2", title: "Add background music, a bomb sound effect, and tune their timing/volume.",
         contextBefore: [],
         contextAfter: [
-          "BACKGROUND_MUSIC_VOLUME = 0.25",
-          "CUSTOM_ITEM_IMAGE_PATH = \"assets/images/item_star.png\"  # used for every entry in CUSTOM_ITEMS below",
-          "CUSTOM_ITEM_SOUND_PATH = \"assets/sounds/pickup_3.wav\"",
+          "# =========================================================",
+          "# Customize your collectible item(s) below.",
+          "# =========================================================",
         ],
         starter: [
           "BOMB_SOUND_PATH = None",
           "BACKGROUND_MUSIC_PATH = None",
+          "BOMB_EXPLOSION_DURATION_MS = 500",
+          "BACKGROUND_MUSIC_VOLUME = 0.25",
         ],
       },
     ],
     hints: [
-      'Every value here is either `None` (silent / built-in shape) or a quoted path under `assets/images/` or `assets/sounds/` — forgetting the quotes is the most common mistake when typing paths by hand, e.g. `PLAYER_IMAGE_PATH = "assets/images/boy.png"`. The asset picker panel on the right fills in the correct line for you with one click, so you don\'t have to type paths at all if you\'d rather not.',
+      'Part 1: Every image value here is either `None` (built-in shape) or a quoted path under `assets/images/` — forgetting the quotes is the most common mistake when typing paths by hand, e.g. `PLAYER_IMAGE_PATH = "assets/images/boy.png"`. Each `_COLOR` is a plain `(R, G, B)` tuple, three integers 0-255. The asset picker panel on the right fills in image paths for you with one click.\nPart 2: Sound paths follow the same None-or-quoted-path rule under `assets/sounds/`. `BOMB_EXPLOSION_DURATION_MS` is milliseconds (a plain integer); `BACKGROUND_MUSIC_VOLUME` is a number from 0.0 to 1.0.',
     ],
     visualizer: "assetPicker",
     grading: {
       mode: "syntax",
       mustDefine: [
         "PLAYER_IMAGE_PATH", "GOAL_IMAGE_PATH", "BOMB_IMAGE_PATH", "FLOOR_TILE_IMAGE_PATH",
-        "BOMB_SOUND_PATH", "BACKGROUND_MUSIC_PATH",
+        "WALL_COLOR", "PLAYER_COLOR", "GOAL_COLOR", "BOMB_COLOR", "BOMB_EXPLOSION_COLOR",
+        "BOMB_SOUND_PATH", "BACKGROUND_MUSIC_PATH", "BOMB_EXPLOSION_DURATION_MS", "BACKGROUND_MUSIC_VOLUME",
       ],
-      notes: "Open-ended: passes once the code runs with no Python error and all six names are defined. Path/type issues surface as non-blocking warnings, not failures.",
+      notes: "Open-ended: passes once the code runs with no Python error and every image/color/sound/tuning name across both parts is defined. Path/color/range issues surface as non-blocking warnings, not failures.",
       twoParts: true,
     },
   },
@@ -429,39 +460,68 @@ const COURSE_STEPS = [
   // ------------------------------------------------------------------ TODO 8
   {
     id: "8", step: 8, kind: "Bonus", required: false, file: "settings.py",
-    title: "Design your own collectible item(s).",
-    lead: "This is where your game gets its own signature collectibles. **`CUSTOM_ITEMS`** is a list — add as many dictionaries as you like, each with its own:\n\n- **`name`** — the display name.\n- **`color`** — an RGB tuple, used when no image is set.\n- **`effect`** — what happens when it's collected. Two effects are already wired up: `\"add_time\"` (adds seconds to the round's clock) and `\"add_hint\"` (adds extra Hint-button uses).\n- **`amount`** — how much of that effect: seconds for `add_time`, hint uses for `add_hint`.\n\nEvery round spawns several custom items total, each randomly drawn from this list, so two or three genuinely different items can appear side by side. Feel free to invent your own effect name too (e.g. `\"shrink_maze\"`) — the game safely does nothing extra for an effect it doesn't recognize, so an experimental idea never crashes anything.",
+    title: "Design your own collectible item(s) and wire up their effects.",
+    lead: "This Bonus TODO spans **two files**, because it's really two connected ideas. Part 1/2 (in `settings.py`) is where your game gets its own signature collectibles. **`CUSTOM_ITEMS`** is a list — add as many dictionaries as you like, each with its own:\n\n- **`name`** — the display name.\n- **`color`** — an RGB tuple, used when no `image` is set.\n- **`image`** / **`sound`** — `None`, or a quoted path under `assets/images/` / `assets/sounds/`, exactly like TODO 7's assets. Each item can have its OWN picture and pickup sound — they don't have to share one.\n- **`effect`** — what happens when it's collected: `\"add_time\"` (extra seconds) or `\"add_hint\"` (extra Hint-button uses), or an effect name you invent yourself.\n- **`amount`** — how much of that effect.\n\nPart 2/2 (in `game.py`, inside **`apply_custom_item_effect`**) is where you actually WRITE the code that reacts to `effect`/`amount`: branch on `\"add_time\"` (increase `self.bonus_time_seconds`) and `\"add_hint\"` (increase `self.hints_remaining`). Any effect string you invent that isn't one of those two must stay a safe no-op here — never raise an error — so an experimental idea never crashes the game.\n\nEvery round spawns several custom items total, each randomly drawn from this list (or exactly the item(s) you place by hand with the map editor in TODO 6), so two or three genuinely different items — each with their own art and sound — can appear side by side.",
     codeReference: [
-      ["CUSTOM_ITEMS", "A list of dictionaries — add as many as you like, each describing one distinct custom item."],
+      ["CUSTOM_ITEMS", "(settings.py) A list of dictionaries — add as many as you like, each describing one distinct custom item."],
       ["name", "The display name of this collectible."],
       ["color", "An (R, G, B) tuple, each 0-255, used when no image is set."],
-      ["effect", 'A string describing what happens on pickup. "add_time" and "add_hint" are built in; any other string is a safe no-op until wired up in game.py.'],
+      ["image / sound", "None, or a quoted path under assets/images/ or assets/sounds/ — this item's OWN picture/pickup sound."],
+      ["effect", 'A string describing what happens on pickup. "add_time" and "add_hint" are built in and handled in Part 2/2; any other string must be a safe no-op there.'],
       ["amount", "How much of the effect: extra seconds for add_time, extra hint uses for add_hint."],
+      ["apply_custom_item_effect(self, item_def)", "(game.py) Called once per pickup with the item's dict; effect/amount are already pulled out for you — your job is just the branching."],
     ],
-    contextBefore: [],
-    contextAfter: [
-      "# =========================================================",
-      "# Write your game's rules below (Bonus capstone - unlocks once every other",
-      "# Bonus challenge is completed or skipped, since the rules only make sense",
-    ],
-    starter: [
-      "CUSTOM_ITEMS = [",
-      "    {",
-      '        "name": "Custom Item",',
-      '        "color": (180, 180, 180),',
-      '        "effect": "add_time",',
-      '        "amount": 0,',
-      "    },",
-      "]",
+    parts: [
+      {
+        part: "1/2", title: "Design your own collectible item(s).", file: "settings.py",
+        contextBefore: [],
+        contextAfter: [
+          "# =========================================================",
+          "# Write your game's rules below.",
+          "# =========================================================",
+        ],
+        starter: [
+          "CUSTOM_ITEMS = [",
+          "    {",
+          '        "name": "Custom Item",',
+          '        "color": (180, 180, 180),',
+          '        "image": None,',
+          '        "sound": None,',
+          '        "effect": "add_time",',
+          '        "amount": 0,',
+          "    },",
+          "]",
+        ],
+      },
+      {
+        part: "2/2", title: "Apply the effect (add_time / add_hint / your own).", file: "game.py",
+        contextBefore: [
+          "    def apply_custom_item_effect(self, item_def):",
+          '        """Applies whatever "effect"/"amount" a custom item (TODO 8,',
+          "        Part 2/2) declares - your job is just the branching. See the",
+          '        full explanation in your own game.py."""',
+          '        effect = item_def.get("effect")',
+          '        amount = item_def.get("amount", 0)',
+        ],
+        contextAfter: [
+          "",
+          "    def check_bombs(self):",
+          "        now = pygame.time.get_ticks()",
+        ],
+        starter: [
+          "        pass  # Write your code here.",
+        ],
+      },
     ],
     hints: [
-      '`CUSTOM_ITEMS` is a list of dictionaries, and you can add as many as you like. Each one needs a `name` (string), a `color` (a tuple of three 0-255 numbers), an `effect` (the string `"add_time"` or `"add_hint"`, or your own invented string), and an `amount` (a plain integer). Example:\n```\nCUSTOM_ITEMS = [\n    {"name": "Time Crystal", "color": (14, 165, 233), "effect": "add_time", "amount": 15},\n    {"name": "Hint Scroll", "color": (250, 204, 21), "effect": "add_hint", "amount": 1},\n]\n```',
+      'Part 1: `CUSTOM_ITEMS` is a list of dictionaries, and you can add as many as you like. Each one needs a `name` (string), a `color` (a tuple of three 0-255 numbers), `image`/`sound` (`None`, or a quoted path — the asset picker on the right fills these in for the item you\'re currently editing), an `effect` (the string `"add_time"` or `"add_hint"`, or your own invented string), and an `amount` (a plain integer). Example:\n```\nCUSTOM_ITEMS = [\n    {"name": "Time Crystal", "color": (14, 165, 233), "image": "assets/images/item_gem_1.png", "sound": "assets/sounds/pickup_1.wav", "effect": "add_time", "amount": 15},\n    {"name": "Hint Scroll", "color": (250, 204, 21), "image": None, "sound": None, "effect": "add_hint", "amount": 1},\n]\n```\nPart 2:\n```\nif effect == "add_time":\n    self.bonus_time_seconds += amount\nelif effect == "add_hint":\n    self.hints_remaining += amount\n```\nAny other `effect` string simply falls through both branches and does nothing — that\'s the safe no-op the game promises.',
     ],
     visualizer: "customItemLab",
     grading: {
-      mode: "syntax",
-      mustDefine: ["CUSTOM_ITEMS"],
-      notes: "Open-ended: passes once the code runs with no Python error and CUSTOM_ITEMS is defined. Shape issues (not a list, missing keys, wrong types) surface as non-blocking warnings, not failures.",
+      mode: "behaviour",
+      harness: "customItems_8",
+      casesDescription: "Part 1: compiles, defines CUSTOM_ITEMS, and gives non-blocking shape warnings (color/image/sound/effect/amount) per item — open-ended, no fixed answer. Part 2: the student's apply_custom_item_effect body is run against real (effect, amount, starting state) cases — add_time adds seconds, add_time stacks on existing bonus time, add_hint adds a hint use, add_hint with a larger amount, and an unrecognized effect string, which must be a safe no-op (never an error). Each part is graded independently, so a mistake in one part is attributed specifically to that part.",
+      twoParts: true,
     },
   },
 
@@ -469,7 +529,7 @@ const COURSE_STEPS = [
   {
     id: "9", step: 9, kind: "Bonus", required: false, file: "settings.py",
     title: "Write your game's rules.",
-    lead: "Now that your game actually exists — your custom item(s), your map — write the rules that describe it. **`MISSION_RULES`** and **`HOW_TO_PLAY_RULES`** are lists of short strings shown on the mission and how-to-play screens. This step is locked until every other Bonus challenge is completed or skipped, on purpose: rules written before the game exists are usually wrong, so write these last.",
+    lead: "Now that your game actually exists — your custom item(s), your map — write the rules that describe it. **`MISSION_RULES`** and **`HOW_TO_PLAY_RULES`** are lists of short strings shown on the mission and how-to-play screens.",
     codeReference: [
       ["MISSION_RULES", "A list of short strings describing the win condition(s), shown on the mission screen."],
       ["HOW_TO_PLAY_RULES", "A list of short strings explaining controls, shown on the how-to-play screen."],
@@ -494,7 +554,7 @@ const COURSE_STEPS = [
     grading: {
       mode: "syntax",
       mustDefine: ["MISSION_RULES", "HOW_TO_PLAY_RULES"],
-      notes: "Open-ended: passes once the code runs with no Python error and both names are defined as non-empty lists. This step is additionally gated by the capstone lock (see CAPSTONE_BONUS_ID) regardless of grading result.",
+      notes: "Open-ended: passes once the code runs with no Python error and both names are defined as non-empty lists.",
     },
   },
 ];
@@ -503,7 +563,6 @@ const COURSE_STEPS = [
 window.COURSE_DATA = {
   REQUIRED_ORDER,
   BONUS_ORDER,
-  CAPSTONE_BONUS_ID,
   KNOWN_ASSET_FILES,
   COURSE_STEPS,
 };

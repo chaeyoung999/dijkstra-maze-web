@@ -803,6 +803,19 @@ a.btn { text-decoration: none; cursor: pointer; }
 }
 .step-actions .spacer { flex: 1; }
 .attempt-count { font-size: 0.78rem; color: var(--text-faint); }
+/* Teacher-only escape hatch (see promptTeacherOverride in app.js) -
+   deliberately styled as a quiet, low-emphasis text link, not a button,
+   so it reads as "something's wrong? click here" rather than a feature. */
+.override-link {
+  background: none;
+  border: none;
+  padding: 4px 2px;
+  font-size: 0.78rem;
+  color: var(--text-faint);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.override-link:hover { color: var(--text-dim); }
 
 /* --------------------------------------------------------- next-todo cta */
 /* Deliberately secondary to the Run/Grade action above (smaller, quieter,
