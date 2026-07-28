@@ -275,6 +275,10 @@ FUNCS = [
     # with real method-body parts (see app.js section 10).
     "harness_roundDesign_6", "harness_lookAndFeel_7", "harness_customItems_8",
     "harness_gameRules_9",
+    # Not a grading harness: the Play tab / step visualiser preview, which
+    # runs the student's own movement code for real. Covered by
+    # test_trace_harnesses.py.
+    "traceHarness_playerMove",
 ]
 # PY_BONUS_HELPERS / PY_FAKE_PYGAME are the shared Python fragments those
 # four harnesses splice in (the step budget guard, the settings/body
@@ -415,6 +419,13 @@ def generate_harness_source(fn_name, *code_args):
     given student-code string argument(s) and returns the exact Python
     source text app.js would hand to Pyodide."""
     args_js = ", ".join(_js_string_literal(a) for a in code_args)
+    return generate_call_source(fn_name, args_js)
+
+
+def generate_call_source(fn_name, args_js):
+    """Same, but the caller supplies the argument list as raw JS source -
+    needed for the trace harnesses, whose arguments include maze grids,
+    numbers and option objects rather than only code strings."""
     call = "%s(%s)" % (fn_name, args_js)
     out_file = os.path.join(HERE, "_harness_out.py")
     if os.path.exists(out_file):

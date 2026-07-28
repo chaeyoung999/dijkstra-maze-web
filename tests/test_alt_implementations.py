@@ -34,63 +34,140 @@ def run_python(py_source):
 CASES = []
 
 
-def case(step, label, harness_fn, code_args, expect_ok=True):
-    CASES.append((step, label, harness_fn, code_args, expect_ok))
+def case(step, label, harness_fn, code_args, expect_ok=True, expect_warning=None):
+    """expect_warning: a substring that must appear in result['warnings'].
+    Used for the cases where the point is the ADVICE, not the pass/fail -
+    open-ended grading means a setting that quietly breaks the game still
+    passes, so the warning text is the only thing standing between a
+    student and a game they cannot play."""
+    CASES.append((step, label, harness_fn, code_args, expect_ok, expect_warning))
 
 
 # ---------------------------------------------------------------- TODO 2
-CANONICAL_2 = (
-    'if keys[pygame.K_LEFT] or keys[pygame.K_a]:\n'
-    '    moved = self.player.try_move("left", self.maze)\n'
-    'elif keys[pygame.K_RIGHT] or keys[pygame.K_d]:\n'
-    '    moved = self.player.try_move("right", self.maze)\n'
-    'elif keys[pygame.K_UP] or keys[pygame.K_w]:\n'
-    '    moved = self.player.try_move("top", self.maze)\n'
-    'elif keys[pygame.K_DOWN] or keys[pygame.K_s]:\n'
-    '    moved = self.player.try_move("bottom", self.maze)\n'
+# Three parts now: acceleration, friction, and one grid step.
+CANONICAL_2A = (
+    'if keys[pygame.K_LEFT] or keys[pygame.K_e]:\n'
+    '    self.player.velocity.x -= self.player.acceleration\n'
+    'if keys[pygame.K_RIGHT] or keys[pygame.K_f]:\n'
+    '    self.player.velocity.x += self.player.acceleration\n'
+    'if keys[pygame.K_UP] or keys[pygame.K_c]:\n'
+    '    self.player.velocity.y -= self.player.acceleration\n'
+    'if keys[pygame.K_DOWN] or keys[pygame.K_d]:\n'
+    '    self.player.velocity.y += self.player.acceleration\n'
 )
-# Alt A: loop+break over a lookup table instead of if/elif chain (still
-# calls try_move) - genuinely different control-flow shape.
-ALT_2_LOOP = (
-    'key_direction_pairs = [\n'
-    '    (pygame.K_LEFT, "left"), (pygame.K_a, "left"),\n'
-    '    (pygame.K_RIGHT, "right"), (pygame.K_d, "right"),\n'
-    '    (pygame.K_UP, "top"), (pygame.K_w, "top"),\n'
-    '    (pygame.K_DOWN, "bottom"), (pygame.K_s, "bottom"),\n'
+# Alt A: a data-driven loop instead of four ifs.
+ALT_2A_TABLE = (
+    'moves = [\n'
+    '    ((pygame.K_LEFT, pygame.K_e), "x", -1),\n'
+    '    ((pygame.K_RIGHT, pygame.K_f), "x", 1),\n'
+    '    ((pygame.K_UP, pygame.K_c), "y", -1),\n'
+    '    ((pygame.K_DOWN, pygame.K_d), "y", 1),\n'
     ']\n'
-    'moved = False\n'
-    'for key_const, direction in key_direction_pairs:\n'
-    '    if keys[key_const]:\n'
-    '        moved = self.player.try_move(direction, self.maze)\n'
-    '        break\n'
+    'for key_pair, axis, sign in moves:\n'
+    '    if keys[key_pair[0]] or keys[key_pair[1]]:\n'
+    '        step = sign * self.player.acceleration\n'
+    '        if axis == "x":\n'
+    '            self.player.velocity.x += step\n'
+    '        else:\n'
+    '            self.player.velocity.y += step\n'
 )
-# Alt B: bypasses try_move ENTIRELY - inlines its own row/col math AND its
-# own wall check, using different variable names throughout.
-ALT_2_BYPASS = (
-    'chosen = None\n'
-    'if keys[pygame.K_LEFT] or keys[pygame.K_a]:\n'
-    '    chosen = ("left", 0, -1)\n'
-    'elif keys[pygame.K_RIGHT] or keys[pygame.K_d]:\n'
-    '    chosen = ("right", 0, 1)\n'
-    'elif keys[pygame.K_UP] or keys[pygame.K_w]:\n'
-    '    chosen = ("top", -1, 0)\n'
-    'elif keys[pygame.K_DOWN] or keys[pygame.K_s]:\n'
-    '    chosen = ("bottom", 1, 0)\n'
-    'if chosen is None:\n'
+# Alt B: writes the acceleration as a literal instead of reading the
+# attribute - warns about retunability, but must still pass.
+ALT_2A_LITERAL = CANONICAL_2A.replace('self.player.acceleration', '0.9')
+# Alt C: expanded form instead of -= / +=.
+ALT_2A_EXPANDED = (
+    'if keys[pygame.K_LEFT] or keys[pygame.K_e]:\n'
+    '    self.player.velocity.x = self.player.velocity.x - self.player.acceleration\n'
+    'if keys[pygame.K_RIGHT] or keys[pygame.K_f]:\n'
+    '    self.player.velocity.x = self.player.velocity.x + self.player.acceleration\n'
+    'if keys[pygame.K_UP] or keys[pygame.K_c]:\n'
+    '    self.player.velocity.y = self.player.velocity.y - self.player.acceleration\n'
+    'if keys[pygame.K_DOWN] or keys[pygame.K_d]:\n'
+    '    self.player.velocity.y = self.player.velocity.y + self.player.acceleration\n'
+)
+
+CANONICAL_2B = (
+    'self.player.velocity.x *= self.player.friction\n'
+    'self.player.velocity.y *= self.player.friction\n'
+)
+ALT_2B_EXPANDED = (
+    'self.player.velocity.x = self.player.velocity.x * self.player.friction\n'
+    'self.player.velocity.y = self.player.velocity.y * self.player.friction\n'
+)
+ALT_2B_UPDATE = (
+    'self.player.velocity.update(\n'
+    '    self.player.velocity.x * self.player.friction,\n'
+    '    self.player.velocity.y * self.player.friction,\n'
+    ')\n'
+)
+# A harsher friction is a legitimate design choice, not an error.
+ALT_2B_HARSH = (
+    'self.player.velocity.x *= 0.5\n'
+    'self.player.velocity.y *= 0.5\n'
+)
+
+CANONICAL_2C = (
+    'speed_x = self.player.velocity.x\n'
+    'speed_y = self.player.velocity.y\n'
+    'if abs(speed_x) >= abs(speed_y) and abs(speed_x) >= PLAYER_MOVE_THRESHOLD:\n'
+    '    direction = "right" if speed_x > 0 else "left"\n'
+    '    moved = self.player.try_move(direction, self.maze)\n'
+    'elif abs(speed_y) >= PLAYER_MOVE_THRESHOLD:\n'
+    '    direction = "bottom" if speed_y > 0 else "top"\n'
+    '    moved = self.player.try_move(direction, self.maze)\n'
+)
+# Alt: bypasses try_move ENTIRELY - inlines its own row/col math AND its
+# own wall check, with different variable names throughout.
+ALT_2C_BYPASS = (
+    'vx = self.player.velocity.x\n'
+    'vy = self.player.velocity.y\n'
+    'pick = None\n'
+    'if abs(vx) >= abs(vy) and abs(vx) >= PLAYER_MOVE_THRESHOLD:\n'
+    '    pick = ("right", 0, 1) if vx > 0 else ("left", 0, -1)\n'
+    'elif abs(vy) >= PLAYER_MOVE_THRESHOLD:\n'
+    '    pick = ("bottom", 1, 0) if vy > 0 else ("top", -1, 0)\n'
+    'if pick is None:\n'
     '    moved = False\n'
     'else:\n'
-    '    want_dir, delta_r, delta_c = chosen\n'
-    '    target_cell = self.maze.get_cell(self.player.row, self.player.col)\n'
-    '    if target_cell is not None and not target_cell.walls[want_dir]:\n'
-    '        self.player.row += delta_r\n'
-    '        self.player.col += delta_c\n'
+    '    want, dr, dc = pick\n'
+    '    here = self.maze.get_cell(self.player.row, self.player.col)\n'
+    '    if here is not None and not here.walls[want]:\n'
+    '        self.player.row += dr\n'
+    '        self.player.col += dc\n'
     '        moved = True\n'
     '    else:\n'
     '        moved = False\n'
 )
-case("2", "canonical (try_move, if/elif)", "harness_movement_2", (CANONICAL_2,))
-case("2", "alt: loop+break lookup table", "harness_movement_2", (ALT_2_LOOP,))
-case("2", "alt: bypasses try_move, inlines own move+wall check", "harness_movement_2", (ALT_2_BYPASS,))
+case("2", "canonical (accel / friction / try_move)", "harness_movement_2", (CANONICAL_2A, CANONICAL_2B, CANONICAL_2C))
+case("2 Part1/3", "alt: data-driven key table", "harness_movement_2", (ALT_2A_TABLE, CANONICAL_2B, CANONICAL_2C))
+case("2 Part1/3", "alt: literal 0.9 instead of the attribute (warns)", "harness_movement_2", (ALT_2A_LITERAL, CANONICAL_2B, CANONICAL_2C))
+case("2 Part1/3", "alt: expanded x = x - accel form", "harness_movement_2", (ALT_2A_EXPANDED, CANONICAL_2B, CANONICAL_2C))
+case("2 Part2/3", "alt: expanded multiply form", "harness_movement_2", (CANONICAL_2A, ALT_2B_EXPANDED, CANONICAL_2C))
+case("2 Part2/3", "alt: velocity.update(...)", "harness_movement_2", (CANONICAL_2A, ALT_2B_UPDATE, CANONICAL_2C))
+case("2 Part2/3", "alt: much harsher friction (0.5)", "harness_movement_2", (CANONICAL_2A, ALT_2B_HARSH, CANONICAL_2C))
+case("2 Part3/3", "alt: bypasses try_move, inlines move+wall check", "harness_movement_2", (CANONICAL_2A, CANONICAL_2B, ALT_2C_BYPASS))
+
+BAD_2A_WRONG_SIGN = CANONICAL_2A.replace(
+    'if keys[pygame.K_LEFT] or keys[pygame.K_e]:\n'
+    '    self.player.velocity.x -= self.player.acceleration\n',
+    'if keys[pygame.K_LEFT] or keys[pygame.K_e]:\n'
+    '    self.player.velocity.x += self.player.acceleration\n')
+case("2 Part1/3", "BAD: left accelerates right (negative control)", "harness_movement_2", (BAD_2A_WRONG_SIGN, CANONICAL_2B, CANONICAL_2C), expect_ok=False)
+BAD_2A_NOTHING = 'pass\n'
+case("2 Part1/3", "BAD: does nothing (negative control)", "harness_movement_2", (BAD_2A_NOTHING, CANONICAL_2B, CANONICAL_2C), expect_ok=False)
+BAD_2B_GROWS = (
+    'self.player.velocity.x *= 1.1\n'
+    'self.player.velocity.y *= 1.1\n'
+)
+case("2 Part2/3", "BAD: friction above 1, never stops (negative control)", "harness_movement_2", (CANONICAL_2A, BAD_2B_GROWS, CANONICAL_2C), expect_ok=False)
+BAD_2B_NOTHING = 'pass\n'
+case("2 Part2/3", "BAD: no friction at all (negative control)", "harness_movement_2", (CANONICAL_2A, BAD_2B_NOTHING, CANONICAL_2C), expect_ok=False)
+BAD_2C_LEFT_RIGHT_SWAP = CANONICAL_2C.replace(
+    '    direction = "right" if speed_x > 0 else "left"',
+    '    direction = "left" if speed_x > 0 else "right"')
+case("2 Part3/3", "BAD: left/right swapped (negative control)", "harness_movement_2", (CANONICAL_2A, CANONICAL_2B, BAD_2C_LEFT_RIGHT_SWAP), expect_ok=False)
+BAD_2C_NO_MOVED = CANONICAL_2C.replace('moved = self.player.try_move', 'self.player.try_move')
+case("2 Part3/3", "BAD: never stores the try_move result in moved (negative control)", "harness_movement_2", (CANONICAL_2A, CANONICAL_2B, BAD_2C_NO_MOVED), expect_ok=False)
 
 # ---------------------------------------------------------------- TODO 3
 CANONICAL_3 = 'if current is None or current.walls[direction]:\n    return False\n'
@@ -194,18 +271,8 @@ case("8 Part2/2", "alt: two separate if statements (no elif)", "harness_customIt
 # ---------------------------------------------- negative controls (must FAIL)
 # Proves the harnesses aren't just trivially permissive - a genuinely wrong
 # implementation must still be correctly rejected.
-BAD_2_SWAPPED = (
-    'if keys[pygame.K_LEFT] or keys[pygame.K_a]:\n'
-    '    moved = self.player.try_move("right", self.maze)\n'  # wrong direction
-    'elif keys[pygame.K_RIGHT] or keys[pygame.K_d]:\n'
-    '    moved = self.player.try_move("left", self.maze)\n'
-    'elif keys[pygame.K_UP] or keys[pygame.K_w]:\n'
-    '    moved = self.player.try_move("top", self.maze)\n'
-    'elif keys[pygame.K_DOWN] or keys[pygame.K_s]:\n'
-    '    moved = self.player.try_move("bottom", self.maze)\n'
-)
-case("2", "BAD: left/right swapped (negative control)", "harness_movement_2", (BAD_2_SWAPPED,), expect_ok=False)
-
+# (TODO 2's negative controls live with its three parts further up, since
+# they need one snippet per part.)
 BAD_3_NO_WALL_CHECK = 'if current is None:\n    return False\n'  # forgets the wall check entirely
 case("3", "BAD: forgets the wall check (negative control)", "harness_guardClause_3", (BAD_3_NO_WALL_CHECK,), expect_ok=False)
 
@@ -271,8 +338,28 @@ ROUNDS_1 = (
     '     "bomb_count": 1, "custom_item_count": 1, "time_limit_seconds": 40},\n'
     ']\n'
 )
-PACING_6 = 'PLAYER_MOVE_DELAY_MS = 100\nALLOW_PATH_HINT = True\nMAX_HINT_COUNT = 2\n'
-PACING_6_NO_HINT = 'PLAYER_MOVE_DELAY_MS = 60\nALLOW_PATH_HINT = False\nMAX_HINT_COUNT = 0\n'
+PACING_6 = (
+    'PLAYER_MOVE_DELAY_MS = 100\n'
+    'PLAYER_ACCELERATION = 0.9\n'
+    'PLAYER_FRICTION = 0.88\n'
+    'PLAYER_MOVE_THRESHOLD = 1.5\n'
+    'ALLOW_PATH_HINT = True\n'
+    'MAX_HINT_COUNT = 2\n'
+)
+PACING_6_NO_HINT = (
+    'PLAYER_MOVE_DELAY_MS = 60\n'
+    'PLAYER_ACCELERATION = 1.4\n'
+    'PLAYER_FRICTION = 0.96\n'
+    'PLAYER_MOVE_THRESHOLD = 2.5\n'
+    'ALLOW_PATH_HINT = False\n'
+    'MAX_HINT_COUNT = 0\n'
+)
+# Friction at or above 1 makes the player impossible to steer, but the
+# grading policy is open-ended, so it must warn and still pass.
+PACING_6_BROKEN_FRICTION = PACING_6.replace('0.88', '1.4')
+# Friction so low the top speed never reaches the threshold: the player
+# cannot move at all. Also a warning, but the message has to say so.
+PACING_6_UNPLAYABLE = PACING_6.replace('0.88', '0.6')
 
 CANONICAL_6C = (
     'custom_positions = create_random_positions(\n'
@@ -338,7 +425,9 @@ ALT_6C_WHILE = (
 case("6", "canonical (random placement, 3 rounds)", "harness_roundDesign_6", (ROUNDS_3, PACING_6, CANONICAL_6C))
 case("6", "alt: 5 rounds instead of 3", "harness_roundDesign_6", (ROUNDS_5, PACING_6, CANONICAL_6C))
 case("6", "alt: a single round", "harness_roundDesign_6", (ROUNDS_1, PACING_6, CANONICAL_6C))
-case("6", "alt: hints turned off entirely", "harness_roundDesign_6", (ROUNDS_3, PACING_6_NO_HINT, CANONICAL_6C))
+case("6", "alt: hints off, icy friction, faster steps", "harness_roundDesign_6", (ROUNDS_3, PACING_6_NO_HINT, CANONICAL_6C))
+case("6", "alt: friction >= 1 (warns, still passes)", "harness_roundDesign_6", (ROUNDS_3, PACING_6_BROKEN_FRICTION, CANONICAL_6C))
+case("6", "alt: friction so low the player cannot move (warns)", "harness_roundDesign_6", (ROUNDS_3, PACING_6_UNPLAYABLE, CANONICAL_6C), expect_warning="will never be able to move")
 case("6", "alt: own placement rules (no bombs near start, items in turn)", "harness_roundDesign_6", (ROUNDS_3, PACING_6, ALT_6C_RULES))
 case("6", "alt: places nothing at all (empty lists)", "harness_roundDesign_6", (ROUNDS_3, PACING_6, ALT_6C_EMPTY))
 case("6", "alt: while loop placement (budget guard must not trip)", "harness_roundDesign_6", (ROUNDS_3, PACING_6, ALT_6C_WHILE))
@@ -540,15 +629,21 @@ def main():
     print("%-14s | %-55s | %-4s | notes" % ("Step", "Implementation", "PASS"))
     print("-" * 110)
     all_ok = True
-    for step, label, harness_fn, code_args, expect_ok in CASES:
+    for step, label, harness_fn, code_args, expect_ok, expect_warning in CASES:
         py_src = generate_harness_source(harness_fn, *code_args)
         result = run_python(py_src)
         ok = result.get("ok")
-        status = "PASS" if ok == expect_ok else "FAIL"
-        if ok != expect_ok:
+        good = ok == expect_ok
+        warnings = result.get("warnings") or []
+        if expect_warning and not any(expect_warning in w for w in warnings):
+            good = False
+        status = "PASS" if good else "FAIL"
+        if not good:
             all_ok = False
         note = ""
-        if not ok:
+        if expect_warning:
+            note = "warned" if any(expect_warning in w for w in warnings) else "MISSING WARNING %r in %s" % (expect_warning, warnings)
+        elif not ok:
             note = "error=%s failed=%s" % (result.get("error"), result.get("failed"))
         print("%-14s | %-55s | %-4s | %s" % (step, label, status, note))
     print("-" * 110)

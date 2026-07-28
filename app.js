@@ -1546,123 +1546,214 @@
 
   var PY_PRELUDE = "import json, base64, traceback\n";
 
-  // Rewritten (B1) to be fully OUTCOME-based, "like Reach the Star": this
-  // grades WHAT HAPPENS TO THE PLAYER, never HOW the student got there. A
-  // student who calls self.player.try_move(direction, self.maze) exactly
-  // as hinted passes; so does a student who bypasses try_move entirely and
-  // inlines their own row/col math AND their own wall check, as long as
-  // the final position is correct. This works by giving the harness its
-  // OWN independent, provably-correct reference FakePlayer.try_move /
-  // FakeMaze (NOT the student's own TODO 3/4 code - TODO 2 is graded in
-  // total isolation from whether TODO 3/4 are even attempted yet) and then
-  // only inspecting the final position and the `moved` value afterward -
-  // never asserting a specific method was called with specific arguments.
-  function harness_movement_2(code) {
-    var fnSrc = buildFnSource("self, pygame, keys, moved", code, "    ");
+  // TODO 2 is three parts now (acceleration / friction / one grid step),
+  // and every part stays fully OUTCOME-based: this grades WHAT HAPPENS to
+  // the velocity and to the player, never HOW the student got there.
+  //
+  //   Part 1  hold a key -> the velocity has to change the right way. Only
+  //           the SIGN is graded; using a literal instead of
+  //           self.player.acceleration is a note, not a failure.
+  //   Part 2  a known velocity has to come back smaller (and never flip
+  //           sign), and repeated frames have to approach zero. Any
+  //           friction factor in [0, 1) is accepted.
+  //   Part 3  a velocity is supplied directly and the player's final cell
+  //           is checked against an independent reference try_move/maze -
+  //           NOT the student's own TODO 3/4 code, so TODO 2 is graded in
+  //           isolation from whether those are even attempted yet. A
+  //           student who bypasses try_move entirely and inlines their own
+  //           row/col math still passes, as long as the outcome is right.
+  function harness_movement_2(code1, code2, code3) {
+    var fn1 = buildFnSource("self, pygame, keys, moved", code1, "    ");
+    var fn2 = buildFnSource("self, pygame, keys, moved", code2, "    ");
+    var fn3 = buildFnSource("self, pygame, keys, moved, PLAYER_MOVE_THRESHOLD", code3, "    ");
     return [
       PY_PRELUDE,
-      b64Line("FN_SRC", fnSrc),
-      "START_ROW = 2",
-      "START_COL = 2",
+      PY_BONUS_HELPERS,
+      b64Line("FN1_SRC", fn1),
+      b64Line("FN2_SRC", fn2),
+      b64Line("FN3_SRC", fn3),
+      "START_ROW = 4",
+      "START_COL = 4",
+      "ACCEL = 0.9",
+      "FRICTION = 0.88",
+      "THRESHOLD = 1.5",
       "DELTA = {'top': (-1, 0), 'right': (0, 1), 'bottom': (1, 0), 'left': (0, -1)}",
+      "class Vec(object):",
+      "    def __init__(self, x=0.0, y=0.0):",
+      "        self.x = float(x); self.y = float(y)",
+      "    def update(self, x=0, y=0):",
+      "        self.x = float(x); self.y = float(y)",
+      "    def __repr__(self):",
+      "        return '(x=%.3f, y=%.3f)' % (self.x, self.y)",
+      "class FakeCell(object):",
+      "    def __init__(self, walls):",
+      "        self.walls = walls",
+      "class FakeMaze(object):",
+      // Independent reference maze: every cell is open EXCEPT the player's
+      // own starting cell, which blocks whichever direction a case names.
+      "    def __init__(self, blocked_dirs):",
+      "        self.blocked_dirs = set(blocked_dirs)",
+      "    def get_cell(self, row, col):",
+      "        if row == START_ROW and col == START_COL:",
+      "            return FakeCell(dict((d, d in self.blocked_dirs) for d in DELTA))",
+      "        return FakeCell(dict((d, False) for d in DELTA))",
+      "class FakePlayer(object):",
+      // A correct, independent REFERENCE try_move - never the student's own
+      // TODO 3/4 code - so a student who calls try_move as hinted sees
+      // correct behaviour back regardless of their other steps.
+      "    def __init__(self, vx=0.0, vy=0.0):",
+      "        self.row = START_ROW",
+      "        self.col = START_COL",
+      "        self.velocity = Vec(vx, vy)",
+      "        self.acceleration = ACCEL",
+      "        self.friction = FRICTION",
+      "    def try_move(self, direction, maze):",
+      "        current = maze.get_cell(self.row, self.col)",
+      "        if current is None or current.walls[direction]:",
+      "            return False",
+      "        dr, dc = DELTA[direction]",
+      "        self.row += dr",
+      "        self.col += dc",
+      "        return True",
+      "class Pygame(object):",
+      "    K_LEFT = 1; K_RIGHT = 2; K_UP = 3; K_DOWN = 4",
+      "    K_e = 5; K_f = 6; K_c = 7; K_d = 8",
+      "KEY_NAMES = ['K_LEFT', 'K_RIGHT', 'K_UP', 'K_DOWN', 'K_e', 'K_f', 'K_c', 'K_d']",
+      "class SelfObj(object):",
+      "    pass",
+      "def _make_self(vx=0.0, vy=0.0, blocked=()):",
+      "    s = SelfObj()",
+      "    s.player = FakePlayer(vx, vy)",
+      "    s.maze = FakeMaze(blocked)",
+      "    return s",
+      "def _make_keys(pressed):",
+      "    pg = Pygame()",
+      "    return dict((getattr(pg, n), n in pressed) for n in KEY_NAMES)",
       "def _run():",
-      "    result = {'ok': False, 'passed': [], 'failed': [], 'error': None, 'traceback': None}",
-      "    class FakeCell:",
-      "        def __init__(self, walls):",
-      "            self.walls = walls",
-      "    class FakeMaze:",
-      "        # Independent reference maze: every cell is open EXCEPT the",
-      "        # player's own starting cell, which blocks whichever",
-      "        # direction(s) a given test case names. Good enough to check",
-      "        # real outcomes without depending on the student's own TODO 3/4.",
-      "        def __init__(self, blocked_dirs):",
-      "            self.blocked_dirs = blocked_dirs",
-      "        def get_cell(self, row, col):",
-      "            if row == START_ROW and col == START_COL:",
-      "                return FakeCell({d: (d in self.blocked_dirs) for d in DELTA})",
-      "            return FakeCell({d: False for d in DELTA})",
-      "    class FakePlayer:",
-      "        # A correct, independent REFERENCE try_move - not the",
-      "        # student's own code - used only so a student who correctly",
-      "        # calls self.player.try_move(...) sees correct behaviour back.",
-      "        def __init__(self):",
-      "            self.row = START_ROW",
-      "            self.col = START_COL",
-      "        def try_move(self, direction, maze):",
-      "            current = maze.get_cell(self.row, self.col)",
-      "            if current is None or current.walls[direction]:",
-      "                return False",
-      "            dr, dc = DELTA[direction]",
-      "            self.row += dr",
-      "            self.col += dc",
-      "            return True",
-      "    class Pygame:",
-      "        K_LEFT = 1; K_a = 2; K_RIGHT = 3; K_d = 4; K_UP = 5; K_w = 6; K_DOWN = 7; K_s = 8",
-      "    class SelfObj:",
-      "        pass",
-      "    ns = {}",
-      "    try:",
-      "        exec(compile(FN_SRC, '<student>', 'exec'), {}, ns)",
-      "    except SyntaxError as e:",
-      "        line = max(1, (e.lineno or 1) - 1)",
-      "        result['error'] = 'Python syntax error on line %s: %s.' % (line, e.msg)",
-      "        return json.dumps(result)",
-      "    _fn = ns['_fn']",
-      "    def run_case(pressed, blocked_dirs=()):",
-      "        pygame = Pygame()",
-      "        player = FakePlayer()",
-      "        maze = FakeMaze(set(blocked_dirs))",
-      "        self = SelfObj()",
-      "        self.player = player",
-      "        self.maze = maze",
-      "        key_names = ['K_LEFT', 'K_a', 'K_RIGHT', 'K_d', 'K_UP', 'K_w', 'K_DOWN', 'K_s']",
-      "        keys = {}",
-      "        for name in key_names:",
-      "            keys[getattr(pygame, name)] = name in pressed",
-      "        out = _fn(self, pygame, keys, False)",
-      "        if not isinstance(out, dict):",
-      "            return 'RETURNED_EARLY', None, None",
-      "        return (player.row, player.col), out.get('moved', False), None",
-      "    try:",
-      "        cases = [",
-      "            ('no keys pressed: stays put', [], (), (START_ROW, START_COL), False),",
-      "            ('LEFT moves one cell left', ['K_LEFT'], (), (START_ROW, START_COL - 1), True),",
-      "            ('A (alt left) moves one cell left', ['K_a'], (), (START_ROW, START_COL - 1), True),",
-      "            ('RIGHT moves one cell right', ['K_RIGHT'], (), (START_ROW, START_COL + 1), True),",
-      "            ('D (alt right) moves one cell right', ['K_d'], (), (START_ROW, START_COL + 1), True),",
-      "            ('UP moves one cell up', ['K_UP'], (), (START_ROW - 1, START_COL), True),",
-      "            ('W (alt up) moves one cell up', ['K_w'], (), (START_ROW - 1, START_COL), True),",
-      "            ('DOWN moves one cell down', ['K_DOWN'], (), (START_ROW + 1, START_COL), True),",
-      "            ('S (alt down) moves one cell down', ['K_s'], (), (START_ROW + 1, START_COL), True),",
-      "            ('a wall blocks the move (stays put)', ['K_LEFT'], ('left',), (START_ROW, START_COL), False),",
-      "        ]",
-      "        for label, pressed, blocked, expect_pos, expect_moved in cases:",
-      "            pos, moved, _ = run_case(pressed, blocked)",
-      "            if pos == 'RETURNED_EARLY':",
-      "                result['failed'].append('%s: your code used return and exited update_player early. Remove any stray return statement.' % label)",
-      "            elif pos != expect_pos:",
-      "                result['failed'].append('%s: expected the player to end up at (row, col) = %s, got %s.' % (label, expect_pos, pos))",
-      "            elif moved != expect_moved:",
-      "                result['failed'].append('%s: the player ended up in the right place, but moved should be %r, got %r.' % (label, expect_moved, moved))",
-      "            else:",
-      "                result['passed'].append(label)",
-      "        # Two opposite keys at once: exactly one direction should win",
-      "        # (if/elif, not separate independent ifs) - accept EITHER",
-      "        # neighbor, since which branch wins when both are held is a",
-      "        # legitimate implementation choice, not something to grade.",
-      "        pos, moved, _ = run_case(['K_LEFT', 'K_RIGHT'])",
-      "        valid_positions = [(START_ROW, START_COL - 1), (START_ROW, START_COL + 1)]",
-      "        if pos == 'RETURNED_EARLY':",
-      "            result['failed'].append('Pressing LEFT and RIGHT together: your code used return and exited update_player early.')",
-      "        elif pos not in valid_positions:",
-      "            result['failed'].append('Pressing LEFT and RIGHT together should still move exactly one cell (use if/elif, not separate if statements); expected one of %s, got %s.' % (valid_positions, pos))",
+      "    result = _new_result()",
+      // ---------------- Part 1/3: keys -> velocity
+      "    fn1 = _compile_body(result, FN1_SRC, 'Part 1')",
+      "    if fn1 is None:",
+      "        return _finish(result)",
+      "    part1_ok = True",
+      "    axis_cases = [",
+      "        ('LEFT arrow', ['K_LEFT'], 'x', -1),",
+      "        ('E (controller left)', ['K_e'], 'x', -1),",
+      "        ('RIGHT arrow', ['K_RIGHT'], 'x', 1),",
+      "        ('F (controller right)', ['K_f'], 'x', 1),",
+      "        ('UP arrow', ['K_UP'], 'y', -1),",
+      "        ('C (controller up)', ['K_c'], 'y', -1),",
+      "        ('DOWN arrow', ['K_DOWN'], 'y', 1),",
+      "        ('D (controller down)', ['K_d'], 'y', 1),",
+      "    ]",
+      "    for label, pressed, axis, sign in axis_cases:",
+      "        s = _make_self()",
+      "        ok, msg = _call_body(fn1, (s, Pygame(), _make_keys(pressed), False), 'Part 1 (%s)' % label)",
+      "        if not ok:",
+      "            result['failed'].append(msg)",
+      "            part1_ok = False",
+      "            continue",
+      "        got = s.player.velocity.x if axis == 'x' else s.player.velocity.y",
+      "        other = s.player.velocity.y if axis == 'x' else s.player.velocity.x",
+      "        want = 'negative' if sign < 0 else 'positive'",
+      "        if got == 0:",
+      "            result['failed'].append('Part 1 (%s): holding this key did not change velocity.%s at all. It should become %s.' % (label, axis, want))",
+      "            part1_ok = False",
+      "        elif (got > 0) != (sign > 0):",
+      "            result['failed'].append('Part 1 (%s): velocity.%s became %.2f, but this key should make it %s. Check whether you need -= or += here.' % (label, axis, got, want))",
+      "            part1_ok = False",
+      "        elif other != 0:",
+      "            result['failed'].append('Part 1 (%s): this key also changed the other axis (velocity.%s = %.2f). Each key should only affect one of x/y.' % (label, 'y' if axis == 'x' else 'x', other))",
+      "            part1_ok = False",
       "        else:",
-      "            result['passed'].append('Only one direction wins when multiple keys are pressed together.')",
-      "    except Exception as e:",
-      "        result['error'] = '%s: %s' % (type(e).__name__, e)",
-      "        result['traceback'] = traceback.format_exc()",
-      "    result['ok'] = result['error'] is None and len(result['failed']) == 0",
-      "    return json.dumps(result)",
+      "            result['passed'].append('Part 1 (%s): velocity.%s becomes %s.' % (label, axis, want))",
+      "            if abs(abs(got) - ACCEL) > 1e-6:",
+      "                result['warnings'].append('Heads up: %s changed the speed by %.2f rather than self.player.acceleration (%.2f). That still works, but using self.player.acceleration means Bonus TODO 6 can retune the feel later.' % (label, abs(got), ACCEL))",
+      "    s = _make_self()",
+      "    ok, msg = _call_body(fn1, (s, Pygame(), _make_keys([]), False), 'Part 1 (no keys held)')",
+      "    if not ok:",
+      "        result['failed'].append(msg)",
+      "        part1_ok = False",
+      "    elif s.player.velocity.x != 0 or s.player.velocity.y != 0:",
+      "        result['failed'].append('Part 1 (no keys held): the velocity changed to %r even though nothing was pressed. Every change belongs inside one of the if blocks.' % s.player.velocity)",
+      "        part1_ok = False",
+      "    else:",
+      "        result['passed'].append('Part 1 (no keys held): the velocity stays at zero.')",
+      "    if part1_ok:",
+      "        s = _make_self()",
+      "        _call_body(fn1, (s, Pygame(), _make_keys(['K_LEFT', 'K_UP']), False), 'Part 1 (two keys)')",
+      "        if s.player.velocity.x < 0 and s.player.velocity.y < 0:",
+      "            result['passed'].append('Part 1 (LEFT + UP together): speed builds on both axes, so diagonal input works.')",
+      "        else:",
+      "            result['warnings'].append('Heads up: holding LEFT and UP together only built up speed on one axis (%r). Four separate `if` statements - rather than if/elif - let both build at once.' % s.player.velocity)",
+      // ---------------- Part 2/3: friction
+      "    fn2 = _compile_body(result, FN2_SRC, 'Part 2')",
+      "    if fn2 is None:",
+      "        return _finish(result)",
+      "    s = _make_self(4.0, -3.0)",
+      "    ok, msg = _call_body(fn2, (s, Pygame(), _make_keys([]), False), 'Part 2 (one frame of friction)')",
+      "    if not ok:",
+      "        result['failed'].append(msg)",
+      "    else:",
+      "        vx, vy = s.player.velocity.x, s.player.velocity.y",
+      "        problems = []",
+      "        if abs(vx) >= 4.0 or abs(vy) >= 3.0:",
+      "            problems.append('the speed did not get smaller (x: 4.00 -> %.2f, y: -3.00 -> %.2f)' % (vx, vy))",
+      "        if vx < 0 or vy > 0:",
+      "            problems.append('the direction flipped (x should stay positive and y negative)')",
+      "        if problems:",
+      "            result['failed'].append('Part 2: %s. Multiply each part of the velocity by self.player.friction, a number just under 1.' % '; and '.join(problems))",
+      "        else:",
+      "            result['passed'].append('Part 2: one frame of friction shrinks the speed from (4.00, -3.00) to (%.2f, %.2f).' % (vx, vy))",
+      "            if vx == 0 and vy == 0:",
+      "                result['warnings'].append('Heads up: your friction wipes the speed out completely in a single frame, so the player will stop the instant you let go. That works, but multiplying by something like 0.88 gives a nicer glide.')",
+      "            s2 = _make_self(6.0, 6.0)",
+      "            for _ in range(60):",
+      "                _call_body(fn2, (s2, Pygame(), _make_keys([]), False), 'Part 2 (decay)')",
+      "            if abs(s2.player.velocity.x) > 0.05 or abs(s2.player.velocity.y) > 0.05:",
+      "                result['failed'].append('Part 2: after 60 frames with no keys held the speed is still %r. Friction has to be a factor BELOW 1, or the player never comes to a stop.' % s2.player.velocity)",
+      "            else:",
+      "                result['passed'].append('Part 2: with no keys held the player coasts to a stop.')",
+      "        s3 = _make_self(0.0, 0.0)",
+      "        _call_body(fn2, (s3, Pygame(), _make_keys([]), False), 'Part 2 (already stopped)')",
+      "        if s3.player.velocity.x != 0 or s3.player.velocity.y != 0:",
+      "            result['failed'].append('Part 2: a player already at rest was given speed %r out of nowhere.' % s3.player.velocity)",
+      // ---------------- Part 3/3: velocity -> one grid step
+      "    fn3 = _compile_body(result, FN3_SRC, 'Part 3')",
+      "    if fn3 is None:",
+      "        return _finish(result)",
+      "    step_cases = [",
+      "        ('moving right', 5.0, 0.0, (), (START_ROW, START_COL + 1), True),",
+      "        ('moving left', -5.0, 0.0, (), (START_ROW, START_COL - 1), True),",
+      "        ('moving down', 0.0, 5.0, (), (START_ROW + 1, START_COL), True),",
+      "        ('moving up', 0.0, -5.0, (), (START_ROW - 1, START_COL), True),",
+      "        ('mostly right, slightly down', 5.0, 2.0, (), (START_ROW, START_COL + 1), True),",
+      "        ('mostly down, slightly right', 2.0, 5.0, (), (START_ROW + 1, START_COL), True),",
+      "        ('barely moving (under the threshold)', 0.2, 0.1, (), (START_ROW, START_COL), False),",
+      "        ('not moving at all', 0.0, 0.0, (), (START_ROW, START_COL), False),",
+      "        ('a wall blocks the step', 5.0, 0.0, ('right',), (START_ROW, START_COL), False),",
+      "    ]",
+      "    for label, vx, vy, blocked, expect_pos, expect_moved in step_cases:",
+      "        s = _make_self(vx, vy, blocked)",
+      "        try:",
+      "            out = _run_guarded(fn3, (s, Pygame(), _make_keys([]), False, THRESHOLD))",
+      "        except _StepBudget:",
+      "            result['failed'].append('Part 3 (%s): your code never finished - check for a loop that cannot end.' % label)",
+      "            continue",
+      "        except Exception as e:",
+      "            result['failed'].append('Part 3 (%s): raised %s: %s' % (label, type(e).__name__, e))",
+      "            continue",
+      "        pos = (s.player.row, s.player.col)",
+      "        moved = out.get('moved', False) if isinstance(out, dict) else None",
+      "        if not isinstance(out, dict):",
+      "            result['failed'].append('Part 3 (%s): your code used return and left update_player early. Remove any stray return statement.' % label)",
+      "        elif pos != expect_pos:",
+      "            result['failed'].append('Part 3 (%s): expected the player to end up at (row, col) = %s, got %s.' % (label, expect_pos, pos))",
+      "        elif bool(moved) != expect_moved:",
+      "            result['failed'].append('Part 3 (%s): the player ended up in the right place, but moved should be %r, got %r. Store what try_move returns in moved.' % (label, expect_moved, moved))",
+      "        else:",
+      "            result['passed'].append('Part 3 (%s): OK.' % label)",
+      "    return _finish(result)",
       "_run()",
     ].join("\n");
   }
@@ -2224,14 +2315,55 @@
       "    ns2 = _exec_settings(result, CODE2, 'Part 2')",
       "    if ns2 is None:",
       "        return _finish(result)",
-      "    pacing = ['PLAYER_MOVE_DELAY_MS', 'ALLOW_PATH_HINT', 'MAX_HINT_COUNT']",
+      "    pacing = ['PLAYER_MOVE_DELAY_MS', 'PLAYER_ACCELERATION', 'PLAYER_FRICTION',",
+      "              'PLAYER_MOVE_THRESHOLD', 'ALLOW_PATH_HINT', 'MAX_HINT_COUNT']",
       "    missing_pacing = [n for n in pacing if n not in ns2]",
       "    if missing_pacing:",
       "        result['failed'].append('Part 2: Missing definition(s): %s.' % ', '.join(missing_pacing))",
       "    else:",
-      "        result['passed'].append('Part 2: PLAYER_MOVE_DELAY_MS=%s, ALLOW_PATH_HINT=%s, MAX_HINT_COUNT=%s.' % (",
-      "            _short_repr(ns2['PLAYER_MOVE_DELAY_MS']), _short_repr(ns2['ALLOW_PATH_HINT']), _short_repr(ns2['MAX_HINT_COUNT'])))",
+      "        result['passed'].append('Part 2: delay=%s, acceleration=%s, friction=%s, threshold=%s, hints=%s/%s.' % (",
+      "            _short_repr(ns2['PLAYER_MOVE_DELAY_MS']), _short_repr(ns2['PLAYER_ACCELERATION']),",
+      "            _short_repr(ns2['PLAYER_FRICTION']), _short_repr(ns2['PLAYER_MOVE_THRESHOLD']),",
+      "            _short_repr(ns2['ALLOW_PATH_HINT']), _short_repr(ns2['MAX_HINT_COUNT'])))",
       "        _check_number(result, 'PLAYER_MOVE_DELAY_MS', ns2['PLAYER_MOVE_DELAY_MS'], int, low=0, high=2000)",
+      "        _check_number(result, 'PLAYER_ACCELERATION', ns2['PLAYER_ACCELERATION'], (int, float), low=0.05, high=20)",
+      "        _check_number(result, 'PLAYER_MOVE_THRESHOLD', ns2['PLAYER_MOVE_THRESHOLD'], (int, float), low=0, high=50)",
+      // Friction outside 0..1 is the one tuning value that genuinely breaks
+      // the game (>= 1 accelerates forever, <= 0 flips direction), so it
+      // gets its own explicit note rather than the generic range warning.
+      "        fr = ns2['PLAYER_FRICTION']",
+      "        if isinstance(fr, bool) or not isinstance(fr, (int, float)):",
+      "            result['warnings'].append('Heads up: PLAYER_FRICTION should be a number just under 1, like 0.88.')",
+      "        elif fr >= 1:",
+      "            result['warnings'].append('Heads up: PLAYER_FRICTION = %s is 1 or more, so speed never fades — the player will keep accelerating and become impossible to steer. Values just under 1 (0.6-0.97) are the useful range.' % _short_repr(fr))",
+      "        elif fr <= 0:",
+      "            result['warnings'].append('Heads up: PLAYER_FRICTION = %s is 0 or less, so the player stops instantly (or jitters backwards) every frame. Try something between 0.6 and 0.97.' % _short_repr(fr))",
+      "        elif fr < 0.5:",
+      "            result['warnings'].append('Heads up: PLAYER_FRICTION = %s is very low, so the player will stop almost the instant you let go. That is a valid choice, just check it feels right in the Play tab.' % _short_repr(fr))",
+      // The three movement numbers interact: holding a key forever settles
+      // at accel*friction/(1-friction). If that top speed never reaches
+      // PLAYER_MOVE_THRESHOLD the player simply cannot move - a silently
+      // unplayable game, and the single easiest way to lose a lesson to
+      // confusion. Worth spelling out with the actual arithmetic.
+      "        try:",
+      "            acc = ns2['PLAYER_ACCELERATION']; thr = ns2['PLAYER_MOVE_THRESHOLD']",
+      "            numbers_ok = all((not isinstance(v, bool)) and isinstance(v, (int, float)) for v in (acc, fr, thr))",
+      "            if numbers_ok and 0 < fr < 1:",
+      "                top_speed = acc * fr / (1 - fr)",
+      "                if top_speed < thr:",
+      "                    result['warnings'].append(",
+      "                        'IMPORTANT: with these three numbers your player will never be able to move at all. '",
+      "                        'Holding a key settles at a top speed of %.2f (acceleration %.2f with friction %.2f), '",
+      "                        'but PLAYER_MOVE_THRESHOLD is %.2f, so a step never happens. Raise PLAYER_ACCELERATION, '",
+      "                        'raise PLAYER_FRICTION closer to 1, or lower PLAYER_MOVE_THRESHOLD.'",
+      "                        % (top_speed, acc, fr, thr))",
+      "                elif top_speed < thr * 1.5:",
+      "                    result['warnings'].append(",
+      "                        'Heads up: your top speed (%.2f) is only just above PLAYER_MOVE_THRESHOLD (%.2f), so the '",
+      "                        'player will feel sluggish and may stall. Try the Play tab before you settle on this.'",
+      "                        % (top_speed, thr))",
+      "        except Exception:",
+      "            pass",
       "        if not isinstance(ns2['ALLOW_PATH_HINT'], bool):",
       "            result['warnings'].append('Heads up: ALLOW_PATH_HINT is usually True or False — this still counts as complete, but double-check the Hint button behaves as you expect.')",
       "        _check_number(result, 'MAX_HINT_COUNT', ns2['MAX_HINT_COUNT'], int, low=0, high=99)",
@@ -3150,95 +3282,166 @@
     ].join("\n");
   }
 
-  function traceHarness_playerMove(code21, code22, code23, mazeGrid, pressed, startRow, startCol) {
-    var fn21 = buildFnSource("self, pygame, keys, moved", code21, "    ");
-    var fn22 = buildFnSource("current, direction", code22, "    ");
-    var fn23 = buildFnSource("self, dr, dc", code23, "    ");
+  // Runs one key press through the student's REAL movement code, the same
+  // way the pygame game does: TODO 2's three parts (accelerate, apply
+  // friction, take a grid step) run once per simulated frame, and TODO 3/4
+  // supply try_move's guard clause and position update.
+  //
+  // Because movement is momentum-based now, a single frame is not a useful
+  // unit of preview - one key press is. So this simulates a short burst:
+  // HOLD_FRAMES frames with the key held, then up to COAST_FRAMES more with
+  // nothing held, and reports every cell the player passed through. That
+  // makes the glide from Part 2/3's friction something a student can
+  // actually see, at one Pyodide round trip per key press.
+  function traceHarness_playerMove(code2a, code2b, code2c, code3, code4, mazeGrid, pressed, startRow, startCol, opts) {
+    opts = opts || {};
+    var fnA = buildFnSource("self, pygame, keys, moved", code2a, "    ");
+    var fnB = buildFnSource("self, pygame, keys, moved", code2b, "    ");
+    var fnC = buildFnSource("self, pygame, keys, moved, PLAYER_MOVE_THRESHOLD", code2c, "    ");
+    var fn3 = buildFnSource("current, direction", code3, "    ");
+    var fn4 = buildFnSource("self, dr, dc", code4, "    ");
     return [
       "import json, base64, traceback",
-      b64Line("FN21_SRC", fn21),
-      b64Line("FN22_SRC", fn22),
-      b64Line("FN23_SRC", fn23),
+      PY_BONUS_HELPERS,
+      b64Line("FNA_SRC", fnA),
+      b64Line("FNB_SRC", fnB),
+      b64Line("FNC_SRC", fnC),
+      b64Line("FN3_SRC", fn3),
+      b64Line("FN4_SRC", fn4),
       "GRID = " + JSON.stringify(JSON.stringify(mazeGrid)),
       "PRESSED = " + JSON.stringify(pressed || ""),
       "START_ROW = " + Number(startRow),
       "START_COL = " + Number(startCol),
+      "ACCEL = " + Number(opts.acceleration != null ? opts.acceleration : 0.9),
+      "FRICTION = " + Number(opts.friction != null ? opts.friction : 0.88),
+      "THRESHOLD = " + Number(opts.threshold != null ? opts.threshold : 1.5),
+      "HOLD_FRAMES = " + Number(opts.holdFrames != null ? opts.holdFrames : 8),
+      "COAST_FRAMES = " + Number(opts.coastFrames != null ? opts.coastFrames : 26),
+      "MAX_STEPS = " + Number(opts.maxSteps != null ? opts.maxSteps : 6),
       "def _run():",
-      "    result = {'ok': True, 'error': None, 'traceback': None, 'moved': None, 'calls': [], 'row': START_ROW, 'col': START_COL, 'wall_violation': False, 'unexpected_delta': False, 'direction_requested': None, 'try_move_returned': None}",
+      "    result = {'ok': True, 'error': None, 'traceback': None, 'moved': None, 'calls': [],",
+      "              'row': START_ROW, 'col': START_COL, 'path': [], 'wall_violation': False,",
+      "              'unexpected_delta': False, 'direction_requested': None, 'try_move_returned': None,",
+      "              'velocity': [0.0, 0.0], 'blocked': False, 'stopped_reason': None}",
       "    grid = json.loads(GRID)",
       "    rows = len(grid); cols = len(grid[0]) if rows else 0",
-      "    ns21 = {}",
       "    try:",
-      "        exec(compile(FN21_SRC, '<t21>', 'exec'), {}, ns21)",
-      "        exec(compile(FN22_SRC, '<t22>', 'exec'), {}, {})",
-      "        exec(compile(FN23_SRC, '<t23>', 'exec'), {}, {})",
+      "        nsA = {}; exec(compile(FNA_SRC, '<t2a>', 'exec'), {}, nsA)",
+      "        nsB = {}; exec(compile(FNB_SRC, '<t2b>', 'exec'), {}, nsB)",
+      "        nsC = {}; exec(compile(FNC_SRC, '<t2c>', 'exec'), {}, nsC)",
+      "        exec(compile(FN3_SRC, '<t3>', 'exec'), {}, {})",
+      "        exec(compile(FN4_SRC, '<t4>', 'exec'), {}, {})",
       "    except SyntaxError as e:",
       "        result['ok'] = False",
-      "        result['error'] = 'Python syntax error on line %s: %s.' % (e.lineno, e.msg)",
+      "        result['error'] = 'Python syntax error on line %s: %s.' % (max(1, (e.lineno or 1) - 1), e.msg)",
       "        return json.dumps(result)",
-      "    fn21 = ns21['_fn']",
-      "    class Cell:",
+      "    fnA = nsA['_fn']; fnB = nsB['_fn']; fnC = nsC['_fn']",
+      "    class Cell(object):",
       "        def __init__(self, r, c):",
       "            self.row = r; self.col = c",
       "            self.walls = dict(grid[r][c])",
       "    cells = [[Cell(r, c) for c in range(cols)] for r in range(rows)]",
-      "    class Maze:",
+      "    class Maze(object):",
       "        def get_cell(self, r, c):",
       "            if 0 <= r < rows and 0 <= c < cols:",
       "                return cells[r][c]",
       "            return None",
       "    maze = Maze()",
       "    DR_DC = {'top': (-1, 0), 'right': (0, 1), 'bottom': (1, 0), 'left': (0, -1)}",
-      "    class Pygame:",
-      "        K_LEFT = 1; K_a = 2; K_RIGHT = 3; K_d = 4; K_UP = 5; K_w = 6; K_DOWN = 7; K_s = 8",
+      "    class Vec(object):",
+      "        def __init__(self):",
+      "            self.x = 0.0; self.y = 0.0",
+      "        def update(self, x=0, y=0):",
+      "            self.x = float(x); self.y = float(y)",
+      "    class Pygame(object):",
+      "        K_LEFT = 1; K_RIGHT = 2; K_UP = 3; K_DOWN = 4",
+      "        K_e = 5; K_f = 6; K_c = 7; K_d = 8",
       "    pygame = Pygame()",
-      "    key_map = {'K_LEFT': pygame.K_LEFT, 'K_a': pygame.K_a, 'K_RIGHT': pygame.K_RIGHT, 'K_d': pygame.K_d, 'K_UP': pygame.K_UP, 'K_w': pygame.K_w, 'K_DOWN': pygame.K_DOWN, 'K_s': pygame.K_s}",
-      "    keys = dict((v, False) for v in key_map.values())",
+      "    key_map = {'K_LEFT': pygame.K_LEFT, 'K_RIGHT': pygame.K_RIGHT, 'K_UP': pygame.K_UP,",
+      "               'K_DOWN': pygame.K_DOWN, 'K_e': pygame.K_e, 'K_f': pygame.K_f,",
+      "               'K_c': pygame.K_c, 'K_d': pygame.K_d}",
+      "    held = dict((v, False) for v in key_map.values())",
+      "    released = dict((v, False) for v in key_map.values())",
       "    if PRESSED in key_map:",
-      "        keys[key_map[PRESSED]] = True",
-      "    class Player:",
+      "        held[key_map[PRESSED]] = True",
+      "    class Player(object):",
       "        def __init__(self, row, col):",
       "            self.row = row; self.col = col",
+      "            self.velocity = Vec()",
+      "            self.acceleration = ACCEL",
+      "            self.friction = FRICTION",
       "        def try_move(self, direction, maze_arg):",
+      "            if direction not in DR_DC:",
+      "                return False",
       "            result['calls'].append(direction)",
       "            result['direction_requested'] = direction",
+      "            before = (self.row, self.col)",
       "            current = maze_arg.get_cell(self.row, self.col)",
-      "            ns22 = {'current': current, 'direction': direction}",
-      "            exec(compile(FN22_SRC, '<t22>', 'exec'), {}, ns22)",
-      "            out22 = ns22['_fn'](current, direction)",
-      "            if out22 is False:",
+      "            ns3 = {}",
+      "            exec(compile(FN3_SRC, '<t3>', 'exec'), {}, ns3)",
+      "            out3 = ns3['_fn'](current, direction)",
+      "            if out3 is False:",
       "                result['try_move_returned'] = False",
+      "                result['blocked'] = True",
       "                return False",
       "            dr, dc = DR_DC[direction]",
-      "            ns23 = {}",
-      "            exec(compile(FN23_SRC, '<t23>', 'exec'), {}, ns23)",
-      "            ns23['_fn'](self, dr, dc)",
+      "            ns4 = {}",
+      "            exec(compile(FN4_SRC, '<t4>', 'exec'), {}, ns4)",
+      "            ns4['_fn'](self, dr, dc)",
       "            result['try_move_returned'] = True",
+      // The preview mirrors the real game's own safety net: TODO 3/4 are
+      // graded separately, so a half-finished guard clause here must show
+      // up as a flagged oddity rather than walking the player off the grid.
+      "            wall_present = cells[before[0]][before[1]].walls.get(direction, True)",
+      "            if (self.row, self.col) != before:",
+      "                if wall_present:",
+      "                    result['wall_violation'] = True",
+      "                if (self.row, self.col) != (before[0] + dr, before[1] + dc):",
+      "                    result['unexpected_delta'] = True",
+      "                if not (0 <= self.row < rows and 0 <= self.col < cols):",
+      // Stepping outside the grid entirely means the guard clause let a
+      // move through that it should have stopped. Clamp back inside so the
+      // preview stays drawable, and say so - but never append a repeat of
+      // the cell already stood on, or the animation stutters in place.
+      "                    result['wall_violation'] = True",
+      "                    self.row = max(0, min(rows - 1, self.row))",
+      "                    self.col = max(0, min(cols - 1, self.col))",
+      "                if (self.row, self.col) != before:",
+      "                    result['path'].append([self.row, self.col])",
       "            return True",
       "    player = Player(START_ROW, START_COL)",
-      "    class SelfObj:",
+      "    class SelfObj(object):",
       "        pass",
       "    self_ = SelfObj()",
       "    self_.player = player",
       "    self_.maze = maze",
+      "    def one_frame(keys):",
+      "        fnA(self_, pygame, keys, False)",
+      "        fnB(self_, pygame, keys, False)",
+      "        out = fnC(self_, pygame, keys, False, THRESHOLD)",
+      "        if isinstance(out, dict):",
+      "            return bool(out.get('moved', False))",
+      "        return bool(out)",
       "    try:",
-      "        out21 = fn21(self_, pygame, keys, False)",
-      "        moved = out21.get('moved', False) if isinstance(out21, dict) else out21",
-      "        result['moved'] = moved if isinstance(moved, bool) else bool(moved)",
-      "        old_row, old_col = START_ROW, START_COL",
+      "        moved_any = False",
+      "        def burst(keys, frames):",
+      "            got = False",
+      "            for _ in range(frames):",
+      "                if len(result['path']) >= MAX_STEPS:",
+      "                    result['stopped_reason'] = 'step cap'",
+      "                    return got",
+      "                if one_frame(keys):",
+      "                    got = True",
+      "            return got",
+      "        moved_any = _run_guarded(lambda: burst(held, HOLD_FRAMES), ()) or moved_any",
+      "        moved_any = _run_guarded(lambda: burst(released, COAST_FRAMES), ()) or moved_any",
+      "        result['moved'] = bool(moved_any)",
       "        result['row'] = player.row",
       "        result['col'] = player.col",
-      "        if result['calls']:",
-      "            last_dir = result['calls'][-1]",
-      "            dr, dc = DR_DC[last_dir]",
-      "            cell_before = cells[old_row][old_col]",
-      "            wall_present = cell_before.walls.get(last_dir, True)",
-      "            if wall_present and (player.row != old_row or player.col != old_col):",
-      "                result['wall_violation'] = True",
-      "            if player.row != old_row or player.col != old_col:",
-      "                exp_row, exp_col = old_row + dr, old_col + dc",
-      "                if player.row != exp_row or player.col != exp_col:",
-      "                    result['unexpected_delta'] = True",
+      "        result['velocity'] = [round(player.velocity.x, 3), round(player.velocity.y, 3)]",
+      "    except _StepBudget:",
+      "        result['ok'] = False",
+      "        result['error'] = 'Your movement code never finished - check for a loop that cannot end.'",
       "    except Exception as e:",
       "        result['ok'] = False",
       "        result['error'] = '%s: %s' % (type(e).__name__, e)",
@@ -3584,19 +3787,40 @@
   // against the REAL grading harnesses (harness_movement_2/guardClause_3/
   // positionDelta_4) to confirm they are behaviourally correct substitutes.
   var REFERENCE_CODE = {
+    // TODO 2 is three parts, so its stand-in is an array of three bodies.
     "2": [
-      'key_to_direction = [',
-      '    (pygame.K_LEFT, "left"), (pygame.K_a, "left"),',
-      '    (pygame.K_RIGHT, "right"), (pygame.K_d, "right"),',
-      '    (pygame.K_UP, "top"), (pygame.K_w, "top"),',
-      '    (pygame.K_DOWN, "bottom"), (pygame.K_s, "bottom"),',
-      ']',
-      'moved = False',
-      'for key_const, direction in key_to_direction:',
-      '    if keys[key_const]:',
-      '        moved = self.player.try_move(direction, self.maze)',
-      '        break',
-    ].join("\n"),
+      [
+        'for key_pair, axis, sign in [',
+        '    ((pygame.K_LEFT, pygame.K_e), "x", -1),',
+        '    ((pygame.K_RIGHT, pygame.K_f), "x", 1),',
+        '    ((pygame.K_UP, pygame.K_c), "y", -1),',
+        '    ((pygame.K_DOWN, pygame.K_d), "y", 1),',
+        ']:',
+        '    if keys[key_pair[0]] or keys[key_pair[1]]:',
+        '        change = sign * self.player.acceleration',
+        '        if axis == "x":',
+        '            self.player.velocity.x += change',
+        '        else:',
+        '            self.player.velocity.y += change',
+      ].join("\n"),
+      [
+        'self.player.velocity.update(',
+        '    self.player.velocity.x * self.player.friction,',
+        '    self.player.velocity.y * self.player.friction,',
+        ')',
+      ].join("\n"),
+      [
+        'lean_x = self.player.velocity.x',
+        'lean_y = self.player.velocity.y',
+        'wanted = None',
+        'if abs(lean_x) >= abs(lean_y) and abs(lean_x) >= PLAYER_MOVE_THRESHOLD:',
+        '    wanted = "right" if lean_x > 0 else "left"',
+        'elif abs(lean_y) >= PLAYER_MOVE_THRESHOLD:',
+        '    wanted = "bottom" if lean_y > 0 else "top"',
+        'if wanted is not None:',
+        '    moved = self.player.try_move(wanted, self.maze)',
+      ].join("\n"),
+    ],
     "3": [
       'if current is None:',
       '    return False',
@@ -3628,11 +3852,17 @@
       return REFERENCE_CODE[id];
     }
 
+    // TODO 2 is a three-part step now (accelerate / friction / grid step),
+    // so its code is an array; TODO 3 and 4 are still single-part.
     function currentCode() {
+      var c2 = codeFor("2");
+      if (!Array.isArray(c2)) c2 = [c2 || "", "", ""];
       return {
-        code21: codeFor("2"),
-        code22: codeFor("3"),
-        code23: codeFor("4"),
+        code2a: c2[0] || "",
+        code2b: c2[1] || "",
+        code2c: c2[2] || "",
+        code3: codeFor("3"),
+        code4: codeFor("4"),
       };
     }
 
@@ -3680,7 +3910,11 @@
       busy = true;
       var codes = currentCode();
       ensurePyodide().then(function (py) {
-        var src = traceHarness_playerMove(codes.code21, codes.code22, codes.code23, NAV_MAZE, pressedName, pos.row, pos.col);
+        var pacing = playPacing();
+        var src = traceHarness_playerMove(
+          codes.code2a, codes.code2b, codes.code2c, codes.code3, codes.code4,
+          NAV_MAZE, pressedName, pos.row, pos.col,
+          { acceleration: pacing.acceleration, friction: pacing.friction, threshold: pacing.threshold });
         return py.runPythonAsync(src);
       }).then(function (json) {
         busy = false;
@@ -3710,11 +3944,13 @@
       });
     }
 
+    // WASD is gone; the alternate keys are the classroom bluetooth
+    // controller's buttons (E/F/C/D = left/right/up/down).
     var KEY_TO_KEYNAME = {
-      ArrowLeft: "K_LEFT", a: "K_a", A: "K_a",
-      ArrowRight: "K_RIGHT", d: "K_d", D: "K_d",
-      ArrowUp: "K_UP", w: "K_w", W: "K_w",
-      ArrowDown: "K_DOWN", s: "K_s", S: "K_s",
+      ArrowLeft: "K_LEFT", e: "K_e", E: "K_e",
+      ArrowRight: "K_RIGHT", f: "K_f", F: "K_f",
+      ArrowUp: "K_UP", c: "K_c", C: "K_c",
+      ArrowDown: "K_DOWN", d: "K_d", D: "K_d",
     };
 
     // Captured at the document level (not just the canvas) so a student who
@@ -3740,14 +3976,14 @@
       mount: function (container, state0) {
         viewingStepId = state0 && state0.step ? state0.step.id : null;
         container.innerHTML = "";
-        container.appendChild(el("p", { class: "small muted", text: "Use Arrow keys or WASD anywhere on this page (no need to click the board first)." }));
+        container.appendChild(el("p", { class: "small muted", text: "Use the Arrow keys (or E/F/C/D) anywhere on this page — no need to click the board first. Hold a direction and watch the player build up speed, then glide a little after you let go." }));
         var boardWrap = el("div", { class: "viz-board-wrap" });
         var width = fitWidth(container, 340);
         CELL = Math.max(20, Math.floor(width / NAV_COLS));
         var made = makeCanvas(CELL * NAV_COLS, CELL * NAV_ROWS);
         made.canvas.tabIndex = 0;
         made.canvas.className = "viz-canvas viz-canvas-focusable";
-        made.canvas.setAttribute("aria-label", "Maze board — use arrow keys or WASD to move, anywhere on this page");
+        made.canvas.setAttribute("aria-label", "Maze board — use the arrow keys or E/F/C/D to move, anywhere on this page");
         boardWrap.appendChild(made.canvas);
         container.appendChild(boardWrap);
         var readout = buildReadout([
@@ -4458,6 +4694,12 @@
     var raw = step6PartCode(1);
     return {
       moveDelayMs: parseNumberSetting(raw, "PLAYER_MOVE_DELAY_MS", 0, 2000, 100),
+      // Clamped to values that can actually be played: a friction of 1 or
+      // more never stops, so the preview pins it just below while the
+      // grading harness explains the problem in words.
+      acceleration: parseNumberSetting(raw, "PLAYER_ACCELERATION", 0.05, 20, 0.9),
+      friction: parseNumberSetting(raw, "PLAYER_FRICTION", 0.05, 0.99, 0.88),
+      threshold: parseNumberSetting(raw, "PLAYER_MOVE_THRESHOLD", 0, 50, 1.5),
       allowHint: parseBoolSetting(raw, "ALLOW_PATH_HINT", true),
       maxHints: Math.round(parseNumberSetting(raw, "MAX_HINT_COUNT", 0, 99, 2)),
     };
@@ -5901,11 +6143,13 @@
       }
     }
 
+    // WASD is gone; the alternate keys are the classroom bluetooth
+    // controller's buttons (E/F/C/D = left/right/up/down).
     var KEY_TO_KEYNAME = {
-      ArrowLeft: "K_LEFT", a: "K_a", A: "K_a",
-      ArrowRight: "K_RIGHT", d: "K_d", D: "K_d",
-      ArrowUp: "K_UP", w: "K_w", W: "K_w",
-      ArrowDown: "K_DOWN", s: "K_s", S: "K_s",
+      ArrowLeft: "K_LEFT", e: "K_e", E: "K_e",
+      ArrowRight: "K_RIGHT", f: "K_f", F: "K_f",
+      ArrowUp: "K_UP", c: "K_c", C: "K_c",
+      ArrowDown: "K_DOWN", d: "K_d", D: "K_d",
     };
 
     function onKeydown(e) {
@@ -5915,21 +6159,42 @@
       if (!running) return;
       var caps = capabilities();
       if (!caps.movement) { statusLine(teachingNote("Finish TODO 2, 3 and 4 to make the player move.")); return; }
+      var pacing = playPacing();
       var now = performance.now();
-      if (busyMove || now - lastMoveAt < playPacing().moveDelayMs) return;
+      if (busyMove || now - lastMoveAt < pacing.moveDelayMs) return;
       busyMove = true;
-      var codes = { c21: state.steps["2"].code, c22: state.steps["3"].code, c23: state.steps["4"].code };
+      // TODO 2 is three parts now, so one key press runs a short burst of
+      // simulated frames (held, then coasting) through the student's own
+      // acceleration/friction/step code - see traceHarness_playerMove.
+      var c2 = state.steps["2"].code;
+      if (!Array.isArray(c2)) c2 = [c2 || "", "", ""];
       ensurePyodide().then(function (py) {
-        var src = traceHarness_playerMove(codes.c21, codes.c22, codes.c23, maze, keyname, player.row, player.col);
+        var src = traceHarness_playerMove(
+          c2[0] || "", c2[1] || "", c2[2] || "",
+          state.steps["3"].code, state.steps["4"].code,
+          maze, keyname, player.row, player.col,
+          { acceleration: pacing.acceleration, friction: pacing.friction, threshold: pacing.threshold });
         return py.runPythonAsync(src);
       }).then(function (json) {
         busyMove = false;
         lastMoveAt = performance.now();
         var data = JSON.parse(json);
         if (!data.ok) { statusLine(teachingNote("Your movement code raised an error: " + data.error), true); return; }
-        player.row = data.row; player.col = data.col;
-        draw();
-        checkTileEffects();
+        // Walk the cells the burst actually passed through, so the glide
+        // from the student's own friction is visible (and so an item or a
+        // bomb in the middle of that glide still triggers).
+        var stops = (data.path && data.path.length) ? data.path : [[data.row, data.col]];
+        var i = 0;
+        function stepThrough() {
+          var cell = stops[i++];
+          player.row = cell[0]; player.col = cell[1];
+          draw();
+          checkTileEffects();
+          if (i < stops.length && running) {
+            setTimeout(stepThrough, prefersReducedMotion() ? 0 : 70);
+          }
+        }
+        stepThrough();
       }).catch(function () { busyMove = false; });
     }
 
@@ -5999,7 +6264,7 @@
         var made = makeCanvas(360, 260);
         made.canvas.tabIndex = 0;
         made.canvas.className = "viz-canvas viz-canvas-focusable";
-        made.canvas.setAttribute("aria-label", "Maze game board — click then use arrow keys or WASD");
+        made.canvas.setAttribute("aria-label", "Maze game board — click, then use the arrow keys or E/F/C/D");
         boardWrap.appendChild(made.canvas);
         frame.appendChild(boardWrap);
         var notice = el("div", { class: "play-broken-notice", hidden: "hidden" });
