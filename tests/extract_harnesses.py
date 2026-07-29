@@ -328,24 +328,46 @@ function btoa(str) {
   }
   return out;
 }
+// Full UTF-8 percent-encoder. The browser has this natively; cscript's ES3
+// engine does not, and a two-byte-only version silently mangles anything
+// above U+07FF - which is every Korean character and every emoji a student
+// might type into a string. Handles 1-4 byte sequences and surrogate pairs.
 function encodeURIComponent(str) {
   var unreserved = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.!~*'()";
+  function pct(byteVal) {
+    var hex = byteVal.toString(16).toUpperCase();
+    if (hex.length < 2) hex = "0" + hex;
+    return "%" + hex;
+  }
   var out = "";
   for (var i = 0; i < str.length; i++) {
     var ch = str.charAt(i);
     var code = str.charCodeAt(i);
     if (unreserved.indexOf(ch) !== -1) {
       out += ch;
-    } else if (code < 0x80) {
-      var hex = code.toString(16).toUpperCase();
-      if (hex.length < 2) hex = "0" + hex;
-      out += "%" + hex;
+      continue;
+    }
+    // Combine a surrogate pair into one code point before encoding.
+    if (code >= 0xD800 && code <= 0xDBFF && i + 1 < str.length) {
+      var low = str.charCodeAt(i + 1);
+      if (low >= 0xDC00 && low <= 0xDFFF) {
+        code = 0x10000 + ((code - 0xD800) << 10) + (low - 0xDC00);
+        i++;
+      }
+    }
+    if (code < 0x80) {
+      out += pct(code);
+    } else if (code < 0x800) {
+      out += pct(0xC0 | (code >> 6)) + pct(0x80 | (code & 0x3F));
+    } else if (code < 0x10000) {
+      out += pct(0xE0 | (code >> 12)) +
+             pct(0x80 | ((code >> 6) & 0x3F)) +
+             pct(0x80 | (code & 0x3F));
     } else {
-      var b1 = 0xC0 | (code >> 6);
-      var b2 = 0x80 | (code & 0x3F);
-      var h1 = b1.toString(16).toUpperCase(); if (h1.length < 2) h1 = "0" + h1;
-      var h2 = b2.toString(16).toUpperCase(); if (h2.length < 2) h2 = "0" + h2;
-      out += "%" + h1 + "%" + h2;
+      out += pct(0xF0 | (code >> 18)) +
+             pct(0x80 | ((code >> 12) & 0x3F)) +
+             pct(0x80 | ((code >> 6) & 0x3F)) +
+             pct(0x80 | (code & 0x3F));
     }
   }
   return out;
@@ -427,22 +449,28 @@ def generate_call_source(fn_name, args_js):
     needed for the trace harnesses, whose arguments include maze grids,
     numbers and option objects rather than only code strings."""
     call = "%s(%s)" % (fn_name, args_js)
-    out_file = os.path.join(HERE, "_harness_out.py")
+    # Scratch names are per-process so two suites (or a fuzz run and a
+    # regression run) can never fight over the same temp file.
+    tag = "_%d" % os.getpid()
+    out_name = "_harness_out%s.py" % tag
+    out_file = os.path.join(HERE, out_name)
     if os.path.exists(out_file):
         os.remove(out_file)
     script = (SCRIPT_TEMPLATE
               .replace("__POLYFILLS__", POLYFILLS)
               .replace("__COMBINED__", COMBINED_ES3)
-              .replace("__OUTFILE__", "_harness_out.py")
+              .replace("__OUTFILE__", out_name)
               .replace("__CALL__", call))
-    js_path = os.path.join(HERE, "_harness_call.js")
+    js_name = "_harness_call%s.js" % tag
+    js_path = os.path.join(HERE, js_name)
     with open(js_path, "w", encoding="utf-16") as f:
         f.write(script)
     result = subprocess.run(
-        ["cscript", "//nologo", "//E:jscript", "_harness_call.js"],
+        ["cscript", "//nologo", "//E:jscript", js_name],
         cwd=HERE, capture_output=True, text=True,
+        encoding="utf-8", errors="replace",
     )
-    if result.returncode != 0 or result.stderr.strip():
+    if result.returncode != 0 or (result.stderr or "").strip():
         raise SystemExit("cscript failed for %s:\nSTDOUT: %s\nSTDERR: %s" % (fn_name, result.stdout, result.stderr))
     with open(out_file, encoding="utf-16") as f:
         text = f.read()

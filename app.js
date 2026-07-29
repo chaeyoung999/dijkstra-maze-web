@@ -1632,7 +1632,7 @@
       "def _make_keys(pressed):",
       "    pg = Pygame()",
       "    return dict((getattr(pg, n), n in pressed) for n in KEY_NAMES)",
-      "def _run():",
+      "def _run_inner():",
       "    result = _new_result()",
       // ---------------- Part 1/3: keys -> velocity
       "    fn1 = _compile_body(result, FN1_SRC, 'Part 1')",
@@ -1743,7 +1743,7 @@
       "        except _StepBudget:",
       "            result['failed'].append('Part 3 (%s): your code never finished - check for a loop that cannot end.' % label)",
       "            continue",
-      "        except Exception as e:",
+      "        except BaseException as e:",
       "            result['failed'].append('Part 3 (%s): raised %s: %s' % (label, type(e).__name__, e))",
       "            continue",
       "        pos = (s.player.row, s.player.col)",
@@ -1757,6 +1757,8 @@
       "        else:",
       "            result['passed'].append('Part 3 (%s): OK.' % label)",
       "    return _finish(result)",
+      "def _run():",
+      "    return _finish_or_report(_run_inner)",
       "_run()",
     ].join("\n");
   }
@@ -1765,9 +1767,10 @@
     var fnSrc = buildFnSource("current, direction", code, "    ");
     return [
       PY_PRELUDE,
+      PY_BONUS_HELPERS,
       b64Line("FN_SRC", fnSrc),
-      "def _run():",
-      "    result = {'ok': False, 'passed': [], 'failed': [], 'error': None, 'traceback': None}",
+      "def _run_inner():",
+      "    result = {'ok': False, 'passed': [], 'failed': [], 'warnings': [], 'error': None, 'traceback': None}",
       "    class Cell:",
       "        def __init__(self):",
       "            self.walls = {'top': False, 'right': False, 'bottom': False, 'left': False}",
@@ -1778,7 +1781,11 @@
       "        line = max(1, (e.lineno or 1) - 1)",
       "        result['error'] = 'Python syntax error on line %s: %s.' % (line, e.msg)",
       "        return json.dumps(result)",
-      "    _fn = ns['_fn']",
+      // Every call to the student's body goes through the line-budget guard,
+      // so a `while True` here is a graded failure rather than a frozen tab.
+      "    _raw_fn = ns['_fn']",
+      "    def _fn(*args):",
+      "        return _run_guarded(_raw_fn, args)",
       "    try:",
       "        r1 = _fn(None, 'left')",
       "        if r1 is False:",
@@ -1803,11 +1810,13 @@
       "            result['passed'].append('a wall in a different direction does not block this move')",
       "        else:",
       "            result['failed'].append('Only current.walls[direction] should block the move, not a wall in another direction.')",
-      "    except Exception as e:",
+      "    except BaseException as e:",
       "        result['error'] = '%s: %s' % (type(e).__name__, e)",
       "        result['traceback'] = traceback.format_exc()",
       "    result['ok'] = result['error'] is None and len(result['failed']) == 0",
       "    return json.dumps(result)",
+      "def _run():",
+      "    return _finish_or_report(_run_inner)",
       "_run()",
     ].join("\n");
   }
@@ -1816,9 +1825,10 @@
     var fnSrc = buildFnSource("self, dr, dc", code, "    ");
     return [
       PY_PRELUDE,
+      PY_BONUS_HELPERS,
       b64Line("FN_SRC", fnSrc),
-      "def _run():",
-      "    result = {'ok': False, 'passed': [], 'failed': [], 'error': None, 'traceback': None}",
+      "def _run_inner():",
+      "    result = {'ok': False, 'passed': [], 'failed': [], 'warnings': [], 'error': None, 'traceback': None}",
       "    class SelfObj:",
       "        def __init__(self):",
       "            self.row = 5",
@@ -1830,7 +1840,11 @@
       "        line = max(1, (e.lineno or 1) - 1)",
       "        result['error'] = 'Python syntax error on line %s: %s.' % (line, e.msg)",
       "        return json.dumps(result)",
-      "    _fn = ns['_fn']",
+      // Guarded like every other student-code call: a runaway loop becomes a
+      // graded failure instead of a hung browser tab.
+      "    _raw_fn = ns['_fn']",
+      "    def _fn(*args):",
+      "        return _run_guarded(_raw_fn, args)",
       "    cases = [",
       "        ('top', -1, 0, 4, 5),",
       "        ('right', 0, 1, 5, 6),",
@@ -1849,11 +1863,13 @@
       "                result['failed'].append('direction %s: col is wrong (expected %d, got %d) though row is right. The column update is not changing by the right amount.' % (direction, exp_col, self.col))",
       "            else:",
       "                result['failed'].append('direction %s: expected (row, col) = (%d, %d), got (%d, %d).' % (direction, exp_row, exp_col, self.row, self.col))",
-      "    except Exception as e:",
+      "    except BaseException as e:",
       "        result['error'] = '%s: %s' % (type(e).__name__, e)",
       "        result['traceback'] = traceback.format_exc()",
       "    result['ok'] = result['error'] is None and len(result['failed']) == 0",
       "    return json.dumps(result)",
+      "def _run():",
+      "    return _finish_or_report(_run_inner)",
       "_run()",
     ].join("\n");
   }
@@ -1874,10 +1890,11 @@
     var fn2Src = buildFnSource("new_cost, neighbor, current, distance, parent, queue", code2, "    ");
     return [
       PY_PRELUDE + "import heapq",
+      PY_BONUS_HELPERS,
       b64Line("FN1_SRC", fn1Src),
       b64Line("FN2_SRC", fn2Src),
-      "def _run():",
-      "    result = {'ok': False, 'passed': [], 'failed': [], 'error': None, 'traceback': None}",
+      "def _run_inner():",
+      "    result = {'ok': False, 'passed': [], 'failed': [], 'warnings': [], 'error': None, 'traceback': None}",
       "    ns1 = {}",
       "    ns2 = {}",
       "    try:",
@@ -1892,8 +1909,14 @@
       "        line = max(1, (e.lineno or 1) - 1)",
       "        result['error'] = 'Part 2: Python syntax error on line %s: %s.' % (line, e.msg)",
       "        return json.dumps(result)",
-      "    _fn1 = ns1['_fn']",
-      "    _fn2 = ns2['_fn']",
+      // Both parts run behind the line-budget guard, so a loop that never
+      // ends is reported as a failure instead of freezing the browser.
+      "    _raw_fn1 = ns1['_fn']",
+      "    _raw_fn2 = ns2['_fn']",
+      "    def _fn1(*args):",
+      "        return _run_guarded(_raw_fn1, args)",
+      "    def _fn2(*args):",
+      "        return _run_guarded(_raw_fn2, args)",
       "    try:",
       "        cost_cases = [",
       "            ('cost=0, step_cost=5', 0, 5),",
@@ -1909,7 +1932,7 @@
       "                result['passed'].append('Part 1 (%s): new_cost == %r' % (label, expected))",
       "            else:",
       "                result['failed'].append('Part 1 (%s): expected new_cost == %r, got %r.' % (label, expected, got))",
-      "    except Exception as e:",
+      "    except BaseException as e:",
       "        result['error'] = 'Part 1: %s: %s' % (type(e).__name__, e)",
       "        result['traceback'] = traceback.format_exc()",
       "        return json.dumps(result)",
@@ -1948,11 +1971,13 @@
       "                    result['passed'].append('Part 2 (%s): correctly left unchanged since it was not an improvement' % label)",
       "                else:",
       "                    result['failed'].append('Part 2 (%s): distance/parent were changed even though new_cost was not an improvement over the existing distance[%r]=%r.' % (label, neighbor, dist0[neighbor]))",
-      "    except Exception as e:",
+      "    except BaseException as e:",
       "        result['error'] = 'Part 2: %s: %s' % (type(e).__name__, e)",
       "        result['traceback'] = traceback.format_exc()",
       "    result['ok'] = result['error'] is None and len(result['failed']) == 0",
       "    return json.dumps(result)",
+      "def _run():",
+      "    return _finish_or_report(_run_inner)",
       "_run()",
     ].join("\n");
   }
@@ -2029,7 +2054,7 @@
       "            result['passed'].append('Both are defined: TITLE=%s, GAME_SUBTITLE=%s.' % (_short_repr(ns['TITLE']), _short_repr(ns['GAME_SUBTITLE'])))",
       "            if not isinstance(ns['TITLE'], str) or not isinstance(ns['GAME_SUBTITLE'], str):",
       "                result['warnings'].append('Heads up: TITLE and GAME_SUBTITLE are usually plain strings — this still counts as complete, but double-check it looks right in the title-screen preview.')",
-      "    except Exception as e:",
+      "    except BaseException as e:",
       "        result['error'] = '%s: %s' % (type(e).__name__, e)",
       "        result['traceback'] = traceback.format_exc()",
       "    result['ok'] = result['error'] is None and len(result['failed']) == 0",
@@ -2056,7 +2081,13 @@
   var PY_BONUS_HELPERS = [
     "import sys",
     "class _StepBudget(Exception):",
-    "    pass",
+    // Carries its own explanation so even a harness that only has a
+    // catch-all `except Exception` still tells the student something
+    // useful instead of printing a bare class name.
+    "    def __str__(self):",
+    "        return ('your code was still running after a very long time, so it was stopped. '",
+    "                'This almost always means a loop that never ends - check that every '",
+    "                'while loop can actually reach its stopping condition.')",
     "def _run_guarded(fn, args, budget=300000):",
     "    counter = [0]",
     "    def _tracer(frame, event, arg):",
@@ -2089,9 +2120,22 @@
     "        result['error'] = '%s: Python syntax error on line %s: %s.' % (label, e.lineno, e.msg)",
     "        return None",
     "    ns = {}",
-    "    try:",
+    "    def _go():",
     "        exec(compile(code, '<student>', 'exec'), {}, ns)",
-    "    except Exception as e:",
+    "    try:",
+    // Settings blocks are ordinary top-level code, and a student can just
+    // as easily leave a `while True` there as in a method body - so this
+    // runs behind the same line budget as everything else.
+    "        _run_guarded(_go, ())",
+    "    except _StepBudget as e:",
+    "        result['error'] = '%s: %s' % (label, e)",
+    "        return None",
+    // BaseException, not Exception: sys.exit() / exit() / quit() raise
+    // SystemExit and Ctrl-C style code raises KeyboardInterrupt, neither of
+    // which is an Exception. Letting those through would escape the whole
+    // harness and surface as "The grading engine could not run", which
+    // tells a student nothing.
+    "    except BaseException as e:",
     "        result['error'] = '%s: %s: %s' % (label, type(e).__name__, e)",
     "        result['traceback'] = traceback.format_exc()",
     "        return None",
@@ -2107,7 +2151,7 @@
     "        line = max(1, (e.lineno or 1) - 1)",
     "        result['error'] = '%s: Python syntax error on line %s: %s.' % (label, line, e.msg)",
     "        return None",
-    "    except Exception as e:",
+    "    except BaseException as e:",
     "        result['error'] = '%s: %s: %s' % (label, type(e).__name__, e)",
     "        result['traceback'] = traceback.format_exc()",
     "        return None",
@@ -2123,7 +2167,9 @@
     "        return False, ('%s: your code was still running after a very long time, so it was stopped. '",
     "                       'This almost always means a loop that never ends - check that every while loop '",
     "                       'can actually reach its stopping condition.') % label",
-    "    except Exception as e:",
+    // BaseException so sys.exit()/exit()/quit()/KeyboardInterrupt are graded
+    // like any other mistake instead of escaping the harness entirely.
+    "    except BaseException as e:",
     "        return False, '%s: raised %s: %s' % (label, type(e).__name__, e)",
     "def _check_path(result, label, val, folder, known):",
     "    exts = IMAGE_EXT if folder == 'assets/images/' else SOUND_EXT",
@@ -2151,6 +2197,25 @@
     "def _finish(result):",
     "    result['ok'] = result['error'] is None and len(result['failed']) == 0",
     "    return json.dumps(result)",
+    // Last line of defence. Student code runs behind _call_body/_exec_settings,
+    // but what a harness does AFTERWARDS - reading self.player, self.items,
+    // game.game_clear and so on - is not itself guarded, and code that
+    // deletes or replaces those attributes makes the checker fall over
+    // instead of grading. This wraps the whole run so any such escape
+    // becomes an ordinary, explained failure.
+    "def _finish_or_report(fn):",
+    "    try:",
+    "        return fn()",
+    "    except BaseException as e:",
+    "        r = _new_result()",
+    "        r['error'] = ('The checker could not finish, because your code changed something it "
+      + "needed to look at afterwards (%s: %s). Check that you are not deleting or replacing "
+      + "things the game relies on, like self.player or self.items.') % (type(e).__name__, e)",
+    "        try:",
+    "            r['traceback'] = traceback.format_exc()",
+    "        except BaseException:",
+    "            pass",
+    "        return json.dumps(r)",
   ].join("\n");
 
   // A minimal stand-in for the pygame API the student's game.py code can
@@ -2269,7 +2334,7 @@
       "    {'name': 'A', 'color': (1, 2, 3), 'image': None, 'sound': None, 'size': 1.0, 'effect': 'add_time', 'amount': 5},",
       "    {'name': 'B', 'color': (4, 5, 6), 'image': None, 'sound': None, 'size': 1.0, 'effect': 'add_hint', 'amount': 1},",
       "]",
-      "def _run():",
+      "def _run_inner():",
       "    result = _new_result()",
       "    _rnd.seed(20260729)",
       // ---------------- Part 1: ROUND_CONFIGS
@@ -2424,6 +2489,8 @@
       "    if part3_ok:",
       "        result['passed'].append('Part 3: your placement code ran cleanly for every round shape it was given.')",
       "    return _finish(result)",
+      "def _run():",
+      "    return _finish_or_report(_run_inner)",
       "_run()",
     ].join("\n");
   }
@@ -2450,7 +2517,7 @@
       "KNOWN_SOUNDS = " + JSON.stringify(KNOWN_ASSETS.sounds).replace(/"/g, "'"),
       "class _StubGame(object):",
       "    pass",
-      "def _run():",
+      "def _run_inner():",
       "    result = _new_result()",
       // ---------------- Part 1: images, sizes, colors
       "    ns1 = _exec_settings(result, CODE1, 'Part 1')",
@@ -2529,6 +2596,8 @@
       "    else:",
       "        result['passed'].append('Part 3: a missing or broken music file is handled without crashing the game.')",
       "    return _finish(result)",
+      "def _run():",
+      "    return _finish_or_report(_run_inner)",
       "_run()",
     ].join("\n");
   }
@@ -2604,7 +2673,7 @@
       "        if path is None or path == '<broken>':",
       "            return None",
       "        return _PickSound(self.played, path)",
-      "def _run():",
+      "def _run_inner():",
       "    result = {'ok': False, 'passed': [], 'failed': [], 'warnings': [], 'error': None, 'traceback': None}",
       "    try:",
       "        compile(CODE1, '<student-part1>', 'exec')",
@@ -2613,7 +2682,10 @@
       "        return json.dumps(result)",
       "    try:",
       "        ns1 = {}",
-      "        exec(compile(CODE1, '<student-part1>', 'exec'), {}, ns1)",
+      // Behind the line budget like every other student-code run, so a
+      // `while True` in the settings block is a graded failure rather than
+      // a frozen browser tab.
+      "        _run_guarded(lambda: exec(compile(CODE1, '<student-part1>', 'exec'), {}, ns1), ())",
       "        if 'CUSTOM_ITEMS' not in ns1:",
       "            result['failed'].append('Part 1: Missing definition: CUSTOM_ITEMS.')",
       "        else:",
@@ -2664,7 +2736,7 @@
       "                    _check_asset_field('image', 'assets/images/', IMAGE_EXT, KNOWN_IMAGES)",
       "                    _check_asset_field('sound', 'assets/sounds/', SOUND_EXT, KNOWN_SOUNDS)",
       "                    result['passed'].append('%s: %s' % (label, _short_repr(item_def)))",
-      "    except Exception as e:",
+      "    except BaseException as e:",
       "        result['error'] = 'Part 1: %s: %s' % (type(e).__name__, e)",
       "        result['traceback'] = traceback.format_exc()",
       "        return json.dumps(result)",
@@ -2691,15 +2763,18 @@
       "            exec(compile(FN2_SRC, '<student-part2>', 'exec'), {}, ns2)",
       "            self_ = SelfObj(start[0], start[1])",
       "            try:",
-      "                ns2['_fn'](self_, effect, amount)",
-      "            except Exception as e:",
+      "                _run_guarded(ns2['_fn'], (self_, effect, amount))",
+      "            except _StepBudget as e:",
+      "                result['failed'].append('Part 2 (%s): %s' % (label, e))",
+      "                continue",
+      "            except BaseException as e:",
       "                result['failed'].append('Part 2 (%s): raised %s: %s - an unrecognized effect must be a safe no-op, never an error.' % (label, type(e).__name__, e))",
       "                continue",
       "            if self_.bonus_time_seconds == expect[0] and self_.hints_remaining == expect[1]:",
       "                result['passed'].append('Part 2 (%s): OK' % label)",
       "            else:",
       "                result['failed'].append('Part 2 (%s): expected (bonus_time_seconds, hints_remaining) == %r, got %r.' % (label, expect, (self_.bonus_time_seconds, self_.hints_remaining)))",
-      "    except Exception as e:",
+      "    except BaseException as e:",
       "        result['error'] = 'Part 2: %s: %s' % (type(e).__name__, e)",
       "        result['traceback'] = traceback.format_exc()",
       "        return json.dumps(result)",
@@ -2759,6 +2834,8 @@
       "        else:",
       "            result['warnings'].append('Heads up: your pickup works, but it never plays the item sound. Look up the sound with self.get_custom_item_sound(...) and call .play() on the result when it is not None.')",
       "    return _finish(result)",
+      "def _run():",
+      "    return _finish_or_report(_run_inner)",
       "_run()",
     ].join("\n");
   }
@@ -2806,7 +2883,7 @@
       "    def cleared(self):",
       "        return bool(self.game_clear) or self.round_transition_time is not None",
       "ROUNDS_STUB = [1, 2, 3]",
-      "def _run():",
+      "def _run_inner():",
       "    result = _new_result()",
       // ---------------- Part 1: the rules as text
       "    ns1 = _exec_settings(result, CODE1, 'Part 1')",
@@ -2883,6 +2960,8 @@
       "        if not no_items.cleared() and not on_goal_left.cleared():",
       "            result['warnings'].append('Heads up: your extra win condition also blocks a round that has no items at all. If any round sets custom_item_count to 0, that round could never be finished.')",
       "    return _finish(result)",
+      "def _run():",
+      "    return _finish_or_report(_run_inner)",
       "_run()",
     ].join("\n");
   }
@@ -3277,7 +3356,7 @@
       "        hr = ns.get('HOW_TO_PLAY_RULES', [])",
       "        result['mission'] = [str(x) for x in mr] if isinstance(mr, list) else []",
       "        result['howto'] = [str(x) for x in hr] if isinstance(hr, list) else []",
-      "    except Exception as e:",
+      "    except BaseException as e:",
       "        result['ok'] = False",
       "        result['error'] = '%s: %s' % (type(e).__name__, e)",
       "    return json.dumps(result)",
@@ -3445,7 +3524,7 @@
       "    except _StepBudget:",
       "        result['ok'] = False",
       "        result['error'] = 'Your movement code never finished - check for a loop that cannot end.'",
-      "    except Exception as e:",
+      "    except BaseException as e:",
       "        result['ok'] = False",
       "        result['error'] = '%s: %s' % (type(e).__name__, e)",
       "        result['traceback'] = traceback.format_exc()",
@@ -3502,7 +3581,7 @@
       "                'sound': sound if isinstance(sound, str) else None,",
       "            })",
       "        result['items'] = out",
-      "    except Exception as e:",
+      "    except BaseException as e:",
       "        result['ok'] = False",
       "        result['error'] = '%s: %s' % (type(e).__name__, e)",
       "    return json.dumps(result)",
@@ -3590,7 +3669,7 @@
       "            path.reverse()",
       "            result['path'] = [list(p) for p in path]",
       "            result['total_cost'] = distance.get(end)",
-      "    except Exception as e:",
+      "    except BaseException as e:",
       "        result['ok'] = False",
       "        result['error'] = '%s: %s' % (type(e).__name__, e)",
       "        result['traceback'] = traceback.format_exc()",
@@ -3684,7 +3763,7 @@
       "            path.reverse()",
       "            result['path'] = [list(p) for p in path]",
       "            result['total_cost'] = distance.get(end)",
-      "    except Exception as e:",
+      "    except BaseException as e:",
       "        result['ok'] = False",
       "        result['error'] = '%s: %s' % (type(e).__name__, e)",
       "        result['traceback'] = traceback.format_exc()",
@@ -6580,7 +6659,7 @@
       "    except SyntaxError as e:",
       "        result['ok'] = False",
       "        result['error'] = 'line %s: %s' % (e.lineno, e.msg)",
-      "    except Exception as e:",
+      "    except BaseException as e:",
       "        result['ok'] = False",
       "        result['error'] = '%s: %s' % (type(e).__name__, e)",
       "    return json.dumps(result)",
