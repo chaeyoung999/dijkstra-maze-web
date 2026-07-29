@@ -327,14 +327,19 @@ pygame/
 
 ## 남은 일 / 다음 세션 후보
 
-1. **위 4번의 남은 가드 구멍 2개** (`traceHarness_hintRoute`, `traceHarness_customItems`).
-   가장 우선순위 높습니다 — 수업 중 탭이 얼 수 있습니다.
-2. `python tests/test_fuzz_harnesses.py` 완주 확인 (약 20분).
-3. **TODO별 설명 문서** — 이전 세션에 요청받았지만 아직 안 만들었습니다:
+1. **미리보기 경로 가드 구멍 2개** (`traceHarness_hintRoute`, `traceHarness_customItems`).
+   가장 우선순위 높습니다 — 학생이 `while True:` 를 남기면 수업 중 탭이 얼 수 있습니다.
+   `traceHarness_playerMove` 에 이미 들어 있는 `_preview_guarded` 블록을 그대로 복사하면 됩니다.
+   (`traceHarness_customItems` 는 이제 **TODO 8-1** 코드를 받습니다.)
+2. `python tests/test_fuzz_harnesses.py` 완주 확인 (약 20분). 이번에도 못 돌렸습니다.
+3. **TODO별 설명 문서** — 두 세션째 요청받았지만 아직 안 만들었습니다:
    > "todo 각각 순서대로 설명해줄꺼야. todo별 설명 **영어로** 적어놔줘.
    >  **대본 형식 말고 bullet 형식**이라 내가 보면서 말할 수 있도록. 문서 파일로."
-   - 영어, 불릿, TODO 1 → 9 순서. 각 TODO마다 무엇을/왜/어디에(파일)/자주 하는 실수/보여줄 것.
+   - 영어, 불릿. **이제 순서가 1~5 그리고 6-1 … 9-4 (총 35단계)** 입니다.
    - 파일명 제안: `pygame/교사용/TODO_TALKING_POINTS.md`
-   - **이제 파트가 30개**라는 점을 반영해야 합니다.
-4. 실제 브라우저에서 보드 크기 눈으로 확인 (자동 테스트는 가짜 DOM 기준입니다).
-   교실 프로젝터 해상도에서 키오스크 팝업을 한 번 띄워보시면 확실합니다.
+4. 실제 브라우저에서 **새 사이드바** 눈으로 확인. 이제 Bonus 항목이 30개라
+   사이드바가 길어졌습니다 — 묶음 제목 4개로 접히지 않고 전부 나열됩니다.
+   교실 노트북 화면에서 스크롤이 불편하면 묶음별 접기(`<details>`)를 넣는 게 다음 후보입니다.
+5. `TEACHER_TODO_GUIDE.md`, `student/README.md`, `student/TODO_GUIDE.md` 는 아직
+   옛 번호(“TODO 6/7/8/9”, “Part 1/2”)로 설명합니다. `student/TODO_CHECKLIST.md` 만
+   이번에 새 구조로 다시 썼습니다. (셋 다 git 밖 파일입니다.)
