@@ -53,8 +53,8 @@ const REQUIRED_ORDER = ["1", "2", "3", "4", "5"];
  * removed.
  */
 const BONUS_GROUPS = [
-  { id: "6", title: "Rounds, pacing and placement", note: "Do these in order — each one is small on purpose.", ids: ["6-1", "6-2", "6-3", "6-4", "6-5", "6-6"] },
-  { id: "7", title: "Pictures, colors and sound", note: "Look and feel, two lines at a time.", ids: ["7-1", "7-2", "7-3", "7-4", "7-5", "7-6", "7-7", "7-8"] },
+  { id: "6", title: "Rounds, pacing and placement", note: "Do these in order — each one is small on purpose.", ids: ["6-1", "6-2", "6-3", "6-4", "6-5", "6-6", "6-7", "6-8"] },
+  { id: "7", title: "Pictures, colors and sound", note: "Look and feel, two lines at a time.", ids: ["7-1", "7-2", "7-3", "7-4", "7-5", "7-6", "7-7", "7-8", "7-9", "7-10", "7-11", "7-12"] },
   { id: "8", title: "Your own collectible item", note: "Design the item, then make it do something.", ids: ["8-1", "8-2", "8-3", "8-4", "8-5", "8-6"] },
   { id: "9", title: "Your game's rules", note: "The rules in English, then the same rules in Python.", ids: ["9-1", "9-2", "9-3", "9-4"] },
 ];
@@ -442,9 +442,8 @@ const COURSE_STEPS = [
       "MAX_HINT_COUNT = 2",
     ],
     contextAfter: [
-      "# =========================================================",
-      "# Replace images and fallback shape colors below.",
-      "# =========================================================",
+      "# TODO 6-7 [Bonus]: Show (or skip) the maze being built.",
+      "# Detailed hint:",
     ],
     hints: [
       "`ALLOW_PATH_HINT = True` or `= False`; `MAX_HINT_COUNT = 3` (any plain integer).",
@@ -570,10 +569,70 @@ const COURSE_STEPS = [
       casesDescription: "Run as part of the same placement body: self.bombs must end up as a list (empty is fine), every position must sit inside the grid, and nothing may spawn on the player or the goal. Counts and filtering rules are free.",
     },
   },
-  // ---------------------------------------------------------------- TODO 7-x
-  // Pictures, colors and sound (8 sub-steps, sequential within the group).
   {
-    id: "7-1", step: 12, kind: "Bonus", required: false, file: "settings.py",
+    id: "6-7", step: 12, kind: "Bonus", required: false, file: "settings.py",
+    group: "6", groupTitle: "Rounds, pacing and placement",
+    title: "Show (or skip) the maze being built.",
+    lead: "Two lines about the animation that plays at the start of every round.\n\n- **`SHOW_DFS_GENERATION`** is `True` or `False`. `False` drops the player straight into a finished maze.\n- **`DFS_STEPS_PER_FRAME`** is how many cells get dug per frame — bigger is faster. Try `1` and you can follow the maze algorithm by eye.",
+    codeReference: [
+      ["SHOW_DFS_GENERATION", "(settings.py) True plays the maze-digging animation at the start of each round; False skips straight to the finished maze."],
+      ["DFS_STEPS_PER_FRAME", "How many cells the builder digs per frame. Bigger is faster; 1 is slow enough to watch the algorithm work."],
+    ],
+    contextBefore: [],
+    starter: [
+      "SHOW_DFS_GENERATION = True",
+      "DFS_STEPS_PER_FRAME = 8",
+    ],
+    contextAfter: [
+      "# TODO 6-8 [Bonus]: Decide how hard the Hint route dodges bombs.",
+      "# =========================================================",
+    ],
+    hints: [
+      "`SHOW_DFS_GENERATION = True` or `= False`; `DFS_STEPS_PER_FRAME = 1` (slow enough to watch) up to `= 30` (almost instant). Two plain values, nothing else.",
+    ],
+    visualizer: "mapEditor",
+    grading: {
+      mode: "behaviour",
+      harness: "roundDesign_6",
+      group: "6", part: 7,
+      casesDescription: "Open-ended: the block runs and both names are defined. A DFS_STEPS_PER_FRAME below 1 (the animation would never finish) or above 200 is a warning, not a failure.",
+    },
+  },
+  {
+    id: "6-8", step: 13, kind: "Bonus", required: false, file: "settings.py",
+    group: "6", groupTitle: "Rounds, pacing and placement",
+    title: "Decide how hard the Hint route dodges bombs.",
+    lead: "Two numbers that change what the **Hint button** does.\n\nThe hint finds the *cheapest* route to the goal. **`STUDENT_NORMAL_WEIGHT`** is what an ordinary cell costs; **`STUDENT_BOMB_WEIGHT`** is what a cell with a bomb costs.\n\nA huge bomb weight (`1000`) means the route detours around bombs almost always. Make it small (`2`) and the hint will happily walk you straight past one.",
+    codeReference: [
+      ["STUDENT_NORMAL_WEIGHT", "(settings.py) What an ordinary cell costs the Hint route."],
+      ["STUDENT_BOMB_WEIGHT", "What a cell holding a bomb costs. Much larger than the normal weight means 'go around'."],
+      ["the offset rule", "Before Dijkstra runs, the same offset is added to every weight so the smallest one becomes 1 — that is why negative and zero values are both safe here."],
+    ],
+    contextBefore: [],
+    starter: [
+      "STUDENT_NORMAL_WEIGHT = 0",
+      "STUDENT_BOMB_WEIGHT = 1000",
+    ],
+    contextAfter: [
+      "# =========================================================",
+      "# Redesign the three rounds' difficulty curve below.",
+      "# =========================================================",
+    ],
+    hints: [
+      "Two plain integers, e.g. `STUDENT_NORMAL_WEIGHT = 0` and `STUDENT_BOMB_WEIGHT = 1000`. Make the bomb weight much bigger than the normal weight to make the hint avoid bombs, or nearly equal to make it ignore them. Negative and zero are both allowed.",
+    ],
+    visualizer: "mapEditor",
+    grading: {
+      mode: "behaviour",
+      harness: "roundDesign_6",
+      group: "6", part: 8,
+      casesDescription: "Open-ended: the block runs and both names are defined. Anything that is not a plain integer is a warning, not a failure.",
+    },
+  },
+  // ---------------------------------------------------------------- TODO 7-x
+  // Pictures, colors and sound (12 sub-steps, sequential within the group).
+  {
+    id: "7-1", step: 14, kind: "Bonus", required: false, file: "settings.py",
     group: "7", groupTitle: "Pictures, colors and sound",
     title: "Give the player and the goal a picture.",
     lead: "Two lines. Click a picture in the **asset picker** on the right and it fills the path in for you - or type it yourself, quotes included.\n\nEvery value is either **`None`** (keep the built-in drawn shape) or a **quoted** path under `assets/images/`. There is no third option.\n\nRun it and look at the Play tab - your character is in the maze.",
@@ -600,7 +659,7 @@ const COURSE_STEPS = [
     },
   },
   {
-    id: "7-2", step: 13, kind: "Bonus", required: false, file: "settings.py",
+    id: "7-2", step: 15, kind: "Bonus", required: false, file: "settings.py",
     group: "7", groupTitle: "Pictures, colors and sound",
     title: "Give the bombs and the floor a picture.",
     lead: "Exactly the same rule as before - `None`, or a quoted path under `assets/images/`.\n\n**`FLOOR_TILE_IMAGE_PATH`** is the background tile drawn under every open cell, so this single line changes the look of the whole maze at once. Try `\"assets/images/floor_tile_1.png\"`.",
@@ -627,7 +686,7 @@ const COURSE_STEPS = [
     },
   },
   {
-    id: "7-3", step: 14, kind: "Bonus", required: false, file: "settings.py",
+    id: "7-3", step: 16, kind: "Bonus", required: false, file: "settings.py",
     group: "7", groupTitle: "Pictures, colors and sound",
     title: "Resize them.",
     lead: "Three numbers. Each **`_SCALE`** is a size multiplier: `1.0` is the normal size that fits a cell, `0.5` is half as big, `1.6` is noticeably bigger than its cell.\n\nIt resizes the built-in shapes too, so it works whether or not you picked image files. **Change one number, run it, look at the board. Then the next one.**",
@@ -655,7 +714,7 @@ const COURSE_STEPS = [
     },
   },
   {
-    id: "7-4", step: 15, kind: "Bonus", required: false, file: "settings.py",
+    id: "7-4", step: 17, kind: "Bonus", required: false, file: "settings.py",
     group: "7", groupTitle: "Pictures, colors and sound",
     title: "Pick the wall, player and goal colors.",
     lead: "Each value is an **`(R, G, B)`** tuple - three whole numbers from 0 to 255.\n\n- `(255, 0, 0)` bright red · `(0, 0, 0)` black · `(255, 255, 255)` white\n\nThese are what actually get drawn whenever the matching image is `None`, so you can make the game your own with colors alone. **`WALL_COLOR`** changes every wall in the maze at once, so start there.",
@@ -683,7 +742,7 @@ const COURSE_STEPS = [
     },
   },
   {
-    id: "7-5", step: 16, kind: "Bonus", required: false, file: "settings.py",
+    id: "7-5", step: 18, kind: "Bonus", required: false, file: "settings.py",
     group: "7", groupTitle: "Pictures, colors and sound",
     title: "Pick the bomb and explosion colors.",
     lead: "Same `(R, G, B)` rule, two lines this time.\n\n**`BOMB_EXPLOSION_COLOR`** is the flash shown for a moment after a bomb goes off, so a bright color reads best here - that flash is the only warning the player gets.",
@@ -696,7 +755,8 @@ const COURSE_STEPS = [
       "BOMB_EXPLOSION_COLOR = (239, 68, 68)",
     ],
     contextAfter: [
-      "BOMB_EXPLOSION_IMAGE_PATH = \"assets/images/explode_2.png\"  # also try explode.png",
+      "# TODO 7-9 [Bonus]: Pick the explosion picture.",
+      "# Detailed hint:",
     ],
     hints: [
       "Each `_COLOR` is a tuple of three integers 0-255, e.g. `BOMB_COLOR = (10, 10, 10)`. Keep the brackets and the two commas.",
@@ -710,7 +770,7 @@ const COURSE_STEPS = [
     },
   },
   {
-    id: "7-6", step: 17, kind: "Bonus", required: false, file: "settings.py",
+    id: "7-6", step: 19, kind: "Bonus", required: false, file: "settings.py",
     group: "7", groupTitle: "Pictures, colors and sound",
     title: "Choose two sound files.",
     lead: "The same None-or-quoted-path rule as the pictures, but under **`assets/sounds/`** - and the asset picker on the right fills these in too.\n\n- `BOMB_SOUND_PATH` plays when a bomb goes off.\n- `BACKGROUND_MUSIC_PATH` is the music for the whole game.\n\nWhat the music then *does* - loop, play once, fade in - is TODO 7-8.",
@@ -737,7 +797,7 @@ const COURSE_STEPS = [
     },
   },
   {
-    id: "7-7", step: 18, kind: "Bonus", required: false, file: "settings.py",
+    id: "7-7", step: 20, kind: "Bonus", required: false, file: "settings.py",
     group: "7", groupTitle: "Pictures, colors and sound",
     title: "Tune the explosion length and the volume.",
     lead: "Two numbers.\n\n- **`BOMB_EXPLOSION_DURATION_MS`** - how long the explosion animation shows before the bomb disappears, in milliseconds. `500` is half a second; `1500` is a long, dramatic blast.\n- **`BACKGROUND_MUSIC_VOLUME`** - `0.0` is silent, `1.0` is full volume. `0.25` is quiet background music.",
@@ -767,7 +827,7 @@ const COURSE_STEPS = [
     },
   },
   {
-    id: "7-8", step: 19, kind: "Bonus", required: false, file: "game.py",
+    id: "7-8", step: 21, kind: "Bonus", required: false, file: "game.py",
     group: "7", groupTitle: "Pictures, colors and sound",
     title: "Decide how the music actually plays.",
     lead: "`load_background_music()` runs once, when the game boots.\n\n**The smallest possible change is one number.** What you pass to **`pygame.mixer.music.play()`** is how many times to *repeat*:\n\n- `play(-1)` loops forever (the starter) · `play(0)` plays once · `play(-1, fade_ms=3000)` fades in over 3 seconds.\n\nOne rule: **keep the `try`/`except`**. A missing sound file has to print a message and carry on, so a classmate can open your project without your audio files and still play it.",
@@ -806,10 +866,134 @@ const COURSE_STEPS = [
       casesDescription: "Your playback code runs against a fake pygame.mixer that records what was called. Only two things are required: it does not raise, and a missing sound file is still handled without crashing. Whether the music loops, plays once or fades in is entirely free.",
     },
   },
+  {
+    id: "7-9", step: 22, kind: "Bonus", required: false, file: "settings.py",
+    group: "7", groupTitle: "Pictures, colors and sound",
+    title: "Pick the explosion picture.",
+    lead: "One line, same rule as every other picture: **`None`** (draw the plain `BOMB_EXPLOSION_COLOR` flash instead) or a quoted path under `assets/images/`.\n\nTwo explosion pictures ship with the project — `explode.png` and `explode_2.png`. Walk into a bomb in the Play tab to see the one you picked.",
+    codeReference: [
+      ["BOMB_EXPLOSION_IMAGE_PATH", "(settings.py) None, or a quoted path under assets/images/ — the picture drawn for a moment when a bomb goes off."],
+    ],
+    contextBefore: [],
+    starter: [
+      "BOMB_EXPLOSION_IMAGE_PATH = \"assets/images/explode_2.png\"",
+    ],
+    contextAfter: [
+      "# TODO 7-6 [Bonus]: Choose two sound files.",
+      "# Detailed hint:",
+    ],
+    hints: [
+      "One line: either `BOMB_EXPLOSION_IMAGE_PATH = None` or a QUOTED path, e.g. `= \"assets/images/explode.png\"`. The asset picker panel on the right fills it in with one click.",
+    ],
+    visualizer: "assetPicker",
+    grading: {
+      mode: "behaviour",
+      harness: "lookAndFeel_7",
+      group: "7", part: 9,
+      casesDescription: "Open-ended: the block runs and the name is defined. A path that isn't under assets/images/, or isn't one of the bundled files, is a warning - it will work once you add your own file there.",
+    },
+  },
+  {
+    id: "7-10", step: 23, kind: "Bonus", required: false, file: "settings.py",
+    group: "7", groupTitle: "Pictures, colors and sound",
+    title: "Color the maze-building animation and the hint route.",
+    lead: "Three more **`(R, G, B)`** tuples — the colors of the animation that plays while the maze is dug.\n\n- **`VISITED_COLOR`** tints cells the builder has already opened.\n- **`CURRENT_CELL_COLOR`** is the one cell it is standing on right now.\n- **`PATH_COLOR`** is the route the **Hint** button draws.\n\nA very bright `PATH_COLOR` is the easiest way to see your Hint working.",
+    codeReference: [
+      ["VISITED_COLOR", "(settings.py) Tint drawn over cells the maze builder has already opened."],
+      ["CURRENT_CELL_COLOR", "The single cell the builder is standing on this frame."],
+      ["PATH_COLOR", "The route the Hint button draws from the player to the goal."],
+    ],
+    contextBefore: [
+      "WHITE = (255, 255, 255)",
+      "BLACK = (25, 25, 25)",
+    ],
+    starter: [
+      "VISITED_COLOR = (186, 230, 253)",
+      "CURRENT_CELL_COLOR = (251, 191, 36)",
+      "PATH_COLOR = (139, 92, 246)",
+    ],
+    contextAfter: [
+      "# TODO 7-11 [Bonus]: Color the screen behind the maze and the info panel.",
+      "# Detailed hint:",
+    ],
+    hints: [
+      "Each one is a tuple of three integers 0-255, e.g. `PATH_COLOR = (0, 255, 0)` for a bright green hint route. Keep the brackets and the two commas.",
+    ],
+    visualizer: "assetPicker",
+    grading: {
+      mode: "behaviour",
+      harness: "lookAndFeel_7",
+      group: "7", part: 10,
+      casesDescription: "Open-ended: the block runs and all three colors are defined. Anything that isn't three integers 0-255 is a warning.",
+    },
+  },
+  {
+    id: "7-11", step: 24, kind: "Bonus", required: false, file: "settings.py",
+    group: "7", groupTitle: "Pictures, colors and sound",
+    title: "Color the screen behind the maze and the info panel.",
+    lead: "Three more **`(R, G, B)`** tuples, this time for everything around the maze.\n\n- **`BACKGROUND_COLOR`** fills the whole window.\n- **`PANEL_COLOR`** is the info box; **`PANEL_BORDER`** is its outline.\n\nA dark `BACKGROUND_COLOR` with a light `PANEL_COLOR` gives an instant night-mode look.",
+    codeReference: [
+      ["BACKGROUND_COLOR", "(settings.py) Fills the whole game window, behind everything else."],
+      ["PANEL_COLOR / PANEL_BORDER", "The info panel's fill and its outline."],
+    ],
+    contextBefore: [],
+    starter: [
+      "BACKGROUND_COLOR = (241, 245, 249)",
+      "PANEL_COLOR = (255, 255, 255)",
+      "PANEL_BORDER = (226, 232, 240)",
+    ],
+    contextAfter: [
+      "# Professional UI palette (menu/HUD chrome).",
+      "NAVY = (15, 23, 42)",
+      "SLATE = (71, 85, 105)",
+    ],
+    hints: [
+      "Three integers 0-255 each, e.g. `BACKGROUND_COLOR = (12, 18, 32)` for a dark screen. Keep the brackets and the two commas.",
+    ],
+    visualizer: "assetPicker",
+    grading: {
+      mode: "behaviour",
+      harness: "lookAndFeel_7",
+      group: "7", part: 11,
+      casesDescription: "Open-ended: the block runs and all three colors are defined. Anything that isn't three integers 0-255 is a warning.",
+    },
+  },
+  {
+    id: "7-12", step: 25, kind: "Bonus", required: false, file: "settings.py",
+    group: "7", groupTitle: "Pictures, colors and sound",
+    title: "Color the status messages.",
+    lead: "The last four **`(R, G, B)`** tuples, all in the info panel.\n\n- **`ACCENT`** is the highlight color.\n- **`SUCCESS`** shows when you clear a round, **`WARNING`** when time is running low, **`DANGER`** when you fail.\n\nTraffic-light colors are the usual choice — but this is your game.",
+    codeReference: [
+      ["ACCENT", "(settings.py) The panel's highlight color."],
+      ["SUCCESS / WARNING / DANGER", "Status colors: round cleared, time running low, round failed."],
+    ],
+    contextBefore: [],
+    starter: [
+      "ACCENT = (79, 70, 229)",
+      "SUCCESS = (22, 163, 74)",
+      "WARNING = (245, 158, 11)",
+      "DANGER = (220, 38, 38)",
+    ],
+    contextAfter: [
+      "# =========================================================",
+      "# Redesign the three rounds' difficulty curve below.",
+      "# =========================================================",
+    ],
+    hints: [
+      "Four tuples of three integers 0-255, e.g. `DANGER = (255, 0, 0)`. Keep the brackets and the two commas on every line.",
+    ],
+    visualizer: "assetPicker",
+    grading: {
+      mode: "behaviour",
+      harness: "lookAndFeel_7",
+      group: "7", part: 12,
+      casesDescription: "Open-ended: the block runs and all four colors are defined. Anything that isn't three integers 0-255 is a warning.",
+    },
+  },
   // ---------------------------------------------------------------- TODO 8-x
   // Your own collectible item (6 sub-steps, sequential within the group).
   {
-    id: "8-1", step: 20, kind: "Bonus", required: false, file: "settings.py",
+    id: "8-1", step: 26, kind: "Bonus", required: false, file: "settings.py",
     group: "8", groupTitle: "Your own collectible item",
     title: "Design your own collectible item(s).",
     lead: "**`CUSTOM_ITEMS`** is a list of dictionaries. Start by editing the one that's already there - give it a real `name` and `color` - then run it and look at the Play tab.\n\nEach item carries **`name`**, **`color`** (used when no image is set), **`image`** / **`sound`** (its OWN picture and pickup sound), **`size`** (`1.0` normal), **`effect`** (`\"add_time\"`, `\"add_hint\"`, or a name you invent) and **`amount`**.\n\nOnce that works, **copy the whole `{ ... },` block and paste it underneath** for a second, completely different item.",
@@ -851,7 +1035,7 @@ const COURSE_STEPS = [
     },
   },
   {
-    id: "8-2", step: 21, kind: "Bonus", required: false, file: "game.py",
+    id: "8-2", step: 27, kind: "Bonus", required: false, file: "game.py",
     group: "8", groupTitle: "Your own collectible item",
     title: "Handle the \"add_time\" effect.",
     lead: "**Two lines.** `effect` and `amount` have already been pulled out of the item's dictionary for you on the lines above - all this step does is react to one of them.\n\nWhen `effect` is the string `\"add_time\"`, add `amount` onto **`self.bonus_time_seconds`**. Replace the `pass` line with those two lines.",
@@ -883,7 +1067,7 @@ const COURSE_STEPS = [
     },
   },
   {
-    id: "8-3", step: 22, kind: "Bonus", required: false, file: "game.py",
+    id: "8-3", step: 28, kind: "Bonus", required: false, file: "game.py",
     group: "8", groupTitle: "Your own collectible item",
     title: "Handle the \"add_hint\" effect.",
     lead: "The same two lines you just wrote, with **`\"add_hint\"`** and **`self.hints_remaining`** instead.\n\nNotice what you get for free: any other `effect` string you invent matches neither `if`, so it quietly does nothing. **That is the safe no-op the game promises** - and you write nothing for it.",
@@ -912,7 +1096,7 @@ const COURSE_STEPS = [
     },
   },
   {
-    id: "8-4", step: 23, kind: "Bonus", required: false, file: "game.py",
+    id: "8-4", step: 29, kind: "Bonus", required: false, file: "game.py",
     group: "8", groupTitle: "Your own collectible item",
     title: "Spot the item under the player and mark it collected.",
     lead: "`check_items()` runs every single frame. **`player_position`** is already worked out for you on the line above.\n\nWalk through **`self.items`**. Each one has **`.active`** (still on the board?) and **`.get_position()`**. When an active item is on the same cell as the player, set **`item.active = False`** - that alone makes it vanish.\n\nMarking it inactive **first** is what stops the same item being collected twice in one frame. The starter already does exactly this: read it, run it, and watch an item disappear when you walk onto it.",
@@ -945,7 +1129,7 @@ const COURSE_STEPS = [
     },
   },
   {
-    id: "8-5", step: 24, kind: "Bonus", required: false, file: "game.py",
+    id: "8-5", step: 30, kind: "Bonus", required: false, file: "game.py",
     group: "8", groupTitle: "Your own collectible item",
     title: "Make its effect actually happen.",
     lead: "**One line**, sitting inside the `if` you kept in TODO 8-4.\n\n**`item.item_def`** is that item's own dictionary out of your `CUSTOM_ITEMS`, and **`self.apply_custom_item_effect(...)`** runs *your own TODO 8-2 and 8-3 code* on it - so the effect you designed happens from right here.\n\nCollecting an `\"add_time\"` item should now visibly add seconds to the clock in the Play tab.",
@@ -975,7 +1159,7 @@ const COURSE_STEPS = [
     },
   },
   {
-    id: "8-6", step: 25, kind: "Bonus", required: false, file: "game.py",
+    id: "8-6", step: 31, kind: "Bonus", required: false, file: "game.py",
     group: "8", groupTitle: "Your own collectible item",
     title: "Play that item's own sound.",
     lead: "Still inside the same `if`. **`self.get_custom_item_sound(path)`** hands back a playable Sound - or `None` when there is no file - so always check it before calling `.play()`.\n\nBecause each item carries its own `\"sound\"` (TODO 8-1), two items picked up in the same round can sound completely different.",
@@ -1009,7 +1193,7 @@ const COURSE_STEPS = [
   // ---------------------------------------------------------------- TODO 9-x
   // Your game's rules (4 sub-steps, sequential within the group).
   {
-    id: "9-1", step: 26, kind: "Bonus", required: false, file: "settings.py",
+    id: "9-1", step: 32, kind: "Bonus", required: false, file: "settings.py",
     group: "9", groupTitle: "Your game's rules",
     title: "Write the mission — what the player must do.",
     lead: "**`MISSION_RULES`** is a list of short strings shown on the mission screen. Every string needs its own quotes and its own comma at the end.\n\nRewrite the one line that's there so it describes **your** game - name your own custom item and say what it does. Then add a second line if you want.",
@@ -1037,7 +1221,7 @@ const COURSE_STEPS = [
     },
   },
   {
-    id: "9-2", step: 27, kind: "Bonus", required: false, file: "settings.py",
+    id: "9-2", step: 33, kind: "Bonus", required: false, file: "settings.py",
     group: "9", groupTitle: "Your game's rules",
     title: "Write the how-to-play instructions.",
     lead: "Same shape as TODO 9-1 - a list of short quoted strings, one per line, each ending in a comma.\n\nThese are the controls and the dangers. **Keep the arrow-key line true** (that's how your game is actually played), and mention what YOUR item does rather than leaving the generic example text in place.",
@@ -1066,7 +1250,7 @@ const COURSE_STEPS = [
     },
   },
   {
-    id: "9-3", step: 28, kind: "Bonus", required: false, file: "game.py",
+    id: "9-3", step: 34, kind: "Bonus", required: false, file: "game.py",
     group: "9", groupTitle: "Your game's rules",
     title: "Decide what counts as \"not won yet\".",
     lead: "`check_goal()` runs every frame. The starter says: if the player isn't standing on the goal, stop here - nothing is won.\n\nThat's already correct, so **the smallest version of this step is to read it and move on.**\n\nTo demand more than just arriving, add a second guard underneath in exactly the same shape. Be careful with a condition you can't actually meet - the timer just runs out. Try it in the Play tab before you decide it's finished.",
@@ -1098,7 +1282,7 @@ const COURSE_STEPS = [
     },
   },
   {
-    id: "9-4", step: 29, kind: "Bonus", required: false, file: "game.py",
+    id: "9-4", step: 35, kind: "Bonus", required: false, file: "game.py",
     group: "9", groupTitle: "Your game's rules",
     title: "Decide what winning actually does.",
     lead: "Anything still running past TODO 9-3's guards has **won** the round. Two outcomes:\n\n- On the last round set **`self.game_clear = True`** - the whole game is finished, victory screen.\n- Otherwise set **`self.round_transition_time = pygame.time.get_ticks()`** - clear this round and move on to the next.\n\nThe starter already does exactly that, so this step is mostly about understanding it.",

@@ -2306,7 +2306,7 @@
   // consecutive statement groups of one create_game_objects() body, so
   // the group's code is always spliced back together before it runs -
   // only the reporting and the pass/fail decision are narrowed.
-  function harness_roundDesign_6(code1, code2, code3, code4, code5, code6, focus) {
+  function harness_roundDesign_6(code1, code2, code3, code4, code5, code6, code7, code8, focus) {
     var F = (focus === undefined || focus === null || focus === "") ? null : String(focus);
     function want(n) { return F === null || F === String(n); }
     var out = [];
@@ -2318,6 +2318,8 @@
       b64Line("CODE1", code1),
       b64Line("CODE2", code2),
       b64Line("CODE3", code3),
+      b64Line("CODE7", code7),
+      b64Line("CODE8", code8),
       b64Line("FN4_SRC", buildFnSource(placeParams, code4, "    ")),
       b64Line("FN5_SRC", buildFnSource(placeParams, code5, "    ")),
       b64Line("FN6_SRC", buildFnSource(placeParams, code6, "    ")),
@@ -2441,6 +2443,45 @@
       "            result['warnings'].append('Heads up: ALLOW_PATH_HINT is usually True or False — this still counts as complete, but double-check the Hint button behaves as you expect.')",
       "        _check_number(result, 'MAX_HINT_COUNT', ns3['MAX_HINT_COUNT'], int, low=0, high=99)",
     ]);
+    // ---------------- TODO 6-7: the maze-building animation
+    if (want(7)) push([
+      "    ns7 = _exec_settings(result, CODE7, 'TODO 6-7')",
+      "    if ns7 is None:",
+      "        return _finish(result)",
+      "    dfs_names = ['SHOW_DFS_GENERATION', 'DFS_STEPS_PER_FRAME']",
+      "    missing_dfs = [n for n in dfs_names if n not in ns7]",
+      "    if missing_dfs:",
+      "        result['failed'].append('TODO 6-7: Missing definition(s): %s.' % ', '.join(missing_dfs))",
+      "    else:",
+      "        result['passed'].append('TODO 6-7: maze-building animation %s, %s cell(s) per frame.' % (",
+      "            'on' if ns7['SHOW_DFS_GENERATION'] else 'off', _short_repr(ns7['DFS_STEPS_PER_FRAME'])))",
+      "        if not isinstance(ns7['SHOW_DFS_GENERATION'], bool):",
+      "            result['warnings'].append('Heads up: SHOW_DFS_GENERATION is usually True or False — this still counts as complete, but double-check the animation behaves as you expect.')",
+      // Below 1 the builder would never finish a cell, so the round would
+      // never start - a warning, not a failure, per the open-ended policy.
+      "        _check_number(result, 'DFS_STEPS_PER_FRAME', ns7['DFS_STEPS_PER_FRAME'], int, low=1, high=200)",
+    ]);
+    // ---------------- TODO 6-8: the Hint route's bomb weights
+    if (want(8)) push([
+      "    ns8 = _exec_settings(result, CODE8, 'TODO 6-8')",
+      "    if ns8 is None:",
+      "        return _finish(result)",
+      "    weight_names = ['STUDENT_NORMAL_WEIGHT', 'STUDENT_BOMB_WEIGHT']",
+      "    missing_w = [n for n in weight_names if n not in ns8]",
+      "    if missing_w:",
+      "        result['failed'].append('TODO 6-8: Missing definition(s): %s.' % ', '.join(missing_w))",
+      "    else:",
+      "        nw = ns8['STUDENT_NORMAL_WEIGHT']",
+      "        bw = ns8['STUDENT_BOMB_WEIGHT']",
+      "        result['passed'].append('TODO 6-8: a normal cell costs %s, a bomb cell costs %s.' % (_short_repr(nw), _short_repr(bw)))",
+      // Any numbers are legal (an offset is added before Dijkstra runs), so
+      // everything below is advice about what the hint will DO, not a rule.
+      "        bad_w = [n for n in weight_names if isinstance(ns8[n], bool) or not isinstance(ns8[n], int)]",
+      "        if bad_w:",
+      "            result['warnings'].append('Heads up: %s should be a plain integer — this still counts as complete, but the Hint route may behave oddly.' % ', '.join(bad_w))",
+      "        elif bw <= nw:",
+      "            result['warnings'].append('Heads up: a bomb cell costs no more than a normal one, so the Hint route will walk you straight over bombs. That is allowed - just make sure you meant it.')",
+    ]);
     // ---------------- TODO 6-4 / 6-5 / 6-6: the placement body
     //
     // One create_game_objects() body split across three sidebar steps, so
@@ -2523,20 +2564,31 @@
   // settings block, checked in a single table-driven loop; 7-8 (game.py)
   // is the only real code. `focus` narrows this to the one sub-step being
   // graded - see harness_roundDesign_6 for why the rest still runs.
-  function harness_lookAndFeel_7(code1, code2, code3, code4, code5, code6, code7, code8, focus) {
+  function harness_lookAndFeel_7(code1, code2, code3, code4, code5, code6, code7, code8, code9, code10, code11, code12, focus) {
     var F = (focus === undefined || focus === null || focus === "") ? null : String(focus);
     function want(n) { return F === null || F === String(n); }
     var out = [];
     function push(arr) { for (var i = 0; i < arr.length; i++) out.push(arr[i]); }
     var fn8 = buildFnSource("self, pygame, BACKGROUND_MUSIC_PATH, BACKGROUND_MUSIC_VOLUME", code8, "    ");
+    // [part number, label, names, kind]. The part number is carried
+    // explicitly rather than inferred from the row index, because part 8
+    // (the music playback code) is NOT a settings block and so has no row
+    // here - the settings parts are 1-7 and 9-12, with a hole at 8.
     var settingParts = [
-      ["TODO 7-1", ["PLAYER_IMAGE_PATH", "GOAL_IMAGE_PATH"], "image"],
-      ["TODO 7-2", ["BOMB_IMAGE_PATH", "FLOOR_TILE_IMAGE_PATH"], "image"],
-      ["TODO 7-3", ["PLAYER_IMAGE_SCALE", "GOAL_IMAGE_SCALE", "BOMB_IMAGE_SCALE"], "scale"],
-      ["TODO 7-4", ["WALL_COLOR", "PLAYER_COLOR", "GOAL_COLOR"], "color"],
-      ["TODO 7-5", ["BOMB_COLOR", "BOMB_EXPLOSION_COLOR"], "color"],
-      ["TODO 7-6", ["BOMB_SOUND_PATH", "BACKGROUND_MUSIC_PATH"], "sound"],
-      ["TODO 7-7", ["BOMB_EXPLOSION_DURATION_MS", "BACKGROUND_MUSIC_VOLUME"], "tuning"],
+      [1, "TODO 7-1", ["PLAYER_IMAGE_PATH", "GOAL_IMAGE_PATH"], "image"],
+      [2, "TODO 7-2", ["BOMB_IMAGE_PATH", "FLOOR_TILE_IMAGE_PATH"], "image"],
+      [3, "TODO 7-3", ["PLAYER_IMAGE_SCALE", "GOAL_IMAGE_SCALE", "BOMB_IMAGE_SCALE"], "scale"],
+      [4, "TODO 7-4", ["WALL_COLOR", "PLAYER_COLOR", "GOAL_COLOR"], "color"],
+      [5, "TODO 7-5", ["BOMB_COLOR", "BOMB_EXPLOSION_COLOR"], "color"],
+      [6, "TODO 7-6", ["BOMB_SOUND_PATH", "BACKGROUND_MUSIC_PATH"], "sound"],
+      [7, "TODO 7-7", ["BOMB_EXPLOSION_DURATION_MS", "BACKGROUND_MUSIC_VOLUME"], "tuning"],
+      // 7-9 … 7-12 surface settings that used to be hardcoded: the
+      // explosion picture, and the palettes the maze animation, the
+      // screen and the info panel are drawn with. Same open-ended checks.
+      [9, "TODO 7-9", ["BOMB_EXPLOSION_IMAGE_PATH"], "image"],
+      [10, "TODO 7-10", ["VISITED_COLOR", "CURRENT_CELL_COLOR", "PATH_COLOR"], "color"],
+      [11, "TODO 7-11", ["BACKGROUND_COLOR", "PANEL_COLOR", "PANEL_BORDER"], "color"],
+      [12, "TODO 7-12", ["ACCENT", "SUCCESS", "WARNING", "DANGER"], "color"],
     ];
     push([
       PY_PRELUDE,
@@ -2549,6 +2601,10 @@
       b64Line("CODE5", code5),
       b64Line("CODE6", code6),
       b64Line("CODE7", code7),
+      b64Line("CODE9", code9),
+      b64Line("CODE10", code10),
+      b64Line("CODE11", code11),
+      b64Line("CODE12", code12),
       b64Line("FN3_SRC", fn8),
       "KNOWN_IMAGES = " + JSON.stringify(KNOWN_ASSETS.images).replace(/"/g, "'"),
       "KNOWN_SOUNDS = " + JSON.stringify(KNOWN_ASSETS.sounds).replace(/"/g, "'"),
@@ -2557,8 +2613,8 @@
       // reported on and only its problems can fail the step. The trailing
       // flag is that focus.
       "SETTING_PARTS = [",
-      settingParts.map(function (p, i) {
-        return "    ('" + p[0] + "', CODE" + (i + 1) + ", " + JSON.stringify(p[1]).replace(/"/g, "'") + ", '" + p[2] + "', " + (want(i + 1) ? "True" : "False") + "),";
+      settingParts.map(function (p) {
+        return "    ('" + p[1] + "', CODE" + p[0] + ", " + JSON.stringify(p[2]).replace(/"/g, "'") + ", '" + p[3] + "', " + (want(p[0]) ? "True" : "False") + "),";
       }).join("\n"),
       "]",
       "class _StubGame(object):",
@@ -7389,6 +7445,8 @@
     ].join("\n"),
     "6-2": "PLAYER_MOVE_DELAY_MS = 90",
     "6-3": ["ALLOW_PATH_HINT = True", "MAX_HINT_COUNT = 2"].join("\n"),
+    "6-7": ["SHOW_DFS_GENERATION = True", "DFS_STEPS_PER_FRAME = 4"].join("\n"),
+    "6-8": ["STUDENT_NORMAL_WEIGHT = 0", "STUDENT_BOMB_WEIGHT = 1000"].join("\n"),
     "7-1": [
       'PLAYER_IMAGE_PATH = "assets/images/player_ninja.png"',
       'GOAL_IMAGE_PATH = "assets/images/goal_chest.png"',
@@ -7418,6 +7476,23 @@
     "7-7": [
       "BOMB_EXPLOSION_DURATION_MS = 500",
       "BACKGROUND_MUSIC_VOLUME = 0.25",
+    ].join("\n"),
+    "7-9": 'BOMB_EXPLOSION_IMAGE_PATH = "assets/images/explode.png"',
+    "7-10": [
+      "VISITED_COLOR = (30, 64, 90)",
+      "CURRENT_CELL_COLOR = (251, 191, 36)",
+      "PATH_COLOR = (34, 255, 136)",
+    ].join("\n"),
+    "7-11": [
+      "BACKGROUND_COLOR = (12, 18, 32)",
+      "PANEL_COLOR = (24, 34, 56)",
+      "PANEL_BORDER = (60, 78, 112)",
+    ].join("\n"),
+    "7-12": [
+      "ACCENT = (56, 189, 248)",
+      "SUCCESS = (34, 197, 94)",
+      "WARNING = (250, 204, 21)",
+      "DANGER = (248, 113, 113)",
     ].join("\n"),
     "8-1": [
       [

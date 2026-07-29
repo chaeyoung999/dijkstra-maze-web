@@ -382,13 +382,24 @@ CANON_6_BOMBS = (
 CANONICAL_6C = CANON_6_POS + CANON_6_ITEMS + '\n' + CANON_6_BOMBS
 
 
-def args6(rounds, delay, hints, place, split=None):
-    """Builds TODO 6's six part arguments. `split` supplies the three
-    placement parts individually; otherwise the whole placement body goes in
-    Part 4/6 and Parts 5/6 and 6/6 are left empty."""
+# The two sub-steps added after the split (6-7 maze-build animation, 6-8
+# hint route weights) default to their starters, so an existing case only
+# has to name what it is actually varying.
+DFS_6 = 'SHOW_DFS_GENERATION = True\nDFS_STEPS_PER_FRAME = 8\n'
+WEIGHTS_6 = 'STUDENT_NORMAL_WEIGHT = 0\nSTUDENT_BOMB_WEIGHT = 1000\n'
+
+
+def args6(rounds, delay, hints, place, split=None, dfs=None, weights=None):
+    """Builds TODO 6's eight sub-step arguments. `split` supplies the three
+    placement sub-steps individually; otherwise the whole placement body
+    goes in 6-4 and 6-5/6-6 are left empty."""
+    tail = (
+        dfs if dfs is not None else DFS_6,
+        weights if weights is not None else WEIGHTS_6,
+    )
     if split is not None:
-        return (rounds, delay, hints) + tuple(split)
-    return (rounds, delay, hints, place, '', '')
+        return (rounds, delay, hints) + tuple(split) + tail
+    return (rounds, delay, hints, place, '', '') + tail
 # Alt A: a real rule change - bombs kept away from the start corner, and
 # every CUSTOM_ITEMS entry guaranteed to appear in turn instead of at random.
 ALT_6C_RULES = (
@@ -475,10 +486,33 @@ TUNING_7 = 'BOMB_EXPLOSION_DURATION_MS = 500\nBACKGROUND_MUSIC_VOLUME = 0.25\n'
 TUNING_7_SILENT = 'BOMB_EXPLOSION_DURATION_MS = 500\nBACKGROUND_MUSIC_VOLUME = 0.0\n'
 
 
+# The four sub-steps added after the split (7-9 explosion picture, 7-10 …
+# 7-12 the three palettes), at their starter values.
+EXPLOSION_7 = 'BOMB_EXPLOSION_IMAGE_PATH = "assets/images/explode_2.png"\n'
+MAZE_COLORS_7 = (
+    'VISITED_COLOR = (186, 230, 253)\n'
+    'CURRENT_CELL_COLOR = (251, 191, 36)\n'
+    'PATH_COLOR = (139, 92, 246)\n'
+)
+PANEL_COLORS_7 = (
+    'BACKGROUND_COLOR = (241, 245, 249)\n'
+    'PANEL_COLOR = (255, 255, 255)\n'
+    'PANEL_BORDER = (226, 232, 240)\n'
+)
+STATUS_COLORS_7 = (
+    'ACCENT = (79, 70, 229)\n'
+    'SUCCESS = (22, 163, 74)\n'
+    'WARNING = (245, 158, 11)\n'
+    'DANGER = (220, 38, 38)\n'
+)
+
+
 def args7(music, images=None, scales=None, sounds=None, tuning=None,
-          colors_a=None, colors_b=None):
-    """Builds TODO 7's eight part arguments, defaulting every settings part
-    to the starter so a case only has to name what it is actually varying."""
+          colors_a=None, colors_b=None, explosion=None, maze_colors=None,
+          panel_colors=None, status_colors=None):
+    """Builds TODO 7's twelve sub-step arguments, defaulting every settings
+    sub-step to its starter so a case only has to name what it varies.
+    Order matters: it is 7-1 … 7-12, with the music playback code at 7-8."""
     imgs = images if images is not None else IMG_7_AB
     return (
         imgs[0], imgs[1],
@@ -488,6 +522,10 @@ def args7(music, images=None, scales=None, sounds=None, tuning=None,
         sounds if sounds is not None else SOUNDS_7,
         tuning if tuning is not None else TUNING_7,
         music,
+        explosion if explosion is not None else EXPLOSION_7,
+        maze_colors if maze_colors is not None else MAZE_COLORS_7,
+        panel_colors if panel_colors is not None else PANEL_COLORS_7,
+        status_colors if status_colors is not None else STATUS_COLORS_7,
     )
 CANONICAL_7C = (
     'if BACKGROUND_MUSIC_PATH is None:\n'
@@ -711,6 +749,65 @@ case("9-1 focused", "mission written while how-to-play is still missing", "harne
      args9((MISSION_9, ''), CANONICAL_9B) + ("1",))
 case("9-2 focused", "BAD: the focused how-to-play list really is missing", "harness_gameRules_9",
      args9((MISSION_9, ''), CANONICAL_9B) + ("2",), expect_ok=False)
+
+
+# ------------------------------------------- the six new filler sub-steps
+#
+# 6-7, 6-8 and 7-9 … 7-12 surface settings that were previously hardcoded.
+# Same open-ended contract as every other Bonus settings step: it has to
+# run and define its names; everything else is advice.
+case("6-7 focused", "maze-build animation on, default speed", "harness_roundDesign_6",
+     args6(ROUNDS_3, DELAY_6, HINTS_6, CANONICAL_6C) + ("7",))
+case("6-7 focused", "alt: animation off entirely", "harness_roundDesign_6",
+     args6(ROUNDS_3, DELAY_6, HINTS_6, CANONICAL_6C,
+           dfs='SHOW_DFS_GENERATION = False\nDFS_STEPS_PER_FRAME = 1\n') + ("7",))
+case("6-7 focused", "alt: a speed that would stall the build (warns, still passes)", "harness_roundDesign_6",
+     args6(ROUNDS_3, DELAY_6, HINTS_6, CANONICAL_6C,
+           dfs='SHOW_DFS_GENERATION = True\nDFS_STEPS_PER_FRAME = 0\n') + ("7",),
+     expect_warning="DFS_STEPS_PER_FRAME")
+case("6-7 focused", "BAD: missing DFS_STEPS_PER_FRAME (negative control)", "harness_roundDesign_6",
+     args6(ROUNDS_3, DELAY_6, HINTS_6, CANONICAL_6C,
+           dfs='SHOW_DFS_GENERATION = True\n') + ("7",), expect_ok=False)
+
+case("6-8 focused", "hint route strongly avoids bombs", "harness_roundDesign_6",
+     args6(ROUNDS_3, DELAY_6, HINTS_6, CANONICAL_6C) + ("8",))
+case("6-8 focused", "alt: negative weights are legal", "harness_roundDesign_6",
+     args6(ROUNDS_3, DELAY_6, HINTS_6, CANONICAL_6C,
+           weights='STUDENT_NORMAL_WEIGHT = -5\nSTUDENT_BOMB_WEIGHT = 40\n') + ("8",))
+case("6-8 focused", "alt: bombs cost no more than floor (warns, still passes)", "harness_roundDesign_6",
+     args6(ROUNDS_3, DELAY_6, HINTS_6, CANONICAL_6C,
+           weights='STUDENT_NORMAL_WEIGHT = 5\nSTUDENT_BOMB_WEIGHT = 5\n') + ("8",),
+     expect_warning="walk you straight over bombs")
+case("6-8 focused", "BAD: missing STUDENT_BOMB_WEIGHT (negative control)", "harness_roundDesign_6",
+     args6(ROUNDS_3, DELAY_6, HINTS_6, CANONICAL_6C,
+           weights='STUDENT_NORMAL_WEIGHT = 0\n') + ("8",), expect_ok=False)
+
+case("7-9 focused", "explosion picture at its default", "harness_lookAndFeel_7",
+     args7(CANONICAL_7C) + ("9",))
+case("7-9 focused", "alt: no explosion picture at all", "harness_lookAndFeel_7",
+     args7(CANONICAL_7C, explosion='BOMB_EXPLOSION_IMAGE_PATH = None\n') + ("9",))
+case("7-9 focused", "BAD: missing BOMB_EXPLOSION_IMAGE_PATH (negative control)", "harness_lookAndFeel_7",
+     args7(CANONICAL_7C, explosion='') + ("9",), expect_ok=False)
+
+case("7-10 focused", "maze animation colors", "harness_lookAndFeel_7",
+     args7(CANONICAL_7C) + ("10",))
+case("7-10 focused", "BAD: missing PATH_COLOR (negative control)", "harness_lookAndFeel_7",
+     args7(CANONICAL_7C,
+           maze_colors='VISITED_COLOR = (1, 2, 3)\nCURRENT_CELL_COLOR = (4, 5, 6)\n') + ("10",),
+     expect_ok=False)
+case("7-11 focused", "screen and panel colors", "harness_lookAndFeel_7",
+     args7(CANONICAL_7C,
+           panel_colors='BACKGROUND_COLOR = (12, 18, 32)\nPANEL_COLOR = (24, 34, 56)\nPANEL_BORDER = (60, 78, 112)\n') + ("11",))
+case("7-12 focused", "status colors", "harness_lookAndFeel_7",
+     args7(CANONICAL_7C) + ("12",))
+case("7-12 focused", "alt: a color out of range (warns, still passes)", "harness_lookAndFeel_7",
+     args7(CANONICAL_7C,
+           status_colors='ACCENT = (79, 70, 229)\nSUCCESS = (0, 999, 0)\nWARNING = (245, 158, 11)\nDANGER = (220, 38, 38)\n') + ("12",),
+     expect_warning="SUCCESS")
+case("7-12 focused", "BAD: missing DANGER (negative control)", "harness_lookAndFeel_7",
+     args7(CANONICAL_7C,
+           status_colors='ACCENT = (1, 2, 3)\nSUCCESS = (4, 5, 6)\nWARNING = (7, 8, 9)\n') + ("12",),
+     expect_ok=False)
 
 
 def main():

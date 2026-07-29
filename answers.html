@@ -180,6 +180,24 @@
   "code": "bomb_positions = create_random_positions(\n    self.config[\"rows\"],\n    self.config[\"cols\"],\n    self.config[\"bomb_count\"],\n    forbidden,\n)\nself.bombs = [\n    Bomb(row, col, self.config[\"cell_size\"])\n    for row, col in bomb_positions\n]"
  },
  {
+  "label": "TODO 6-7",
+  "kind": "Bonus",
+  "file": "settings.py",
+  "title": "미로 생성 애니메이션",
+  "englishTitle": "Show (or skip) the maze being built.",
+  "note": "True/False 한 줄 + 숫자 한 줄. DFS_STEPS_PER_FRAME을 1로 두면 알고리즘이 칸을 파는 과정을 눈으로 따라갈 수 있어서 수업 시연용으로 좋습니다. 0 이하는 경고만 나오고 통과합니다.",
+  "code": "SHOW_DFS_GENERATION = True\nDFS_STEPS_PER_FRAME = 4"
+ },
+ {
+  "label": "TODO 6-8",
+  "kind": "Bonus",
+  "file": "settings.py",
+  "title": "힌트 경로의 폭탄 회피 정도",
+  "englishTitle": "Decide how hard the Hint route dodges bombs.",
+  "note": "정수 두 개. 폭탄 가중치가 클수록 힌트가 폭탄을 크게 돌아갑니다. 둘이 같거나 폭탄 쪽이 작으면 힌트가 폭탄 위로 지나가므로 경고가 나오지만 통과합니다(의도한 설계일 수 있음). 음수·0도 허용 — 다익스트라 전에 전체에 같은 오프셋을 더합니다.",
+  "code": "STUDENT_NORMAL_WEIGHT = 0\nSTUDENT_BOMB_WEIGHT = 1000"
+ },
+ {
   "label": "TODO 7-1",
   "kind": "Bonus",
   "file": "settings.py",
@@ -250,6 +268,42 @@
   "englishTitle": "Decide how the music actually plays.",
   "note": "play() 안의 숫자 하나만 바꾸면 되는 파트입니다. -1 무한반복 / 0 한 번 / 3 네 번. try/except는 반드시 남겨야 사운드 파일이 없는 친구도 게임을 열 수 있습니다.",
   "code": "if BACKGROUND_MUSIC_PATH is None:\n    return\ntry:\n    if not pygame.mixer.get_init():\n        pygame.mixer.init()\n    pygame.mixer.music.load(BACKGROUND_MUSIC_PATH)\n    pygame.mixer.music.set_volume(BACKGROUND_MUSIC_VOLUME)\n    pygame.mixer.music.play(-1)\nexcept (pygame.error, FileNotFoundError, TypeError) as error:\n    print(f\"[Info] Background music load failed: {error}\")"
+ },
+ {
+  "label": "TODO 7-9",
+  "kind": "Bonus",
+  "file": "settings.py",
+  "title": "폭발 그림",
+  "englishTitle": "Pick the explosion picture.",
+  "note": "한 줄. None이면 BOMB_EXPLOSION_COLOR로 그린 사각형 플래시만 나옵니다. explode.png / explode_2.png 두 개가 기본 제공됩니다.",
+  "code": "BOMB_EXPLOSION_IMAGE_PATH = \"assets/images/explode.png\""
+ },
+ {
+  "label": "TODO 7-10",
+  "kind": "Bonus",
+  "file": "settings.py",
+  "title": "미로 생성·힌트 경로 색",
+  "englishTitle": "Color the maze-building animation and the hint route.",
+  "note": "(R, G, B) 세 줄. PATH_COLOR를 아주 밝게 하면 Hint 버튼이 실제로 뭘 하는지 학생이 바로 봅니다 — 6-8과 같이 설명하면 효과적입니다.",
+  "code": "VISITED_COLOR = (30, 64, 90)\nCURRENT_CELL_COLOR = (251, 191, 36)\nPATH_COLOR = (34, 255, 136)"
+ },
+ {
+  "label": "TODO 7-11",
+  "kind": "Bonus",
+  "file": "settings.py",
+  "title": "화면·정보판 색",
+  "englishTitle": "Color the screen behind the maze and the info panel.",
+  "note": "(R, G, B) 세 줄. BACKGROUND_COLOR를 어둡게, PANEL_COLOR를 밝게 하면 즉시 '나이트 모드'가 됩니다. 변화가 가장 크게 보이는 파트라 성취감이 큽니다.",
+  "code": "BACKGROUND_COLOR = (12, 18, 32)\nPANEL_COLOR = (24, 34, 56)\nPANEL_BORDER = (60, 78, 112)"
+ },
+ {
+  "label": "TODO 7-12",
+  "kind": "Bonus",
+  "file": "settings.py",
+  "title": "상태 메시지 색",
+  "englishTitle": "Color the status messages.",
+  "note": "(R, G, B) 네 줄. 라운드 클리어(SUCCESS)·시간 부족(WARNING)·실패(DANGER). 0~255를 벗어나도 경고만 나오고 통과합니다.",
+  "code": "ACCENT = (56, 189, 248)\nSUCCESS = (34, 197, 94)\nWARNING = (250, 204, 21)\nDANGER = (248, 113, 113)"
  },
  {
   "label": "TODO 8-1",
