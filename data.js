@@ -213,7 +213,7 @@ const COURSE_STEPS = [
   {
     id: "5", step: 5, kind: "Required", required: true, file: "pathfinding.py",
     title: "Calculate the cost to reach this neighbor, and record the better route.",
-    lead: "This function powers the player's Hint button: it finds the shortest route from the player to the goal, treating active bombs as very expensive so the route avoids them. Dijkstra's relaxation step here is really two separate ideas glued together: computing a candidate cost, then deciding whether to actually keep it. Each part below gets its own explanation, split the same way TODO 7 splits into Part 1/2 and Part 2/2.",
+    lead: "This function powers the player's Hint button: it finds the shortest route from the player to the goal, treating active bombs as very expensive so the route avoids them. Dijkstra's relaxation step here is really two separate ideas glued together: computing a candidate cost, then deciding whether to actually keep it. Each part below gets its own explanation, split the same way the Bonus TODOs are split into small sequential parts.",
     codeReference: [
       ["cost", "The total cost already spent reaching current, popped from the priority queue."],
       ["current", "The cell just popped from the queue this loop iteration (`cost, current = heapq.heappop(queue)`, part of the given setup shown above) — already in scope, not something you compute."],
@@ -310,10 +310,16 @@ const COURSE_STEPS = [
   },
 
   // ------------------------------------------------------------------ TODO 6
+  //
+  // SPLIT (this session): what used to be 3 big parts is now 6 small ones,
+  // per direct teacher request - students were finishing Required in ~30
+  // minutes and finding Bonus too hard to start. Nothing new was added;
+  // the same settings and the same placement code are simply handed over
+  // one small instruction at a time. Same lenient "안 터지면 통과" grading.
   {
     id: "6", step: 6, kind: "Bonus", required: false, file: "settings.py",
-    title: "Redesign the rounds, tune the movement feel, and decide where things spawn.",
-    lead: "This step is the shape of your whole game, and it gets more open-ended as you go:\n\n- **Part 1/3** — the rounds themselves (and how many there are).\n- **Part 2/3** — how the game *feels* to play.\n- **Part 3/3** — real code: where every item and bomb actually lands.\n\nPrefer not to hand-edit numbers? The **map editor** on the right paints a layout tile by tile — including where the player starts, where the goal is, and (once TODO 8 has an item) exactly which of your own items goes where.",
+    title: "Redesign the rounds, tune the feel, and place every item and bomb.",
+    lead: "This step is the shape of your whole game. **Do the six parts in order — each one is small on purpose.**\n\n- **Parts 1-3** (`settings.py`) — the rounds, the walking speed, the Hint button.\n- **Parts 4-6** (`game.py`) — real code: ask for positions, turn them into items, then do the same for bombs.\n\nPrefer not to hand-edit numbers? The **map editor** on the right paints a layout tile by tile — including where the player starts, where the goal is, and (once TODO 8 has an item) exactly which of your own items goes where.",
     codeReference: [
       ["ROUND_CONFIGS", "(settings.py) A list of dictionaries, one per round, read in order as the player clears rounds. It ships with 3 — add a fourth to make your game longer, or delete one to make it shorter."],
       ["rows, cols, cell_size", "Grid dimensions and pixel size of one cell; bigger rows/cols means a bigger maze."],
@@ -323,7 +329,7 @@ const COURSE_STEPS = [
       ["PLAYER_MOVE_DELAY_MS", "The shortest gap between two cell steps, in milliseconds — smaller is faster."],
       ["ALLOW_PATH_HINT", "True/False — whether the Hint button exists at all."],
       ["MAX_HINT_COUNT", "How many times Hint can be used per round; interacts with TODO 8's add_hint effect."],
-      ["create_game_objects(self)", "(game.py) Called once per round, right after the maze finishes generating. Your job in Part 3/3 is to fill self.items and self.bombs."],
+      ["create_game_objects(self)", "(game.py) Called once per round, right after the maze finishes generating. Parts 4-6 fill self.items and self.bombs between them."],
       ["create_random_positions(rows, cols, count, forbidden)", "Helper that returns a list of count (row, col) tuples, never picking a cell that is already in forbidden."],
       ["forbidden", "A set of cells nothing may spawn on. Starts with the player's start cell and the goal; add positions to it as you use them so two objects never share a cell."],
       ["CustomItem(row, col, cell_size, item_def)", "One collectible. item_def is one dictionary out of your own CUSTOM_ITEMS list (TODO 8)."],
@@ -331,11 +337,11 @@ const COURSE_STEPS = [
     ],
     parts: [
       {
-        part: "1/3", title: "Redesign the rounds (and add or remove some).",
-        lead: "Each dictionary in this list is one round, played in order. Change the numbers to redraw your difficulty curve — bigger `rows`/`cols` for a longer maze, more `bomb_count`, a stricter `time_limit_seconds`.\n\n**You are not stuck with three rounds.** Copy a dictionary and paste it at the end for a fourth round; delete one for a shorter game. The map editor on the right grows or shrinks its round tabs to match.\n\nKeep every key inside each dictionary though — the engine reads all of them by name, so deleting one will crash the game.",
+        part: "1/6", title: "Redesign the rounds (and add or remove some).",
+        lead: "Each dictionary in this list is one round, played in order.\n\n**Start with one change:** make round 1 smaller by lowering its `rows` and `cols`. Press *Run my code*, then look at the Play tab on the right — that is your maze now.\n\nThen keep going: more `bomb_count`, a stricter `time_limit_seconds`, a bigger final round. **You are not stuck with three rounds** — copy a whole dictionary and paste it at the end for a fourth; delete one for a shorter game.\n\nKeep every key inside each dictionary though — the engine reads all of them by name, so deleting one will crash the game.",
         contextBefore: [],
         contextAfter: [
-          "# TODO 6 [Bonus] (Part 2/3): Tune movement speed and hint availability.",
+          "# TODO 6 [Bonus] (Part 2/6): Change ONE number - the walking speed.",
           "# Detailed hint:",
         ],
         starter: [
@@ -371,23 +377,34 @@ const COURSE_STEPS = [
         ],
       },
       {
-        part: "2/3", title: "Tune movement speed and hint availability.",
+        part: "2/6", title: "Change one number — how fast the player walks.",
+        lead: "One line, one number. **`PLAYER_MOVE_DELAY_MS`** is the shortest gap between two cell steps, in milliseconds — **smaller is faster**.\n\nTry `60` for a quick, twitchy player, or `200` for a slow, heavy one. Run it, play it on the right, and pick the one that feels like your game. That's the whole part.",
+        contextBefore: [],
+        contextAfter: [
+          "# TODO 6 [Bonus] (Part 3/6): Decide how generous the Hint button is.",
+          "# Detailed hint:",
+        ],
+        starter: [
+          "PLAYER_MOVE_DELAY_MS = 100",
+        ],
+      },
+      {
+        part: "3/6", title: "Decide how generous the Hint button is.",
+        lead: "Two lines this time.\n\n- **`ALLOW_PATH_HINT`** is `True` or `False`. Set it to `False` and the Hint button disappears from your game completely — a much harder game.\n- **`MAX_HINT_COUNT`** is a plain whole number: how many times Hint may be used in one round.\n\nThis one interacts with Bonus TODO 8's `\"add_hint\"` item: a very low `MAX_HINT_COUNT` makes an add_hint item much more valuable. Not a bug — just something to remember when you balance your game.",
         contextBefore: [],
         contextAfter: [
           "# =========================================================",
-          "# Route weights for the Hint button's Dijkstra route (given, not a TODO)",
+          "# Replace images and fallback shape colors below.",
           "# =========================================================",
         ],
-        lead: "Two more settings decide how your game feels to play. **`PLAYER_MOVE_DELAY_MS`** is the shortest gap between two cell steps, in milliseconds — smaller is faster (less waiting between moves). **`ALLOW_PATH_HINT`** switches the Hint button off entirely if you set it to `False`, and **`MAX_HINT_COUNT`** limits how many times it can be used per round. Note the last one interacts with Bonus TODO 8's `\"add_hint\"` item effect — a very low `MAX_HINT_COUNT` makes an add_hint item much more valuable (and vice versa), which isn't a bug, just something to keep in mind when balancing your game.",
         starter: [
-          "PLAYER_MOVE_DELAY_MS = 100",
           "ALLOW_PATH_HINT = True",
           "MAX_HINT_COUNT = 2",
         ],
       },
       {
-        part: "3/3", title: "Decide where the items and bombs go.", file: "game.py",
-        lead: "Every round, once the maze has finished generating, `create_game_objects()` runs exactly once and has to fill two lists: **`self.items`** (your collectibles) and **`self.bombs`**. The starter below is the plain version — scatter both at random. Your job is to make the placement *mean* something.\n\n**`create_random_positions(rows, cols, count, forbidden)`** hands you a list of `(row, col)` tuples and never picks a cell that's already in **`forbidden`**. Keep adding the positions you use back into `forbidden` and nothing will ever overlap.\n\n**Different items in different rounds.** `self.current_round` is `0` for round 1, `1` for round 2, and so on — so you can hand each round its own selection out of your `CUSTOM_ITEMS`:\n\n- `choices = CUSTOM_ITEMS[:2] if self.current_round == 0 else CUSTOM_ITEMS`\n  → round 1 only ever spawns your first two items; later rounds can spawn anything.\n\nOther directions worth trying:\n\n- Guarantee variety: instead of `random.choice(CUSTOM_ITEMS)`, use `CUSTOM_ITEMS[index % len(CUSTOM_ITEMS)]` so every item you designed actually shows up.\n- Keep bombs away from the start so round 1 isn't instantly unfair — drop any position where `r + c < 4`.\n- Make the final round brutal: `self.config[\"bomb_count\"] * 2`.\n- Hand-place something at a fixed cell every single round.\n\nThe only hard rule: `self.items` and `self.bombs` must both end up as **lists** (empty is fine) — anything else and the drawing code later on crashes.",
+        part: "4/6", title: "Ask for the item positions.", file: "game.py",
+        lead: "Now real code — but only three lines of it, and they are already written.\n\n`create_game_objects()` runs once per round, right after the maze is generated. **`create_random_positions(rows, cols, count, forbidden)`** hands back a list of `(row, col)` tuples and never picks a cell that is already in **`forbidden`** (which starts out holding the player's start and the goal).\n\n**The only thing to change here is the count.** Read the starter, then try one of these:\n\n- `self.config[\"custom_item_count\"] + 2` — two extra items in every round.\n- `3` — always exactly three, ignoring the round setting.\n\nRun it, then look at the Play tab.",
         contextBefore: [
           "    def create_game_objects(self):",
           '        """Fills self.items and self.bombs for the round that just',
@@ -400,20 +417,43 @@ const COURSE_STEPS = [
           "        }",
         ],
         contextAfter: [
-          "        self.objects_created = True",
-          "        self.start_time = pygame.time.get_ticks()",
+          "        # TODO 6 [Bonus] (Part 5/6): Turn those positions into real items.",
         ],
         starter: [
           "        custom_positions = create_random_positions(",
           '            self.config["rows"], self.config["cols"],',
           '            self.config.get("custom_item_count", 0), forbidden,',
           "        )",
+        ],
+      },
+      {
+        part: "5/6", title: "Turn those positions into real items.", file: "game.py",
+        lead: "Part 4/6 produced a list of cells. This part turns each one into an actual collectible: one **`CustomItem(row, col, cell_size, item_def)`** per position.\n\nThe `item_def` is one dictionary out of your own **`CUSTOM_ITEMS`** (TODO 8), and `random.choice(CUSTOM_ITEMS)` picks it at random. **Change that one call to decide which item spawns:**\n\n- `CUSTOM_ITEMS[0]` — always your first item.\n- `CUSTOM_ITEMS[index % len(CUSTOM_ITEMS)]` inside a loop — guarantees every item you designed actually shows up.\n\nLeave **`forbidden.update(custom_positions)`** on the last line. It is what stops a bomb landing on top of an item in Part 6/6.",
+        contextBefore: [
+          "        # (Part 4/6 above filled custom_positions.)",
+        ],
+        contextAfter: [
+          "        # TODO 6 [Bonus] (Part 6/6): Now do the same for the bombs.",
+        ],
+        starter: [
           "        self.items = [",
           '            CustomItem(row, col, self.config["cell_size"], random.choice(CUSTOM_ITEMS))',
           "            for row, col in custom_positions",
           "        ]",
           "        forbidden.update(custom_positions)",
-          "",
+        ],
+      },
+      {
+        part: "6/6", title: "Now do the same for the bombs.", file: "game.py",
+        lead: "Exactly the two moves you just did in Parts 4/6 and 5/6 — ask for positions, build objects — with **`Bomb(row, col, cell_size)`** this time.\n\nRead it once, then make it mean something:\n\n- Harsher last round: `self.config[\"bomb_count\"] * 2`.\n- Keep bombs away from the start so round 1 isn't instantly unfair — add a filter line after the positions come back:\n  `bomb_positions = [p for p in bomb_positions if p[0] + p[1] >= 4]`\n\nThe only hard rule for the whole step: **`self.items` and `self.bombs` must both end up as lists** (empty is fine) — anything else and the drawing code crashes.",
+        contextBefore: [
+          "        # (Part 5/6 above filled self.items and updated forbidden.)",
+        ],
+        contextAfter: [
+          "        self.objects_created = True",
+          "        self.start_time = pygame.time.get_ticks()",
+        ],
+        starter: [
           "        bomb_positions = create_random_positions(",
           '            self.config["rows"],',
           '            self.config["cols"],',
@@ -424,27 +464,30 @@ const COURSE_STEPS = [
           '            Bomb(row, col, self.config["cell_size"])',
           "            for row, col in bomb_positions",
           "        ]",
-          "        forbidden.update(bomb_positions)",
         ],
       },
     ],
     hints: [
-      "Part 1: a list of dictionaries, one per round — three to start with, but you can copy one and paste it at the end for a fourth round, or delete one for a shorter game. Every key inside a dictionary means something to the engine (deleting one will crash the game), so only change the numeric values, and keep them plain integers. Don't want to hand-edit the numbers? Use the map editor panel on the right: paint the layout (plus the player/goal start tiles and your own custom items) and the numbers are written into the code for you.\nPart 2: `PLAYER_MOVE_DELAY_MS` is milliseconds (a smaller number moves faster); `ALLOW_PATH_HINT` is `True` or `False`; `MAX_HINT_COUNT` is a plain integer — how many times Hint can be used per round.\nPart 3: keep the starter's overall shape — ask `create_random_positions(...)` for a list of positions, build a list of objects from it, then `forbidden.update(...)` so the next thing you place can't land on top. To filter positions, wrap the call in a list comprehension: `spots = [p for p in create_random_positions(...) if p[0] + p[1] >= 4]` (ask for a few more than you need, since filtering throws some away). To choose which item spawns, replace `random.choice(CUSTOM_ITEMS)` with your own pick — `CUSTOM_ITEMS[index % len(CUSTOM_ITEMS)]` inside a `for index, (row, col) in enumerate(spots):` loop, or a per-round list built from `self.current_round`. `self.items` and `self.bombs` must both still be lists at the end.",
+      "Part 1: a list of dictionaries, one per round. Only change the numeric values, keep them plain integers, and keep every key (deleting one crashes the game). Copy a whole `{ ... },` block and paste it at the end for a fourth round. Don't want to hand-edit numbers? Use the map editor panel on the right.\nPart 2: `PLAYER_MOVE_DELAY_MS = 60` is fast, `= 200` is slow. One number, nothing else.\nPart 3: `ALLOW_PATH_HINT = True` or `= False`; `MAX_HINT_COUNT = 3` (any plain integer).\nPart 4: change only the third argument — e.g. `self.config.get(\"custom_item_count\", 0) + 2`, or just `3`.\nPart 5: replace `random.choice(CUSTOM_ITEMS)` with `CUSTOM_ITEMS[0]` for one fixed item. To cycle through every item, switch the comprehension to a loop:\n```\nself.items = []\nfor index, (row, col) in enumerate(custom_positions):\n    self.items.append(CustomItem(row, col, self.config[\"cell_size\"], CUSTOM_ITEMS[index % len(CUSTOM_ITEMS)]))\nforbidden.update(custom_positions)\n```\nPart 6: keep the starter's shape. To double the bombs, use `self.config[\"bomb_count\"] * 2` as the count. To filter, add one line right after the positions come back: `bomb_positions = [p for p in bomb_positions if p[0] + p[1] >= 4]` (ask for a few more than you need, since filtering throws some away). `self.items` and `self.bombs` must both still be lists at the end.",
     ],
     visualizer: "mapEditor",
     grading: {
       mode: "behaviour",
       harness: "roundDesign_6",
-      casesDescription: "Parts 1-2 keep the open-ended settings checks (compiles, ROUND_CONFIGS / PLAYER_MOVE_DELAY_MS / ALLOW_PATH_HINT / MAX_HINT_COUNT defined; shape and range problems are non-blocking warnings). Part 3 actually RUNS the placement code against a stand-in Game with a known grid, stub CustomItem/Bomb classes and the real create_random_positions, then checks the outcome: self.items and self.bombs are both lists, every position sits inside the grid, and nothing spawns on the player or the goal. Counts, filtering rules and which item goes where are all left free — they only ever produce warnings.",
+      casesDescription: "Parts 1-3 keep the open-ended settings checks (compiles, ROUND_CONFIGS / PLAYER_MOVE_DELAY_MS / ALLOW_PATH_HINT / MAX_HINT_COUNT defined; shape and range problems are non-blocking warnings). Parts 4-6 are joined back together and actually RUN against a stand-in Game with a known grid, stub CustomItem/Bomb classes and the real create_random_positions, then the outcome is checked: self.items and self.bombs are both lists, every position sits inside the grid, and nothing spawns on the player or the goal. Part 4 is additionally checked on its own (it must leave a usable list of positions behind). Counts, filtering rules and which item goes where are all left free — they only ever produce warnings.",
       multiPart: true,
     },
   },
 
   // ------------------------------------------------------------------ TODO 7
+  //
+  // SPLIT (this session): 3 parts -> 8. Each part is now one or two lines
+  // of settings, so a student can read one instruction, change one thing,
+  // and immediately see it in the Play tab.
   {
     id: "7", step: 7, kind: "Bonus", required: false, file: "settings.py",
-    title: "Replace images/colors, resize them, add sounds, and control the music.",
-    lead: "This Bonus TODO spans **two files** and decides everything the player sees and hears.\n\nPart 1/3 (`settings.py`) covers images: paths for the player, goal, floor tile and bomb, a **`_SCALE`** multiplier that resizes each one, and the **`_COLOR`** tuple each falls back to when its image path is `None`. Part 2/3 (`settings.py`) covers sound: paths for the bomb and background music, plus **`BOMB_EXPLOSION_DURATION_MS`** (how long the explosion animation shows) and **`BACKGROUND_MUSIC_VOLUME`** (0.0-1.0). Every path value is either **`None`** (use the built-in shape/silence) or a quoted path to a file under `assets/images/` or `assets/sounds/` — there's no third option, and you can change as many or as few lines as you like.\n\nPart 3/3 (`game.py`) is real code: **`load_background_music()`** is where the music is actually started, so *how* it plays — loop forever, play once, fade in — is yours to write.\n\nThe **`_SCALE`** values are the quickest way to make the game feel like yours: a 2.0 player fills its cell completely, a 0.4 bomb becomes a small hazard that's easy to miss. They resize the built-in shapes too, so they work whether or not you picked image files.",
+    title: "Replace the pictures, resize them, pick your colors, and add sound.",
+    lead: "Everything the player sees and hears, handed over **two lines at a time**. Work down the list in order:\n\n- **Parts 1-2** — pictures for the player, goal, bombs and floor.\n- **Part 3** — how big they are.\n- **Parts 4-5** — the colors used when a picture is `None`.\n- **Parts 6-7** — sound files, explosion length and volume.\n- **Part 8** (`game.py`) — real code: how the music actually plays.\n\nUse the **asset picker** on the right for every path — it types them for you. Every path value is either **`None`** (use the built-in shape/silence) or a quoted path under `assets/images/` / `assets/sounds/`; there is no third option.",
     codeReference: [
       ["PLAYER_IMAGE_PATH / GOAL_IMAGE_PATH / BOMB_IMAGE_PATH / FLOOR_TILE_IMAGE_PATH", "(settings.py) Each is either None (use the built-in drawn shape) or a quoted path to a file under assets/images/."],
       ["PLAYER_IMAGE_SCALE / GOAL_IMAGE_SCALE / BOMB_IMAGE_SCALE", "Size multipliers: 1.0 is the normal size that fits a cell, 0.5 is half as big, 1.6 is bigger than its cell. Resizes the fallback shape as well as the image."],
@@ -452,36 +495,87 @@ const COURSE_STEPS = [
       ["BOMB_SOUND_PATH / BACKGROUND_MUSIC_PATH", "Each is either None (silent) or a quoted path to a file under assets/sounds/."],
       ["BOMB_EXPLOSION_DURATION_MS", "How long (milliseconds) the explosion animation shows before the bomb disappears."],
       ["BACKGROUND_MUSIC_VOLUME", "0.0 (silent) to 1.0 (full volume)."],
-      ["load_background_music(self)", "(game.py) Called once at boot. Part 3/3 is its whole body — yours to write."],
+      ["load_background_music(self)", "(game.py) Called once at boot. Part 8/8 is its whole body — yours to write."],
       ["pygame.mixer.music.play(loops)", "loops is how many times to REPEAT: -1 loops forever, 0 plays once, 3 plays four times. Also takes fade_ms=... to fade in."],
     ],
     parts: [
       {
-        part: "1/3", title: "Replace the images, resize them, and pick their fallback colors.",
+        part: "1/8", title: "Give the player and the goal a picture.",
+        lead: "Two lines. Click a picture in the **asset picker** on the right and it fills the path in for you — or type it yourself, quotes included:\n\n- `PLAYER_IMAGE_PATH = \"assets/images/boy.png\"`\n\nLeave a line as `None` to keep the built-in drawn shape. Run it and look at the Play tab — your character is in the maze.",
         contextBefore: [],
         contextAfter: [
-          'BOMB_EXPLOSION_IMAGE_PATH = "assets/images/explode_2.png"  # also try explode.png',
-          "",
-          "# TODO 7 [Bonus] (Part 2/3): Add background music, a bomb sound effect, and tune their timing/volume.",
-          "# Detailed hint:",
+          "# TODO 7 [Bonus] (Part 2/8): Give the bombs and the floor a picture.",
         ],
         starter: [
           "PLAYER_IMAGE_PATH = None",
           "GOAL_IMAGE_PATH = None",
+        ],
+      },
+      {
+        part: "2/8", title: "Give the bombs and the floor a picture.",
+        lead: "Exactly the same rule as Part 1/8 — `None`, or a quoted path under `assets/images/`.\n\n**`FLOOR_TILE_IMAGE_PATH`** is the background tile drawn under every open cell, so this single line changes the look of the whole maze at once. Try `\"assets/images/floor_tile_1.png\"` and then `floor_tile_2.png`.",
+        contextBefore: [],
+        contextAfter: [
+          "# TODO 7 [Bonus] (Part 3/8): Resize them.",
+        ],
+        starter: [
           "BOMB_IMAGE_PATH = None",
           "FLOOR_TILE_IMAGE_PATH = None  # Background floor for open path cells.",
+        ],
+      },
+      {
+        part: "3/8", title: "Resize them.",
+        lead: "Three numbers. Each **`_SCALE`** is a size multiplier: `1.0` is the normal size that fits a cell, `0.5` is half as big, `1.6` is noticeably bigger than its cell.\n\nThis is the quickest way to make the game feel like yours: a `2.0` player fills its cell completely; a `0.4` bomb becomes a small hazard that's easy to miss. It resizes the built-in shapes too, so it works whether or not you picked image files.\n\n**Change one number, run it, look at the board. Then the next one.**",
+        contextBefore: [],
+        contextAfter: [
+          "# TODO 7 [Bonus] (Part 4/8): Pick the wall, player and goal colors.",
+        ],
+        starter: [
           "PLAYER_IMAGE_SCALE = 1.0",
           "GOAL_IMAGE_SCALE = 1.0",
           "BOMB_IMAGE_SCALE = 1.0",
+        ],
+      },
+      {
+        part: "4/8", title: "Pick the wall, player and goal colors.",
+        lead: "Each value is an **`(R, G, B)`** tuple — three whole numbers from 0 to 255.\n\n- `(255, 0, 0)` bright red · `(0, 0, 0)` black · `(255, 255, 255)` white\n\nThese are what actually get drawn whenever the matching image is `None`, so you can make the game visually your own with colors alone — no image files needed. **`WALL_COLOR`** changes every wall in the maze at once, so start there.",
+        contextBefore: [],
+        contextAfter: [
+          "# TODO 7 [Bonus] (Part 5/8): Pick the bomb and explosion colors.",
+        ],
+        starter: [
           "WALL_COLOR = (30, 41, 59)",
           "PLAYER_COLOR = (37, 99, 235)",
           "GOAL_COLOR = (250, 204, 21)",
+        ],
+      },
+      {
+        part: "5/8", title: "Pick the bomb and explosion colors.",
+        lead: "Same `(R, G, B)` rule as Part 4/8, two lines this time.\n\n**`BOMB_EXPLOSION_COLOR`** is the flash shown for a moment after a bomb goes off, so a bright color reads best here — that flash is the only warning the player gets.",
+        contextBefore: [],
+        contextAfter: [
+          'BOMB_EXPLOSION_IMAGE_PATH = "assets/images/explode_2.png"  # also try explode.png',
+        ],
+        starter: [
           "BOMB_COLOR = (15, 23, 42)",
           "BOMB_EXPLOSION_COLOR = (239, 68, 68)",
         ],
       },
       {
-        part: "2/3", title: "Add background music, a bomb sound effect, and tune their timing/volume.",
+        part: "6/8", title: "Choose two sound files.",
+        lead: "Same None-or-quoted-path rule as the pictures, but under **`assets/sounds/`** — and the asset picker on the right fills these in too.\n\n- `BOMB_SOUND_PATH` plays when a bomb goes off.\n- `BACKGROUND_MUSIC_PATH` is the music for the whole game.\n\nTwo lines. **What the music then *does*** — loop, play once, fade in — is Part 8/8.",
+        contextBefore: [],
+        contextAfter: [
+          "# TODO 7 [Bonus] (Part 7/8): Tune the explosion length and the volume.",
+        ],
+        starter: [
+          "BOMB_SOUND_PATH = None",
+          "BACKGROUND_MUSIC_PATH = None",
+        ],
+      },
+      {
+        part: "7/8", title: "Tune the explosion length and the volume.",
+        lead: "Two numbers.\n\n- **`BOMB_EXPLOSION_DURATION_MS`** — how long the explosion animation shows before the bomb disappears, in milliseconds. `500` is half a second; `1500` is a long, dramatic blast.\n- **`BACKGROUND_MUSIC_VOLUME`** — `0.0` is silent, `1.0` is full volume. `0.25` is quiet background music.",
         contextBefore: [],
         contextAfter: [
           "# =========================================================",
@@ -489,15 +583,13 @@ const COURSE_STEPS = [
           "# =========================================================",
         ],
         starter: [
-          "BOMB_SOUND_PATH = None",
-          "BACKGROUND_MUSIC_PATH = None",
           "BOMB_EXPLOSION_DURATION_MS = 500",
           "BACKGROUND_MUSIC_VOLUME = 0.25",
         ],
       },
       {
-        part: "3/3", title: "Decide how the music actually plays.", file: "game.py",
-        lead: "Part 2/3 chose **which** file and how loud. This part is the playback itself — `load_background_music()` runs once, when the game boots.\n\nThe number you pass to **`pygame.mixer.music.play()`** is how many times to *repeat*: `play(-1)` loops forever, `play(0)` plays it exactly once and then silence, `play(3)` plays it four times in total. You can also fade in with `play(-1, fade_ms=3000)`, or load a different file here for any reason you like — nothing forces you to use `BACKGROUND_MUSIC_PATH`.\n\nOne rule: **keep the `try`/`except`**. A missing or broken sound file has to print a message and carry on, never crash the game — that's what lets a classmate open your project without your audio files and still play it.",
+        part: "8/8", title: "Decide how the music actually plays.", file: "game.py",
+        lead: "Part 6/8 chose **which** file and Part 7/8 **how loud**. This part is the playback itself — `load_background_music()` runs once, when the game boots.\n\n**The smallest possible change is one number.** What you pass to **`pygame.mixer.music.play()`** is how many times to *repeat*:\n\n- `play(-1)` — loops forever (the starter).\n- `play(0)` — plays once, then silence.\n- `play(3)` — plays four times in total.\n- `play(-1, fade_ms=3000)` — loops forever, fading in over 3 seconds.\n\nOne rule: **keep the `try`/`except`**. A missing or broken sound file has to print a message and carry on, never crash the game — that's what lets a classmate open your project without your audio files and still play it.",
         contextBefore: [
           "    def load_background_music(self):",
           '        """Starts the background music. Called once, when the game boots."""',
@@ -521,38 +613,44 @@ const COURSE_STEPS = [
       },
     ],
     hints: [
-      'Part 1: Every image value here is either `None` (built-in shape) or a quoted path under `assets/images/` — forgetting the quotes is the most common mistake when typing paths by hand, e.g. `PLAYER_IMAGE_PATH = "assets/images/boy.png"`. Each `_SCALE` is a size multiplier: `1.0` is normal, `0.5` is half as big, `1.6` is bigger than its cell — it resizes the built-in shape too, so it works even with no image file. Each `_COLOR` is a plain `(R, G, B)` tuple, three integers 0-255. The asset picker panel on the right fills in image paths for you with one click.\nPart 2: Sound paths follow the same None-or-quoted-path rule under `assets/sounds/`. `BOMB_EXPLOSION_DURATION_MS` is milliseconds (a plain integer); `BACKGROUND_MUSIC_VOLUME` is a number from 0.0 to 1.0.\nPart 3: the smallest possible change is the number inside `pygame.mixer.music.play(...)` — try `0` (play once) or `1` (play twice). To fade in instead, `pygame.mixer.music.play(-1, fade_ms=3000)`. Leave the `try:` / `except (pygame.error, FileNotFoundError, TypeError) as error:` lines alone and write inside the `try` block.',
+      'Parts 1, 2 and 6: every path is either `None` or a QUOTED path — forgetting the quotes is the most common mistake, e.g. `PLAYER_IMAGE_PATH = "assets/images/boy.png"`, `BACKGROUND_MUSIC_PATH = "assets/sounds/bgm_1.wav"`. The asset picker panel on the right fills them in with one click.\nPart 3: each `_SCALE` is a plain number — `1.0` normal, `0.5` half size, `1.6` bigger than its cell. It resizes the built-in shape too, so it works with no image file.\nParts 4 and 5: each `_COLOR` is a tuple of three integers 0-255, e.g. `WALL_COLOR = (120, 20, 20)`. Keep the brackets and the two commas.\nPart 7: `BOMB_EXPLOSION_DURATION_MS` is a whole number of milliseconds; `BACKGROUND_MUSIC_VOLUME` is a decimal from 0.0 to 1.0.\nPart 8: the smallest possible change is the number inside `pygame.mixer.music.play(...)` — try `0` (play once) or `1` (play twice). To fade in instead, `pygame.mixer.music.play(-1, fade_ms=3000)`. Leave the `try:` / `except (pygame.error, FileNotFoundError, TypeError) as error:` lines alone and write inside the `try` block.',
     ],
     visualizer: "assetPicker",
     grading: {
       mode: "behaviour",
       harness: "lookAndFeel_7",
-      casesDescription: "Parts 1-2 keep the open-ended settings checks (compiles, every image/scale/color/sound/tuning name defined; path, color, range and scale problems are non-blocking warnings). Part 3 runs the playback code against a fake pygame.mixer that records what was called, and only requires two things: it does not raise, and a missing sound file (mixer raising pygame.error) is still handled without crashing. Whether the music loops, plays once or fades in is entirely free — those only produce an informational note.",
+      casesDescription: "Parts 1-7 keep the open-ended settings checks (compiles, every image/scale/color/sound/tuning name defined; path, color, range and scale problems are non-blocking warnings), each part checked for its own two or three names so the message points at the right one. Part 8 runs the playback code against a fake pygame.mixer that records what was called, and only requires two things: it does not raise, and a missing sound file (mixer raising pygame.error) is still handled without crashing. Whether the music loops, plays once or fades in is entirely free — those only produce an informational note.",
       multiPart: true,
     },
   },
 
   // ------------------------------------------------------------------ TODO 8
+  //
+  // SPLIT (this session): 3 parts -> 6. The effect branching is now one
+  // effect per part, and the pickup is split into "spot it", "run its
+  // effect", "play its sound" - three lines of instruction instead of one
+  // wall of them.
   {
     id: "8", step: 8, kind: "Bonus", required: false, file: "settings.py",
     title: "Design your own collectible item(s), wire up their effects, and control the pickup.",
-    lead: "This Bonus TODO spans **two files** and three connected ideas — it's the deepest step in the course.\n\nPart 1/3 (`settings.py`) is where your game gets its own signature collectibles. **`CUSTOM_ITEMS`** is a list — add as many dictionaries as you like, each with its own:\n\n- **`name`** — the display name.\n- **`color`** — an RGB tuple, used when no `image` is set.\n- **`image`** / **`sound`** — `None`, or a quoted path under `assets/images/` / `assets/sounds/`, exactly like TODO 7's assets. Each item can have its OWN picture and pickup sound — they don't have to share one.\n- **`size`** — a size multiplier for this item alone: `1.0` normal, `0.6` small and easy to miss, `1.5` chunky and obvious.\n- **`effect`** — what happens when it's collected: `\"add_time\"` (extra seconds) or `\"add_hint\"` (extra Hint-button uses), or an effect name you invent yourself.\n- **`amount`** — how much of that effect.\n\nPart 2/3 (`game.py`, inside **`apply_custom_item_effect`**) is where you WRITE the code that reacts to `effect`/`amount`: branch on `\"add_time\"` (increase `self.bonus_time_seconds`) and `\"add_hint\"` (increase `self.hints_remaining`). Any effect string you invent that isn't one of those two must stay a safe no-op here — never raise an error — so an experimental idea never crashes the game.\n\nPart 3/3 (`game.py`, inside **`check_items`**) is the pickup itself: which item counts as collected, when, and what happens at that exact moment — including playing that item's own sound.\n\nEvery round spawns several custom items, each randomly drawn from this list (or exactly the item(s) you place by hand with the map editor in TODO 6), so two or three genuinely different items — each with their own art, size and sound — can appear side by side.",
+    lead: "This is where your game gets its own signature collectible, in six small moves:\n\n- **Part 1** (`settings.py`) — design the item(s) as data.\n- **Parts 2-3** (`game.py`) — one effect each: `\"add_time\"`, then `\"add_hint\"`.\n- **Parts 4-6** (`game.py`) — the pickup itself: spot it, run its effect, play its sound.\n\nEvery round spawns several custom items, each randomly drawn from your list (or exactly the item you placed by hand with the map editor in TODO 6), so two or three genuinely different items — each with their own art, size and sound — can appear side by side.",
     codeReference: [
       ["CUSTOM_ITEMS", "(settings.py) A list of dictionaries — add as many as you like, each describing one distinct custom item."],
       ["name", "The display name of this collectible."],
       ["color", "An (R, G, B) tuple, each 0-255, used when no image is set."],
       ["image / sound", "None, or a quoted path under assets/images/ or assets/sounds/ — this item's OWN picture/pickup sound."],
       ["size", "A size multiplier for this item alone. 1.0 is normal; values outside 0.1-3.0 are clamped so a typo can never make an item invisible or fill the screen."],
-      ["effect", 'A string describing what happens on pickup. "add_time" and "add_hint" are built in and handled in Part 2/3; any other string must be a safe no-op there.'],
+      ["effect", 'A string describing what happens on pickup. "add_time" (Part 2/6) and "add_hint" (Part 3/6) are built in; any other string is a safe no-op.'],
       ["amount", "How much of the effect: extra seconds for add_time, extra hint uses for add_hint."],
-      ["apply_custom_item_effect(self, item_def)", "(game.py) Called once per pickup with the item's dict; effect/amount are already pulled out for you — your job is just the branching."],
-      ["check_items(self)", "(game.py) Runs every frame. Part 3/3 is its body: spot the item under the player and collect it."],
+      ["apply_custom_item_effect(self, item_def)", "(game.py) Called once per pickup; effect/amount are already pulled out for you — Parts 2/6 and 3/6 are just the branching."],
+      ["check_items(self)", "(game.py) Runs every frame. Parts 4-6 are its body: spot the item under the player and collect it."],
       ["item.active / item.get_position() / item.item_def", "One spawned item: still on the board?, where it is, and its own dictionary out of your CUSTOM_ITEMS."],
       ["self.get_custom_item_sound(path)", "Loads (and caches) a pygame Sound for a path, or returns None. Call .play() on the result to hear it."],
     ],
     parts: [
       {
-        part: "1/3", title: "Design your own collectible item(s).", file: "settings.py",
+        part: "1/6", title: "Design your own collectible item(s).", file: "settings.py",
+        lead: "**`CUSTOM_ITEMS`** is a list of dictionaries. Start by editing the one that's already there — give it a real `name` and a `color` — then run it and look at the Play tab.\n\nEach item carries:\n\n- **`name`** — the display name.\n- **`color`** — an RGB tuple, used when no `image` is set.\n- **`image`** / **`sound`** — `None`, or a quoted path under `assets/images/` / `assets/sounds/`. Each item can have its OWN picture and pickup sound.\n- **`size`** — a size multiplier for this item alone: `1.0` normal, `0.6` small and easy to miss, `1.5` chunky and obvious.\n- **`effect`** — `\"add_time\"`, `\"add_hint\"`, or a name you invent yourself.\n- **`amount`** — how much of that effect.\n\nOnce that works, **copy the whole `{ ... },` block and paste it underneath** for a second, completely different item. This part is only the DATA — Parts 2/6 and 3/6 are where the effects actually happen.",
         contextBefore: [],
         contextAfter: [
           "# =========================================================",
@@ -574,17 +672,28 @@ const COURSE_STEPS = [
         ],
       },
       {
-        part: "2/3", title: "Apply the effect (add_time / add_hint / your own).", file: "game.py",
+        part: "2/6", title: 'Handle the "add_time" effect.', file: "game.py",
+        lead: "**Two lines.** `effect` and `amount` have already been pulled out of the item's dictionary for you on the lines above — all this part does is react to one of them.\n\nWhen `effect` is the string `\"add_time\"`, add `amount` onto **`self.bonus_time_seconds`**. That's it:\n\n```\nif effect == \"add_time\":\n    self.bonus_time_seconds += amount\n```\n\nReplace the `pass` line with those two lines.",
         contextBefore: [
           "    def apply_custom_item_effect(self, item_def):",
-          '        """Applies whatever "effect"/"amount" a custom item (TODO 8,',
-          "        Part 2/3) declares - your job is just the branching. See the",
-          '        full explanation in your own game.py."""',
+          '        """Applies whatever "effect"/"amount" a custom item declares."""',
           '        effect = item_def.get("effect")',
           '        amount = item_def.get("amount", 0)',
         ],
         contextAfter: [
-          "",
+          '        # TODO 8 [Bonus] (Part 3/6): Handle the "add_hint" effect.',
+        ],
+        starter: [
+          "        pass  # Write your code here.",
+        ],
+      },
+      {
+        part: "3/6", title: 'Handle the "add_hint" effect.', file: "game.py",
+        lead: "The same two lines you just wrote, with **`\"add_hint\"`** and **`self.hints_remaining`** instead.\n\nNotice what you get for free: any other `effect` string you invent in Part 1/6 matches neither `if`, so it quietly does nothing. **That is the safe no-op the game promises** — an experimental effect name can never crash anything, and you don't have to write a single line for it.",
+        contextBefore: [
+          "        # (Part 2/6 above handled \"add_time\".)",
+        ],
+        contextAfter: [
           "    def check_bombs(self):",
           "        now = pygame.time.get_ticks()",
         ],
@@ -593,22 +702,49 @@ const COURSE_STEPS = [
         ],
       },
       {
-        part: "3/3", title: "Decide when an item is collected, and play its sound.", file: "game.py",
-        lead: "`check_items()` runs every single frame. **`player_position`** is already worked out for you on the line above; everything else is yours.\n\nWalk through **`self.items`**. Each one has **`.active`** (still on the board?), **`.get_position()`**, and **`.item_def`** — its own dictionary out of your `CUSTOM_ITEMS`. To collect one: set `item.active = False`, then call **`self.apply_custom_item_effect(item.item_def)`** — that runs *your own Part 2/3 code*, so the effect you invented happens from right here.\n\nFor sound, **`self.get_custom_item_sound(path)`** hands back a playable Sound (or `None` if there's no file), and `.play()` starts it. Because each item carries its own `\"sound\"`, two items collected in the same round can sound completely different.\n\nOnce the starter works, this is a good place to get inventive: play a special sound only for `\"add_time\"` items, make a rare item need two visits before it counts, or hand out a small bonus for collecting two items in a row.",
+        part: "4/6", title: "Spot the item under the player and mark it collected.", file: "game.py",
+        lead: "`check_items()` runs every single frame. **`player_position`** is already worked out for you on the line above.\n\nWalk through **`self.items`**. Each one has **`.active`** (still on the board?) and **`.get_position()`**. When an active item is on the same cell as the player, set **`item.active = False`** — that alone makes it vanish from the board.\n\nMarking it inactive **first** is what stops the same item being collected twice in one frame. The starter already does exactly this; read it, run it, and watch an item disappear when you walk onto it.",
         contextBefore: [
           "    def check_items(self):",
           '        """Runs every frame: decides when an item counts as collected."""',
           "        player_position = self.player.get_position()",
         ],
         contextAfter: [
-          "    def apply_custom_item_effect(self, item_def):",
-          '        effect = item_def.get("effect")',
+          "                # TODO 8 [Bonus] (Part 5/6): Make its effect actually happen.",
         ],
         starter: [
           "        for item in self.items:",
           "            if item.active and item.get_position() == player_position:",
           "                item.active = False",
+        ],
+      },
+      {
+        part: "5/6", title: "Make its effect actually happen.", file: "game.py",
+        lead: "**One line**, sitting inside the `if` you kept in Part 4/6.\n\n**`item.item_def`** is that item's own dictionary out of your `CUSTOM_ITEMS`, and **`self.apply_custom_item_effect(...)`** runs *your own Parts 2/6 and 3/6 code* on it — so the effect you designed happens from right here.\n\nCollecting an `\"add_time\"` item should now visibly add seconds to the clock in the Play tab.",
+        contextBefore: [
+          "        for item in self.items:",
+          "            if item.active and item.get_position() == player_position:",
+          "                item.active = False",
+        ],
+        contextAfter: [
+          "                # TODO 8 [Bonus] (Part 6/6): Play that item's own sound.",
+        ],
+        starter: [
           "                self.apply_custom_item_effect(item.item_def)",
+        ],
+      },
+      {
+        part: "6/6", title: "Play that item's own sound.", file: "game.py",
+        lead: "Still inside the same `if`. **`self.get_custom_item_sound(path)`** hands back a playable Sound — or `None` when there is no file — so always check it before calling `.play()`.\n\nBecause each item carries its own `\"sound\"` (Part 1/6), two items picked up in the same round can sound completely different.\n\nOnce it works, this is a good place to get inventive: play a special sound only for `\"add_time\"` items by adding `if item.item_def.get(\"effect\") == \"add_time\":` around it.",
+        contextBefore: [
+          "                item.active = False",
+          "                self.apply_custom_item_effect(item.item_def)",
+        ],
+        contextAfter: [
+          "    def apply_custom_item_effect(self, item_def):",
+          '        effect = item_def.get("effect")',
+        ],
+        starter: [
           '                item_sound = self.get_custom_item_sound(item.item_def.get("sound"))',
           "                if item_sound:",
           "                    item_sound.play()",
@@ -616,26 +752,30 @@ const COURSE_STEPS = [
       },
     ],
     hints: [
-      'Part 1: `CUSTOM_ITEMS` is a list of dictionaries, and you can add as many as you like. Each one needs a `name` (string), a `color` (a tuple of three 0-255 numbers), `image`/`sound` (`None`, or a quoted path — the asset picker on the right fills these in for the item you\'re currently editing), a `size` (a number like `1.0`), an `effect` (the string `"add_time"` or `"add_hint"`, or your own invented string), and an `amount` (a plain integer). Example:\n```\nCUSTOM_ITEMS = [\n    {"name": "Time Crystal", "color": (14, 165, 233), "image": "assets/images/item_gem_1.png", "sound": "assets/sounds/pickup_1.wav", "size": 1.2, "effect": "add_time", "amount": 15},\n    {"name": "Hint Scroll", "color": (250, 204, 21), "image": None, "sound": None, "size": 0.8, "effect": "add_hint", "amount": 1},\n]\n```\nPart 2:\n```\nif effect == "add_time":\n    self.bonus_time_seconds += amount\nelif effect == "add_hint":\n    self.hints_remaining += amount\n```\nAny other `effect` string simply falls through both branches and does nothing — that\'s the safe no-op the game promises.\nPart 3: keep the starter\'s shape — loop over `self.items`, and inside the `if`, mark it inactive FIRST (`item.active = False`) so one item can never be collected twice in the same frame. To play a different sound for one effect, add a branch inside the `if`: `if item.item_def.get("effect") == "add_time": ...`.',
+      'Part 1: `CUSTOM_ITEMS` is a list of dictionaries — add as many as you like. Each needs a `name` (string), `color` (three 0-255 numbers), `image`/`sound` (`None` or a quoted path — the asset picker fills these in), `size` (a number like `1.0`), `effect` (`"add_time"`, `"add_hint"`, or your own string), and `amount` (a plain integer). Example:\n```\nCUSTOM_ITEMS = [\n    {"name": "Time Crystal", "color": (14, 165, 233), "image": "assets/images/item_gem_1.png", "sound": "assets/sounds/pickup_1.wav", "size": 1.2, "effect": "add_time", "amount": 15},\n    {"name": "Hint Scroll", "color": (250, 204, 21), "image": None, "sound": None, "size": 0.8, "effect": "add_hint", "amount": 1},\n]\n```\nPart 2:\n```\nif effect == "add_time":\n    self.bonus_time_seconds += amount\n```\nPart 3:\n```\nif effect == "add_hint":\n    self.hints_remaining += amount\n```\nAny other `effect` string matches neither one and does nothing — that is the safe no-op, and you write nothing for it.\nPart 4: keep the starter exactly as it is — `for` over `self.items`, an `if` on `item.active and item.get_position() == player_position`, then `item.active = False` inside it.\nPart 5: one line, indented to the same depth as `item.active = False`: `self.apply_custom_item_effect(item.item_def)`.\nPart 6: three lines at that same depth — get the sound with `self.get_custom_item_sound(item.item_def.get("sound"))`, then `if item_sound:` and `item_sound.play()` indented under it.',
     ],
     visualizer: "customItemLab",
     grading: {
       mode: "behaviour",
       harness: "customItems_8",
-      casesDescription: "Part 1: compiles, defines CUSTOM_ITEMS, and gives non-blocking shape warnings (color/image/sound/size/effect/amount) per item — open-ended, no fixed answer. Part 2: the student's apply_custom_item_effect body is run against real (effect, amount, starting state) cases — add_time adds seconds, add_time stacks, add_hint adds a hint use, add_hint with a larger amount, and an unrecognized effect string, which must be a safe no-op (never an error). Part 3: the pickup body runs against a stand-in Game holding stub items and a fake sound loader — the item under the player must end up inactive and its effect applied, an item elsewhere must be left alone, and an item with no sound (or a sound that fails to load) must not raise. Extra rules a student invents only produce warnings. Each part is graded independently.",
+      casesDescription: "Part 1: compiles, defines CUSTOM_ITEMS, and gives non-blocking shape warnings (color/image/sound/size/effect/amount) per item — open-ended, no fixed answer. Parts 2 and 3 are joined and run against real (effect, amount, starting state) cases — add_time adds seconds and stacks, add_hint adds hint uses, and an unrecognized effect string must be a safe no-op (never an error); each effect is also reported separately so a student can see which of the two parts is not wired up yet. Parts 4-6 are joined into one pickup body and run against a stand-in Game holding stub items and a fake sound loader — the item under the player must end up inactive, its effect must have been applied, an item elsewhere must be left alone, and an item with no sound (or a sound that fails to load) must not raise. Extra rules a student invents only produce warnings.",
       multiPart: true,
     },
   },
 
   // ------------------------------------------------------------------ TODO 9
+  //
+  // SPLIT (this session): 2 parts -> 4. The two rule lists are now one
+  // part each, and the win condition is split into "when is it NOT a win"
+  // and "what does winning do".
   {
     id: "9", step: 9, kind: "Bonus", required: false, file: "settings.py",
     title: "Write your game's rules — as text, then as code.",
-    lead: "Now that your game actually exists — your custom item(s), your map, your placement rules — it needs rules of its own. This step spans **two files** and asks for the same rules twice, in two different languages.\n\nPart 1/2 (`settings.py`) is the rules in **English**: **`MISSION_RULES`** and **`HOW_TO_PLAY_RULES`** are lists of short strings shown on the mission and how-to-play screens.\n\nPart 2/2 (`game.py`, inside **`check_goal`**) is the same rules in **Python**: the code that actually decides when a round has been won. The starter is the plain version — stand on the goal, round over. But if you want your game to demand something more (collect everything first, finish early once you have enough items), this is the one place that decides it.\n\nThe point of doing both is that they have to **agree**. If your `MISSION_RULES` promises \"collect all the crystals, then reach the goal\", then Part 2/2 is where that promise becomes true.",
+    lead: "Now that your game actually exists — your custom item(s), your map, your placement rules — it needs rules of its own, written twice, in two different languages:\n\n- **Parts 1-2** (`settings.py`) — the rules in **English**, shown on the mission and how-to-play screens.\n- **Parts 3-4** (`game.py`) — the same rules in **Python**: the code that decides when a round has been won.\n\nThe point of doing both is that they have to **agree**. If Part 1 promises \"collect all the crystals, then reach the goal\", then Part 3 is where that promise becomes true.",
     codeReference: [
       ["MISSION_RULES", "(settings.py) A list of short strings describing the win condition(s), shown on the mission screen."],
       ["HOW_TO_PLAY_RULES", "(settings.py) A list of short strings explaining controls, shown on the how-to-play screen."],
-      ["check_goal(self)", "(game.py) Runs every frame. Part 2/2 is its whole body: decide whether the round has been won."],
+      ["check_goal(self)", "(game.py) Runs every frame. Parts 3/4 and 4/4 are its body: decide whether the round has been won, and what winning does."],
       ["self.player.get_position() / self.goal.get_position()", "(row, col) tuples. Comparing them is how you tell the player is standing on the goal."],
       ["self.items", "Every item spawned this round. item.active is False once it has been collected, so all(not i.active for i in self.items) means 'everything collected'."],
       ["self.current_round / len(ROUND_CONFIGS)", "Which round this is (0, 1, 2) and how many rounds exist."],
@@ -644,13 +784,24 @@ const COURSE_STEPS = [
     ],
     parts: [
       {
-        part: "1/2", title: "Write your rules as text.", file: "settings.py",
+        part: "1/4", title: "Write the mission — what the player must do.",
+        lead: "**`MISSION_RULES`** is a list of short strings shown on the mission screen. Every string needs its own quotes and its own comma at the end.\n\nRewrite the one line that's there so it describes **your** game — name your own custom item and say what it does. Then add a second line if you want:\n\n```\nMISSION_RULES = [\n    \"Collect every Time Crystal, then reach the vault.\",\n    \"Bombs send you back to the start.\",\n]\n```",
         contextBefore: [],
-        contextAfter: [],
+        contextAfter: [
+          "# TODO 9 [Bonus] (Part 2/4): Write the how-to-play instructions.",
+        ],
         starter: [
           "MISSION_RULES = [",
           '    "Reach the goal before time runs out.",',
           "]",
+        ],
+      },
+      {
+        part: "2/4", title: "Write the how-to-play instructions.",
+        lead: "Same shape as Part 1/4 — a list of short quoted strings, one per line, each ending in a comma.\n\nThese are the controls and the dangers. **Keep the arrow-key line true** (that's how your game is actually played), and mention what YOUR item does rather than leaving the generic example text in place.",
+        contextBefore: [],
+        contextAfter: [],
+        starter: [
           "HOW_TO_PLAY_RULES = [",
           '    "Reach the goal to clear each round.",',
           '    "Move with the Arrow Keys (or E/F/C/D on a controller).",',
@@ -660,11 +811,25 @@ const COURSE_STEPS = [
         ],
       },
       {
-        part: "2/2", title: "Write the same rules as code.", file: "game.py",
-        lead: "`check_goal()` runs every frame. The starter says: if the player isn't standing on the goal, do nothing; otherwise, either finish the game (last round) or start the transition to the next round.\n\nTo demand more than just reaching the goal, add your own condition before the win. For example, requiring every item first is one extra line:\n\n- `if not all(not item.active for item in self.items): return`\n\nBe careful with a round you can't actually win — if you require something impossible, the timer will simply run out. Try it in the Play tab on the right before you decide it's finished.",
+        part: "3/4", title: 'Decide what counts as "not won yet".', file: "game.py",
+        lead: "`check_goal()` runs every frame. The starter says: if the player isn't standing on the goal, stop here — nothing is won.\n\nThat's already correct, so **the smallest version of this part is to read it and move on.**\n\nTo demand more than just arriving, add a second guard underneath in exactly the same shape. Requiring every item first is one extra pair of lines:\n\n```\nif not all(not item.active for item in self.items):\n    return\n```\n\nBe careful with a round you can't actually win — if you require something impossible, the timer just runs out. Try it in the Play tab before you decide it's finished.",
         contextBefore: [
           "    def check_goal(self):",
           '        """Runs every frame: decides when the round has been won."""',
+        ],
+        contextAfter: [
+          '        # TODO 9 [Bonus] (Part 4/4): Decide what winning actually does.',
+        ],
+        starter: [
+          "        if self.player.get_position() != self.goal.get_position():",
+          "            return",
+        ],
+      },
+      {
+        part: "4/4", title: "Decide what winning actually does.", file: "game.py",
+        lead: "Anything still running past Part 3/4's guards has **won** the round. Two outcomes:\n\n- On the last round (`self.current_round == len(ROUND_CONFIGS) - 1`) set **`self.game_clear = True`** — the whole game is finished, victory screen.\n- Otherwise set **`self.round_transition_time = pygame.time.get_ticks()`** — clear this round and move on to the next.\n\nThe starter already does exactly that, so this part is mostly about understanding it. If you want the game to end early — say, after round 2 no matter what — this is the one line that decides it.",
+        contextBefore: [
+          "        # (Part 3/4 above returned early if this is not a win.)",
         ],
         contextAfter: [
           "    def check_time_limit(self):",
@@ -672,9 +837,6 @@ const COURSE_STEPS = [
           "            return",
         ],
         starter: [
-          "        if self.player.get_position() != self.goal.get_position():",
-          "            return",
-          "",
           "        if self.current_round == len(ROUND_CONFIGS) - 1:",
           "            self.game_clear = True",
           "        else:",
@@ -683,13 +845,13 @@ const COURSE_STEPS = [
       },
     ],
     hints: [
-      "Part 1: `MISSION_RULES` and `HOW_TO_PLAY_RULES` are both lists of strings (every item needs its own quotes and comma) — describe the game you actually built: mention your custom item(s) by name and what they do, rather than leaving the generic example text in place.\nPart 2: keep the starter exactly as it is and add your extra condition as a guard right at the top, in the same shape as the first two lines:\n```\nif not all(not item.active for item in self.items):\n    return\n```\nThat says \"if anything is still uncollected, this isn't a win yet\". Everything below it stays untouched.",
+      "Part 1: `MISSION_RULES` is a list of strings — every item needs its own quotes and a comma at the end. Describe the game you actually built: mention your custom item by name and what it does.\nPart 2: `HOW_TO_PLAY_RULES` works exactly the same way. Keep the arrow-key line accurate.\nPart 3: the starter is already a correct win condition, so leaving it alone is a valid answer. To demand more, add your extra condition as a second guard right underneath, in the same shape as the first two lines:\n```\nif not all(not item.active for item in self.items):\n    return\n```\nThat says \"if anything is still uncollected, this isn't a win yet\".\nPart 4: keep the starter as it is — `if self.current_round == len(ROUND_CONFIGS) - 1:` sets `self.game_clear = True`, and the `else:` sets `self.round_transition_time = pygame.time.get_ticks()`.",
     ],
     visualizer: "titleCard",
     grading: {
       mode: "behaviour",
       harness: "gameRules_9",
-      casesDescription: "Part 1: compiles and defines MISSION_RULES and HOW_TO_PLAY_RULES; empty lists or non-strings are non-blocking warnings. Part 2: the win-condition body runs against a stand-in Game — standing somewhere other than the goal must never clear the round, and it must not raise for any of the states tried (mid-round, last round, items left, no items at all). Whether standing on the goal is enough, or your own extra condition has to be met first, is entirely up to you: a goal that needs more than arriving produces an informational note, not a failure.",
+      casesDescription: "Parts 1 and 2: compiles and defines MISSION_RULES / HOW_TO_PLAY_RULES, checked one per part so the message points at the right list; empty lists or non-strings are non-blocking warnings. Parts 3 and 4 are joined into one win-condition body and run against a stand-in Game — standing somewhere other than the goal must never clear the round, and it must not raise for any of the states tried (mid-round, last round, items left, no items at all). Whether standing on the goal is enough, or your own extra condition has to be met first, is entirely up to you: a goal that needs more than arriving produces an informational note, not a failure.",
       multiPart: true,
     },
   },

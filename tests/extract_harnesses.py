@@ -268,7 +268,7 @@ def extract_var_line(name):
 
 FUNCS = [
     "toBase64Utf8", "isCommentOnlyLine", "reindentPython", "buildFnSource",
-    "buildFnSourceTwoParts", "b64Line",
+    "buildFnSourceTwoParts", "buildFnSourceParts", "b64Line",
     "harness_movement_2", "harness_guardClause_3", "harness_positionDelta_4",
     "harness_dijkstra_5",
     # The four multi-part Bonus harnesses: each mixes settings-block parts

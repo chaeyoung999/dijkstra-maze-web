@@ -35,8 +35,8 @@
   var STEP_BY_ID = {};
   STEPS.forEach(function (s) { STEP_BY_ID[s.id] = s; });
 
-  // Per-part file support (Bonus multi-file steps, e.g. TODO 8: Part 1/2 in
-  // settings.py, Part 2/2 in game.py): a part's own `file` wins when
+  // Per-part file support (Bonus multi-file steps, e.g. TODO 8: Part 1/6 in
+  // settings.py, Parts 2/6-6/6 in game.py): a part's own `file` wins when
   // present, otherwise it falls back to the step-level `file` - so
   // single-file steps (and every Required step) never need to repeat the
   // same filename on every part. stepFiles() returns the DISTINCT files a
@@ -225,6 +225,23 @@
     var body1 = reindentPython(code1, indent);
     var body2 = reindentPython(code2, indent);
     return "def _fn(" + params + "):\n" + body1 + "\n" + body2 + "\n    return locals()\n";
+  }
+
+  // Generalisation of buildFnSourceTwoParts for the Bonus split: several
+  // consecutive parts that are sequential statements at the SAME scope in
+  // the real file (TODO 6's Parts 4-6, TODO 8's Parts 2-3, TODO 9's Parts
+  // 3-4) get reindented and concatenated in order inside one function, so
+  // the joined body is exactly what the student's real game.py would run.
+  // IMPORTANT: the parts are concatenated BEFORE reindenting, not after.
+  // reindentPython() dedents whatever it is given to its own smallest indent,
+  // so reindenting each part separately would flatten a part that is meant to
+  // sit INSIDE a block the previous part opened (TODO 8's Parts 5/6 live
+  // inside the `if` that Part 4 opens). Joining first makes the whole group
+  // share one minimum indent, which preserves the relative nesting exactly.
+  function buildFnSourceParts(params, codes, targetIndent) {
+    var joined = codes.map(function (c) { return String(c == null ? "" : c); }).join("\n");
+    var body = reindentPython(joined, targetIndent || "    ");
+    return "def _fn(" + params + "):\n" + body + "\n    return locals()\n";
   }
 
   function b64Line(varName, text) {
@@ -1483,7 +1500,7 @@
     // joined into one string like syntax mode does - the harness needs to
     // splice/grade each part separately so a mistake in one part can be
     // attributed specifically to that part (see harness_dijkstra_5). The
-    // number of parts is read from the step itself, so adding a Part 3/3
+    // number of parts is read from the step itself, so adding a part
     // needs no change here.
     var src = step.parts ? b.apply(null, stepData.code) : b(stepData.code);
     return pyodide.runPythonAsync(src).then(parseHarnessResult);
@@ -2183,16 +2200,23 @@
   // change: ROUND_CONFIGS is no longer pinned to exactly 3 rounds, because
   // students are now explicitly invited to add or remove rounds. Part 3 is
   // the placement code, run for real against a stand-in Game.
-  function harness_roundDesign_6(code1, code2, code3) {
-    var fn3 = buildFnSource(
-      "self, forbidden, create_random_positions, CustomItem, Bomb, random, CUSTOM_ITEMS",
-      code3, "    ");
+  // Six parts since the Bonus split: 1 ROUND_CONFIGS, 2 the walking speed,
+  // 3 the two hint settings, 4/5/6 the placement code in game.py. Parts 4-6
+  // are three consecutive statement groups inside ONE method, so they are
+  // compiled individually (so an indent slip is blamed on the right part)
+  // and then joined and RUN as the single body the real game would execute.
+  function harness_roundDesign_6(code1, code2, code3, code4, code5, code6) {
+    var placeParams = "self, forbidden, create_random_positions, CustomItem, Bomb, random, CUSTOM_ITEMS";
     return [
       PY_PRELUDE,
       PY_BONUS_HELPERS,
       b64Line("CODE1", code1),
       b64Line("CODE2", code2),
-      b64Line("FN3_SRC", fn3),
+      b64Line("CODE3", code3),
+      b64Line("FN4_SRC", buildFnSource(placeParams, code4, "    ")),
+      b64Line("FN5_SRC", buildFnSource(placeParams, code5, "    ")),
+      b64Line("FN6_SRC", buildFnSource(placeParams, code6, "    ")),
+      b64Line("FN_PLACE_SRC", buildFnSourceParts(placeParams, [code4, code5, code6], "    ")),
       "ROUND_KEYS = " + JSON.stringify(ROUND_CONFIG_KEY_ORDER).replace(/"/g, "'"),
       "MAX_ROUNDS_UI = " + MAX_DESIGNABLE_ROUNDS,
       "import random as _rnd",
@@ -2286,20 +2310,31 @@
       "    ns2 = _exec_settings(result, CODE2, 'Part 2')",
       "    if ns2 is None:",
       "        return _finish(result)",
-      "    pacing = ['PLAYER_MOVE_DELAY_MS', 'ALLOW_PATH_HINT', 'MAX_HINT_COUNT']",
-      "    missing_pacing = [n for n in pacing if n not in ns2]",
-      "    if missing_pacing:",
-      "        result['failed'].append('Part 2: Missing definition(s): %s.' % ', '.join(missing_pacing))",
+      "    if 'PLAYER_MOVE_DELAY_MS' not in ns2:",
+      "        result['failed'].append('Part 2: Missing definition: PLAYER_MOVE_DELAY_MS. Keep the variable name exactly as given.')",
       "    else:",
-      "        result['passed'].append('Part 2: delay=%s, hints=%s/%s.' % (",
-      "            _short_repr(ns2['PLAYER_MOVE_DELAY_MS']),",
-      "            _short_repr(ns2['ALLOW_PATH_HINT']), _short_repr(ns2['MAX_HINT_COUNT'])))",
+      "        result['passed'].append('Part 2: one step every %s ms.' % _short_repr(ns2['PLAYER_MOVE_DELAY_MS']))",
       "        _check_number(result, 'PLAYER_MOVE_DELAY_MS', ns2['PLAYER_MOVE_DELAY_MS'], int, low=0, high=2000)",
-      "        if not isinstance(ns2['ALLOW_PATH_HINT'], bool):",
+      // ---------------- Part 3: the hint settings
+      "    ns3 = _exec_settings(result, CODE3, 'Part 3')",
+      "    if ns3 is None:",
+      "        return _finish(result)",
+      "    hint_names = ['ALLOW_PATH_HINT', 'MAX_HINT_COUNT']",
+      "    missing_hint = [n for n in hint_names if n not in ns3]",
+      "    if missing_hint:",
+      "        result['failed'].append('Part 3: Missing definition(s): %s.' % ', '.join(missing_hint))",
+      "    else:",
+      "        result['passed'].append('Part 3: hints %s, up to %s per round.' % (",
+      "            _short_repr(ns3['ALLOW_PATH_HINT']), _short_repr(ns3['MAX_HINT_COUNT'])))",
+      "        if not isinstance(ns3['ALLOW_PATH_HINT'], bool):",
       "            result['warnings'].append('Heads up: ALLOW_PATH_HINT is usually True or False — this still counts as complete, but double-check the Hint button behaves as you expect.')",
-      "        _check_number(result, 'MAX_HINT_COUNT', ns2['MAX_HINT_COUNT'], int, low=0, high=99)",
+      "        _check_number(result, 'MAX_HINT_COUNT', ns3['MAX_HINT_COUNT'], int, low=0, high=99)",
       // ---------------- Part 3: placement
-      "    fn3 = _compile_body(result, FN3_SRC, 'Part 3')",
+      "    for _lbl, _src in (('Part 4', FN4_SRC), ('Part 5', FN5_SRC), ('Part 6', FN6_SRC)):",
+      "        if _compile_body(result, _src, _lbl) is None:",
+      "            return _finish(result)",
+      "        result['passed'].append('%s: compiles.' % _lbl)",
+      "    fn3 = _compile_body(result, FN_PLACE_SRC, 'Parts 4-6')",
       "    if fn3 is None:",
       "        return _finish(result)",
       "    cases = [",
@@ -2308,24 +2343,24 @@
       "        ('a tiny 3x3 round', {'rows': 3, 'cols': 3, 'cell_size': 30, 'extra_open_walls': 0, 'bomb_count': 1, 'custom_item_count': 1, 'time_limit_seconds': 20}, 2),",
       "        ('a round asking for more objects than it has cells', {'rows': 4, 'cols': 4, 'cell_size': 30, 'extra_open_walls': 0, 'bomb_count': 40, 'custom_item_count': 40, 'time_limit_seconds': 20}, 0),",
       "    ]",
-      "    part3_ok = True",
+      "    place_ok = True",
       "    for label, cfg, rindex in cases:",
       "        start = (0, 0)",
       "        goal = (cfg['rows'] - 1, cfg['cols'] - 1)",
       "        game = _StubGame(cfg, start, goal, rindex)",
       "        forbidden = set([start, goal])",
-      "        ok, msg = _call_body(fn3, (game, forbidden, _stub_create_random_positions, _StubItem, _StubBomb, _rnd, STUB_ITEMS), 'Part 3 (%s)' % label)",
+      "        ok, msg = _call_body(fn3, (game, forbidden, _stub_create_random_positions, _StubItem, _StubBomb, _rnd, STUB_ITEMS), 'Parts 4-6 (%s)' % label)",
       "        if not ok:",
       "            result['failed'].append(msg)",
-      "            part3_ok = False",
+      "            place_ok = False",
       "            continue",
       "        if not isinstance(game.items, list):",
-      "            result['failed'].append('Part 3 (%s): self.items must end up as a list (an empty list is fine), got %s. The drawing code loops over it every frame.' % (label, _short_repr(game.items)))",
-      "            part3_ok = False",
+      "            result['failed'].append('Parts 4-6 (%s): self.items must end up as a list (an empty list is fine), got %s. The drawing code loops over it every frame.' % (label, _short_repr(game.items)))",
+      "            place_ok = False",
       "            continue",
       "        if not isinstance(game.bombs, list):",
-      "            result['failed'].append('Part 3 (%s): self.bombs must end up as a list (an empty list is fine), got %s. The drawing code loops over it every frame.' % (label, _short_repr(game.bombs)))",
-      "            part3_ok = False",
+      "            result['failed'].append('Parts 4-6 (%s): self.bombs must end up as a list (an empty list is fine), got %s. The drawing code loops over it every frame.' % (label, _short_repr(game.bombs)))",
+      "            place_ok = False",
       "            continue",
       "        placed = []",
       "        bad_shape = False",
@@ -2348,9 +2383,9 @@
       "            result['warnings'].append('Heads up: %s placed %d object(s) on the player start or the goal. Keep adding used positions to forbidden to avoid that.' % (label, len(on_actor)))",
       "        if len(set(placed)) != len(placed):",
       "            result['warnings'].append('Heads up: %s put two objects on the same cell. Remember forbidden.update(...) after each group you place.' % label)",
-      "        result['passed'].append('Part 3 (%s): placed %d item(s) and %d bomb(s), no errors.' % (label, len(game.items), len(game.bombs)))",
-      "    if part3_ok:",
-      "        result['passed'].append('Part 3: your placement code ran cleanly for every round shape it was given.')",
+      "        result['passed'].append('Parts 4-6 (%s): placed %d item(s) and %d bomb(s), no errors.' % (label, len(game.items), len(game.bombs)))",
+      "    if place_ok:",
+      "        result['passed'].append('Parts 4-6: your placement code ran cleanly for every round shape it was given.')",
       "    return _finish(result)",
       "def _run():",
       "    return _finish_or_report(_run_inner)",
@@ -2358,62 +2393,73 @@
     ].join("\n");
   }
 
-  // ---- TODO 7: images + sizes + sound + music playback -----------------
-  function harness_lookAndFeel_7(code1, code2, code3) {
-    var imageVars = ["PLAYER_IMAGE_PATH", "GOAL_IMAGE_PATH", "BOMB_IMAGE_PATH", "FLOOR_TILE_IMAGE_PATH"];
-    var scaleVars = ["PLAYER_IMAGE_SCALE", "GOAL_IMAGE_SCALE", "BOMB_IMAGE_SCALE"];
-    var colorVars = ["WALL_COLOR", "PLAYER_COLOR", "GOAL_COLOR", "BOMB_COLOR", "BOMB_EXPLOSION_COLOR"];
-    var soundVars = ["BOMB_SOUND_PATH", "BACKGROUND_MUSIC_PATH"];
-    var fn3 = buildFnSource("self, pygame, BACKGROUND_MUSIC_PATH, BACKGROUND_MUSIC_VOLUME", code3, "    ");
+  // ---- TODO 7: images + sizes + colors + sound + music playback --------
+  //
+  // Eight parts since the Bonus split. Parts 1-7 are each a two- or
+  // three-line settings block, checked in a single table-driven loop so
+  // every message names the exact part the student is looking at. Part 8
+  // (game.py) is the only real code, graded exactly as before.
+  function harness_lookAndFeel_7(code1, code2, code3, code4, code5, code6, code7, code8) {
+    var fn8 = buildFnSource("self, pygame, BACKGROUND_MUSIC_PATH, BACKGROUND_MUSIC_VOLUME", code8, "    ");
+    var settingParts = [
+      ["Part 1", ["PLAYER_IMAGE_PATH", "GOAL_IMAGE_PATH"], "image"],
+      ["Part 2", ["BOMB_IMAGE_PATH", "FLOOR_TILE_IMAGE_PATH"], "image"],
+      ["Part 3", ["PLAYER_IMAGE_SCALE", "GOAL_IMAGE_SCALE", "BOMB_IMAGE_SCALE"], "scale"],
+      ["Part 4", ["WALL_COLOR", "PLAYER_COLOR", "GOAL_COLOR"], "color"],
+      ["Part 5", ["BOMB_COLOR", "BOMB_EXPLOSION_COLOR"], "color"],
+      ["Part 6", ["BOMB_SOUND_PATH", "BACKGROUND_MUSIC_PATH"], "sound"],
+      ["Part 7", ["BOMB_EXPLOSION_DURATION_MS", "BACKGROUND_MUSIC_VOLUME"], "tuning"],
+    ];
     return [
       PY_PRELUDE,
       PY_BONUS_HELPERS,
       PY_FAKE_PYGAME,
       b64Line("CODE1", code1),
       b64Line("CODE2", code2),
-      b64Line("FN3_SRC", fn3),
-      "IMAGE_VARS = " + JSON.stringify(imageVars).replace(/"/g, "'"),
-      "SCALE_VARS = " + JSON.stringify(scaleVars).replace(/"/g, "'"),
-      "COLOR_VARS = " + JSON.stringify(colorVars).replace(/"/g, "'"),
-      "SOUND_VARS = " + JSON.stringify(soundVars).replace(/"/g, "'"),
+      b64Line("CODE3", code3),
+      b64Line("CODE4", code4),
+      b64Line("CODE5", code5),
+      b64Line("CODE6", code6),
+      b64Line("CODE7", code7),
+      b64Line("FN3_SRC", fn8),
       "KNOWN_IMAGES = " + JSON.stringify(KNOWN_ASSETS.images).replace(/"/g, "'"),
       "KNOWN_SOUNDS = " + JSON.stringify(KNOWN_ASSETS.sounds).replace(/"/g, "'"),
+      "SETTING_PARTS = [",
+      settingParts.map(function (p, i) {
+        return "    ('" + p[0] + "', CODE" + (i + 1) + ", " + JSON.stringify(p[1]).replace(/"/g, "'") + ", '" + p[2] + "'),";
+      }).join("\n"),
+      "]",
       "class _StubGame(object):",
       "    pass",
       "def _run_inner():",
       "    result = _new_result()",
-      // ---------------- Part 1: images, sizes, colors
-      "    ns1 = _exec_settings(result, CODE1, 'Part 1')",
-      "    if ns1 is None:",
-      "        return _finish(result)",
-      "    part1_names = IMAGE_VARS + SCALE_VARS + COLOR_VARS",
-      "    missing1 = [n for n in part1_names if n not in ns1]",
-      "    if missing1:",
-      "        result['failed'].append('Part 1: Missing definition(s): %s. Keep every variable name exactly as given.' % ', '.join(missing1))",
-      "    else:",
-      "        result['passed'].append('Part 1: all %d image/size/color settings are defined.' % len(part1_names))",
-      "        for n in IMAGE_VARS:",
-      "            _check_path(result, n, ns1[n], 'assets/images/', KNOWN_IMAGES)",
-      "        for n in COLOR_VARS:",
-      "            _check_color(result, n, ns1[n])",
-      "        for n in SCALE_VARS:",
-      "            _check_number(result, n, ns1[n], (int, float), low=0.1, high=3.0)",
-      // ---------------- Part 2: sound + tuning
-      "    ns2 = _exec_settings(result, CODE2, 'Part 2')",
-      "    if ns2 is None:",
-      "        return _finish(result)",
-      "    part2_names = SOUND_VARS + ['BOMB_EXPLOSION_DURATION_MS', 'BACKGROUND_MUSIC_VOLUME']",
-      "    missing2 = [n for n in part2_names if n not in ns2]",
-      "    if missing2:",
-      "        result['failed'].append('Part 2: Missing definition(s): %s. Keep every variable name exactly as given.' % ', '.join(missing2))",
-      "    else:",
-      "        result['passed'].append('Part 2: all %d sound/timing settings are defined.' % len(part2_names))",
-      "        for n in SOUND_VARS:",
-      "            _check_path(result, n, ns2[n], 'assets/sounds/', KNOWN_SOUNDS)",
-      "        _check_number(result, 'BOMB_EXPLOSION_DURATION_MS', ns2['BOMB_EXPLOSION_DURATION_MS'], int, low=0)",
-      "        _check_number(result, 'BACKGROUND_MUSIC_VOLUME', ns2['BACKGROUND_MUSIC_VOLUME'], (int, float), low=0, high=1)",
-      // ---------------- Part 3: music playback
-      "    fn3 = _compile_body(result, FN3_SRC, 'Part 3')",
+      // ---------------- Parts 1-7: the settings blocks, one part at a time
+      "    seen = {}",
+      "    for label, code, names, kind in SETTING_PARTS:",
+      "        ns = _exec_settings(result, code, label)",
+      "        if ns is None:",
+      "            return _finish(result)",
+      "        seen.update(ns)",
+      "        missing = [n for n in names if n not in ns]",
+      "        if missing:",
+      "            result['failed'].append('%s: Missing definition(s): %s. Keep every variable name exactly as given.' % (label, ', '.join(missing)))",
+      "            continue",
+      "        result['passed'].append('%s: %s defined.' % (label, ', '.join(names)))",
+      "        for n in names:",
+      "            if kind == 'image':",
+      "                _check_path(result, n, ns[n], 'assets/images/', KNOWN_IMAGES)",
+      "            elif kind == 'sound':",
+      "                _check_path(result, n, ns[n], 'assets/sounds/', KNOWN_SOUNDS)",
+      "            elif kind == 'color':",
+      "                _check_color(result, n, ns[n])",
+      "            elif kind == 'scale':",
+      "                _check_number(result, n, ns[n], (int, float), low=0.1, high=3.0)",
+      "        if kind == 'tuning':",
+      "            _check_number(result, 'BOMB_EXPLOSION_DURATION_MS', ns['BOMB_EXPLOSION_DURATION_MS'], int, low=0)",
+      "            _check_number(result, 'BACKGROUND_MUSIC_VOLUME', ns['BACKGROUND_MUSIC_VOLUME'], (int, float), low=0, high=1)",
+      "    ns2 = seen",
+      // ---------------- Part 8: music playback
+      "    fn3 = _compile_body(result, FN3_SRC, 'Part 8')",
       "    if fn3 is None:",
       "        return _finish(result)",
       "    music_path = ns2.get('BACKGROUND_MUSIC_PATH') if isinstance(ns2, dict) else None",
@@ -2424,7 +2470,7 @@
       "        volume = 0.25",
       "    log = []",
       "    fake = _FakePygame(log)",
-      "    ok, msg = _call_body(fn3, (_StubGame(), fake, music_path, volume), 'Part 3 (with a music file set)')",
+      "    ok, msg = _call_body(fn3, (_StubGame(), fake, music_path, volume), 'Part 8 (with a music file set)')",
       "    if not ok:",
       "        result['failed'].append(msg)",
       "    else:",
@@ -2433,31 +2479,31 @@
       "            args = plays[0][1]",
       "            loops = args[0] if args else None",
       "            if loops == -1:",
-      "                result['passed'].append('Part 3: the music starts and loops forever (play(-1)).')",
+      "                result['passed'].append('Part 8: the music starts and loops forever (play(-1)).')",
       "            elif loops == 0:",
-      "                result['passed'].append('Part 3: the music starts and plays through exactly once (play(0)).')",
+      "                result['passed'].append('Part 8: the music starts and plays through exactly once (play(0)).')",
       "            else:",
-      "                result['passed'].append('Part 3: the music starts with play(%s).' % _short_repr(loops))",
+      "                result['passed'].append('Part 8: the music starts with play(%s).' % _short_repr(loops))",
       "            if plays[0][2]:",
-      "                result['passed'].append('Part 3: extra playback options used: %s.' % ', '.join(k for k, v in plays[0][2]))",
+      "                result['passed'].append('Part 8: extra playback options used: %s.' % ', '.join(k for k, v in plays[0][2]))",
       "        else:",
       "            result['warnings'].append('Heads up: your code ran fine, but it never called pygame.mixer.music.play(...), so no music will be heard. That is a valid choice if you meant it.')",
       "        if not [e for e in log if e[0] == 'music_volume']:",
       "            result['warnings'].append('Heads up: BACKGROUND_MUSIC_VOLUME is never applied (no set_volume call), so the music will play at full volume.')",
       // no music file at all
       "    log2 = []",
-      "    ok2, msg2 = _call_body(fn3, (_StubGame(), _FakePygame(log2), None, volume), 'Part 3 (with BACKGROUND_MUSIC_PATH = None)')",
+      "    ok2, msg2 = _call_body(fn3, (_StubGame(), _FakePygame(log2), None, volume), 'Part 8 (with BACKGROUND_MUSIC_PATH = None)')",
       "    if not ok2:",
       "        result['failed'].append(msg2 + ' — with no music file chosen, this code still has to finish quietly instead of erroring.')",
       "    else:",
-      "        result['passed'].append('Part 3: with no music file chosen, your code finishes quietly.')",
+      "        result['passed'].append('Part 8: with no music file chosen, your code finishes quietly.')",
       // a broken/missing file: warning only, per the open-ended grading policy
       "    log3 = []",
-      "    ok3, msg3 = _call_body(fn3, (_StubGame(), _FakePygame(log3, fail_on_load=True), music_path, volume), 'Part 3 (music file missing)')",
+      "    ok3, msg3 = _call_body(fn3, (_StubGame(), _FakePygame(log3, fail_on_load=True), music_path, volume), 'Part 8 (music file missing)')",
       "    if not ok3:",
       "        result['warnings'].append('Heads up: if the music file is missing or broken, your code raises instead of handling it (%s). This still counts as complete, but keeping the try / except (pygame.error, FileNotFoundError, TypeError) lines means a classmate can open your project without your sound files and still play it.' % msg3)",
       "    else:",
-      "        result['passed'].append('Part 3: a missing or broken music file is handled without crashing the game.')",
+      "        result['passed'].append('Part 8: a missing or broken music file is handled without crashing the game.')",
       "    return _finish(result)",
       "def _run():",
       "    return _finish_or_report(_run_inner)",
@@ -2465,7 +2511,7 @@
     ].join("\n");
   }
 
-  // TODO 8 now spans two files (Part 1/3 in settings.py: the CUSTOM_ITEMS
+  // TODO 8 now spans two files (Part 1/6 in settings.py: the CUSTOM_ITEMS
   // data; Parts 2/3 and 3/3 in game.py: apply_custom_item_effect's
   // branching and the pickup itself, both real behaviour-graded TODOs
   // instead of given code) - graded together as
@@ -2477,7 +2523,7 @@
   // (effect, amount) pairs - including an unrecognized effect, which must
   // be a safe no-op (never a crash), preserving the exact flexibility
   // promise TODO 8 Part 1 makes about inventing new effect names.
-  function harness_customItems_8(code1, code2, code3) {
+  function harness_customItems_8(code1, code2, code3, code4, code5, code6) {
     // "image"/"sound"/"size" are intentionally NOT in ITEM_KEYS: they are
     // optional-with-a-default, exactly like every other asset path in this
     // project (TODO 7) - an item simply omitting them is equivalent to
@@ -2485,8 +2531,13 @@
     // block just for being absent. Only checked (as a lenient warning)
     // when present.
     var itemKeys = ["name", "color", "effect", "amount"];
-    var fn2Src = buildFnSource("self, effect, amount", code2, "    ");
-    var fn3Src = buildFnSource("self, player_position", code3, "    ");
+    // Since the Bonus split: Parts 2 and 3 are the two effect branches
+    // (one per effect name) and Parts 4-6 are the three statement groups of
+    // the pickup. Each group is joined back into the single method body the
+    // real game runs, but the per-case labels below still point at whichever
+    // individual part a failure actually belongs to.
+    var fn2Src = buildFnSourceParts("self, effect, amount", [code2, code3], "    ");
+    var fn3Src = buildFnSourceParts("self, player_position", [code4, code5, code6], "    ");
     return [
       PY_PRELUDE,
       PY_BONUS_HELPERS,
@@ -2499,7 +2550,7 @@
       "KNOWN_SOUNDS = " + JSON.stringify(KNOWN_ASSETS.sounds).replace(/"/g, "'"),
       "IMAGE_EXT = ('.png', '.jpg', '.jpeg', '.gif', '.bmp')",
       "SOUND_EXT = ('.wav', '.mp3', '.ogg')",
-      // Stand-ins for Part 3/3: one spawned item, and just enough of Game
+      // Stand-ins for Parts 4-6: one spawned item, and just enough of Game
       // for the pickup body to run. apply_custom_item_effect and
       // get_custom_item_sound record what the student's code asked for,
       // rather than re-running Part 2 or touching real audio.
@@ -2607,42 +2658,44 @@
       "        exec(compile(FN2_SRC, '<student-part2>', 'exec'), {}, {})",
       "    except SyntaxError as e:",
       "        line = max(1, (e.lineno or 1) - 1)",
-      "        result['error'] = 'Part 2: Python syntax error on line %s: %s.' % (line, e.msg)",
+      "        result['error'] = 'Parts 2-3: Python syntax error on line %s: %s.' % (line, e.msg)",
       "        return json.dumps(result)",
       "    try:",
       "        class SelfObj:",
       "            def __init__(self, bonus_time_seconds, hints_remaining):",
       "                self.bonus_time_seconds = bonus_time_seconds",
       "                self.hints_remaining = hints_remaining",
+      // The first element is which PART each case really belongs to, so a
+      // student who has done Part 2 but not Part 3 is told exactly that.
       "        cases = [",
-      "            ('add_time adds seconds', 'add_time', 15, (0, 2), (15, 2)),",
-      "            ('add_time stacks on existing bonus time', 'add_time', 10, (30, 1), (40, 1)),",
-      "            ('add_hint adds a hint use', 'add_hint', 1, (0, 2), (0, 3)),",
-      "            ('add_hint with a larger amount', 'add_hint', 2, (5, 0), (5, 2)),",
-      "            ('an unrecognized effect is a safe no-op', 'shrink_maze', 999, (3, 1), (3, 1)),",
+      "            ('Part 2', 'add_time adds seconds', 'add_time', 15, (0, 2), (15, 2)),",
+      "            ('Part 2', 'add_time stacks on existing bonus time', 'add_time', 10, (30, 1), (40, 1)),",
+      "            ('Part 3', 'add_hint adds a hint use', 'add_hint', 1, (0, 2), (0, 3)),",
+      "            ('Part 3', 'add_hint with a larger amount', 'add_hint', 2, (5, 0), (5, 2)),",
+      "            ('Parts 2-3', 'an unrecognized effect is a safe no-op', 'shrink_maze', 999, (3, 1), (3, 1)),",
       "        ]",
-      "        for label, effect, amount, start, expect in cases:",
+      "        for part, label, effect, amount, start, expect in cases:",
       "            ns2 = {}",
       "            exec(compile(FN2_SRC, '<student-part2>', 'exec'), {}, ns2)",
       "            self_ = SelfObj(start[0], start[1])",
       "            try:",
       "                _run_guarded(ns2['_fn'], (self_, effect, amount))",
       "            except _StepBudget as e:",
-      "                result['failed'].append('Part 2 (%s): %s' % (label, e))",
+      "                result['failed'].append('%s (%s): %s' % (part, label, e))",
       "                continue",
       "            except BaseException as e:",
-      "                result['failed'].append('Part 2 (%s): raised %s: %s - an unrecognized effect must be a safe no-op, never an error.' % (label, type(e).__name__, e))",
+      "                result['failed'].append('%s (%s): raised %s: %s - an unrecognized effect must be a safe no-op, never an error.' % (part, label, type(e).__name__, e))",
       "                continue",
       "            if self_.bonus_time_seconds == expect[0] and self_.hints_remaining == expect[1]:",
-      "                result['passed'].append('Part 2 (%s): OK' % label)",
+      "                result['passed'].append('%s (%s): OK' % (part, label))",
       "            else:",
-      "                result['failed'].append('Part 2 (%s): expected (bonus_time_seconds, hints_remaining) == %r, got %r.' % (label, expect, (self_.bonus_time_seconds, self_.hints_remaining)))",
+      "                result['failed'].append('%s (%s): expected (bonus_time_seconds, hints_remaining) == %r, got %r.' % (part, label, expect, (self_.bonus_time_seconds, self_.hints_remaining)))",
       "    except BaseException as e:",
-      "        result['error'] = 'Part 2: %s: %s' % (type(e).__name__, e)",
+      "        result['error'] = 'Parts 2-3: %s: %s' % (type(e).__name__, e)",
       "        result['traceback'] = traceback.format_exc()",
       "        return json.dumps(result)",
-      // ---------------- Part 3/3: the pickup itself
-      "    fn3 = _compile_body(result, FN3_SRC, 'Part 3')",
+      // ---------------- Parts 4-6: the pickup itself
+      "    fn3 = _compile_body(result, FN3_SRC, 'Parts 4-6')",
       "    if fn3 is None:",
       "        return _finish(result)",
       "    def _mk_items(specs):",
@@ -2658,42 +2711,42 @@
       "        ('there are no items at all this round', (0, 0), [], None),",
       "        ('the item under the player was already collected', (5, 5), [((5, 5), DEF_A, False)], None),",
       "    ]",
-      "    part3_clean = True",
+      "    pickup_clean = True",
       "    for label, ppos, specs, expect_idx in scenarios:",
       "        game = _PickGame(_mk_items(specs), ppos)",
-      "        ok3, msg3 = _call_body(fn3, (game, ppos), 'Part 3 (%s)' % label)",
+      "        ok3, msg3 = _call_body(fn3, (game, ppos), 'Parts 4-6 (%s)' % label)",
       "        if not ok3:",
       "            result['failed'].append(msg3)",
-      "            part3_clean = False",
+      "            pickup_clean = False",
       "            continue",
       "        if expect_idx is None:",
       "            wrongly = [i for i, it in enumerate(game.items) if specs[i][2] and not it.active]",
       "            if wrongly:",
-      "                result['warnings'].append('Heads up: Part 3 (%s) still collected an item. Check the position comparison in your if statement.' % label)",
+      "                result['warnings'].append('Heads up: Parts 4-6 (%s) still collected an item. Check the position comparison in your if statement.' % label)",
       "            elif game.applied and not specs:",
       "                pass",
       "            if game.applied and label.startswith('the item under the player was already'):",
-      "                result['warnings'].append('Heads up: Part 3 (%s) applied the effect again for an item that was already collected. Checking item.active first prevents that.' % label)",
-      "            result['passed'].append('Part 3 (%s): nothing was collected, as expected.' % label)",
+      "                result['warnings'].append('Heads up: Parts 4-6 (%s) applied the effect again for an item that was already collected. Checking item.active first prevents that.' % label)",
+      "            result['passed'].append('Parts 4-6 (%s): nothing was collected, as expected.' % label)",
       "            continue",
       "        target = game.items[expect_idx]",
       "        if target.active:",
-      "            result['failed'].append('Part 3 (%s): the item the player is standing on is still active. Set item.active = False when you collect it, or it gets collected again on every single frame.' % label)",
-      "            part3_clean = False",
+      "            result['failed'].append('Parts 4-6 (%s): the item the player is standing on is still active. Set item.active = False when you collect it, or it gets collected again on every single frame.' % label)",
+      "            pickup_clean = False",
       "            continue",
       "        if target.item_def not in game.applied:",
-      "            result['failed'].append('Part 3 (%s): the item was marked collected, but self.apply_custom_item_effect(item.item_def) was never called - so your Part 2/3 effect never runs.' % label)",
-      "            part3_clean = False",
+      "            result['failed'].append('Parts 4-6 (%s): the item was marked collected, but self.apply_custom_item_effect(item.item_def) was never called - so your Parts 2/6 and 3/6 effect never runs.' % label)",
+      "            pickup_clean = False",
       "            continue",
       "        others = [i for i, it in enumerate(game.items) if i != expect_idx and specs[i][2] and not it.active]",
       "        if others:",
-      "            result['warnings'].append('Heads up: Part 3 (%s) also collected %d item(s) the player is not standing on.' % (label, len(others)))",
-      "        result['passed'].append('Part 3 (%s): collected correctly, and your effect was applied.' % label)",
-      "    if part3_clean:",
+      "            result['warnings'].append('Heads up: Parts 4-6 (%s) also collected %d item(s) the player is not standing on.' % (label, len(others)))",
+      "        result['passed'].append('Parts 4-6 (%s): collected correctly, and your effect was applied.' % label)",
+      "    if pickup_clean:",
       "        sound_game = _PickGame(_mk_items([((1, 1), DEF_A, True)]), (1, 1))",
-      "        _call_body(fn3, (sound_game, (1, 1)), 'Part 3 (sound check)')",
+      "        _call_body(fn3, (sound_game, (1, 1)), 'Parts 4-6 (sound check)')",
       "        if sound_game.played:",
-      "            result['passed'].append(\"Part 3: the collected item's own sound is played (%s).\" % sound_game.played[0])",
+      "            result['passed'].append(\"Parts 4-6: the collected item's own sound is played (%s).\" % sound_game.played[0])",
       "        else:",
       "            result['warnings'].append('Heads up: your pickup works, but it never plays the item sound. Look up the sound with self.get_custom_item_sound(...) and call .play() on the result when it is not None.')",
       "    return _finish(result)",
@@ -2705,21 +2758,29 @@
 
   // ---- TODO 9: the rules, written twice -------------------------------
   //
-  // Part 1/2 is the rules as English (settings.py), Part 2/2 is the same
+  // Parts 1/4 and 2/4 are the rules as English (settings.py), Parts 3/4 and 4/4 are the same
   // rules as the win condition (game.py). The grading policy here is
   // deliberately permissive: a student is allowed to invent a harder win
   // condition, so "standing on the goal did not clear the round" is only
   // ever a note. The two things that ARE failures are the ones that make a
   // game unplayable: raising, and clearing the round while the player is
   // nowhere near the goal.
-  function harness_gameRules_9(code1, code2) {
-    var fn2 = buildFnSource("self, pygame, ROUND_CONFIGS", code2, "    ");
+  function harness_gameRules_9(code1, code2, code3, code4) {
+    // Parts 3 and 4 are two consecutive statement groups of check_goal, so
+    // they are compiled separately (attribution) and then joined and run as
+    // the one body the real game executes.
+    var fn3 = buildFnSource("self, pygame, ROUND_CONFIGS", code3, "    ");
+    var fn4 = buildFnSource("self, pygame, ROUND_CONFIGS", code4, "    ");
+    var fnBoth = buildFnSourceParts("self, pygame, ROUND_CONFIGS", [code3, code4], "    ");
     return [
       PY_PRELUDE,
       PY_BONUS_HELPERS,
       PY_FAKE_PYGAME,
       b64Line("CODE1", code1),
-      b64Line("FN2_SRC", fn2),
+      b64Line("CODE2", code2),
+      b64Line("FN3_SRC", fn3),
+      b64Line("FN4_SRC", fn4),
+      b64Line("FN2_SRC", fnBoth),
       "class _GoalActor(object):",
       "    def __init__(self, pos):",
       "        self._pos = pos",
@@ -2752,32 +2813,37 @@
       "    ns1 = _exec_settings(result, CODE1, 'Part 1')",
       "    if ns1 is None:",
       "        return _finish(result)",
-      "    names = ['MISSION_RULES', 'HOW_TO_PLAY_RULES']",
-      "    missing = [n for n in names if n not in ns1]",
-      "    if missing:",
-      "        result['failed'].append('Part 1: Missing definition(s): %s. Keep the variable names exactly as given.' % ', '.join(missing))",
-      "    else:",
-      "        result['passed'].append('Part 1: MISSION_RULES (%s line(s)), HOW_TO_PLAY_RULES (%s line(s)).' % (",
-      "            len(ns1['MISSION_RULES']) if isinstance(ns1['MISSION_RULES'], (list, tuple)) else '?',",
-      "            len(ns1['HOW_TO_PLAY_RULES']) if isinstance(ns1['HOW_TO_PLAY_RULES'], (list, tuple)) else '?'))",
-      "        for rn in names:",
-      "            val = ns1[rn]",
-      "            if not isinstance(val, list) or len(val) == 0:",
-      "                result['warnings'].append('Heads up: %s is usually a non-empty list of strings — this still counts as complete, but the screen that shows it will be blank.' % rn)",
-      "            elif not all(isinstance(x, str) for x in val):",
-      "                result['warnings'].append('Heads up: every entry in %s is usually a quoted string.' % rn)",
-      // ---------------- Part 2: the rules as code
-      "    fn2 = _compile_body(result, FN2_SRC, 'Part 2')",
+      // One rule list per part since the Bonus split, so a missing name is
+      // blamed on the exact part that owns it.
+      "    ns2 = _exec_settings(result, CODE2, 'Part 2')",
+      "    if ns2 is None:",
+      "        return _finish(result)",
+      "    for label, rn, ns in (('Part 1', 'MISSION_RULES', ns1), ('Part 2', 'HOW_TO_PLAY_RULES', ns2)):",
+      "        if rn not in ns:",
+      "            result['failed'].append('%s: Missing definition: %s. Keep the variable name exactly as given.' % (label, rn))",
+      "            continue",
+      "        val = ns[rn]",
+      "        result['passed'].append('%s: %s (%s line(s)).' % (label, rn, len(val) if isinstance(val, (list, tuple)) else '?'))",
+      "        if not isinstance(val, list) or len(val) == 0:",
+      "            result['warnings'].append('Heads up: %s is usually a non-empty list of strings — this still counts as complete, but the screen that shows it will be blank.' % rn)",
+      "        elif not all(isinstance(x, str) for x in val):",
+      "            result['warnings'].append('Heads up: every entry in %s is usually a quoted string.' % rn)",
+      // ---------------- Parts 3-4: the rules as code
+      "    for _lbl, _src in (('Part 3', FN3_SRC), ('Part 4', FN4_SRC)):",
+      "        if _compile_body(result, _src, _lbl) is None:",
+      "            return _finish(result)",
+      "        result['passed'].append('%s: compiles.' % _lbl)",
+      "    fn2 = _compile_body(result, FN2_SRC, 'Parts 3-4')",
       "    if fn2 is None:",
       "        return _finish(result)",
       "    GOAL = (8, 8)",
       "    def _try(label, player_pos, items, round_index):",
       "        game = _GoalGame(player_pos, GOAL, items, round_index, 3)",
-      "        ok, msg = _call_body(fn2, (game, _FakePygame([]), ROUNDS_STUB), 'Part 2 (%s)' % label)",
+      "        ok, msg = _call_body(fn2, (game, _FakePygame([]), ROUNDS_STUB), 'Parts 3-4 (%s)' % label)",
       "        return game, ok, msg",
       "    all_collected = [_GoalItem(False), _GoalItem(False)]",
       "    some_left = [_GoalItem(False), _GoalItem(True)]",
-      "    part2_ok = True",
+      "    goal_ok = True",
       // Away from the goal: clearing here would make the game win itself.
       "    for label, items, rindex in [('away from the goal, items left', some_left, 0),",
       "                                 ('away from the goal, everything collected', all_collected, 0),",
@@ -2785,41 +2851,41 @@
       "        game, ok, msg = _try(label, (0, 0), items, rindex)",
       "        if not ok:",
       "            result['failed'].append(msg)",
-      "            part2_ok = False",
+      "            goal_ok = False",
       "            continue",
       "        if game.cleared():",
-      "            result['failed'].append('Part 2 (%s): the round was cleared even though the player is nowhere near the goal. Keep the first check - if the player is not on the goal, return early.' % label)",
-      "            part2_ok = False",
+      "            result['failed'].append('Parts 3-4 (%s): the round was cleared even though the player is nowhere near the goal. Keep the first check - if the player is not on the goal, return early.' % label)",
+      "            goal_ok = False",
       "        else:",
-      "            result['passed'].append('Part 2 (%s): correctly does nothing.' % label)",
+      "            result['passed'].append('Parts 3-4 (%s): correctly does nothing.' % label)",
       // On the goal: any outcome is legal, but describe what happened.
       "    on_goal_mid, ok_a, msg_a = _try('on the goal, mid-game, everything collected', GOAL, all_collected, 0)",
       "    if not ok_a:",
       "        result['failed'].append(msg_a)",
-      "        part2_ok = False",
+      "        goal_ok = False",
       "    on_goal_last, ok_b, msg_b = _try('on the goal, last round, everything collected', GOAL, all_collected, 2)",
       "    if not ok_b:",
       "        result['failed'].append(msg_b)",
-      "        part2_ok = False",
+      "        goal_ok = False",
       "    on_goal_left, ok_c, msg_c = _try('on the goal with items still uncollected', GOAL, some_left, 0)",
       "    if not ok_c:",
       "        result['failed'].append(msg_c)",
-      "        part2_ok = False",
+      "        goal_ok = False",
       "    no_items, ok_d, msg_d = _try('on the goal in a round with no items at all', GOAL, [], 2)",
       "    if not ok_d:",
       "        result['failed'].append(msg_d)",
-      "        part2_ok = False",
-      "    if part2_ok:",
+      "        goal_ok = False",
+      "    if goal_ok:",
       "        if on_goal_last.game_clear:",
-      "            result['passed'].append('Part 2: reaching the goal on the final round finishes the game.')",
+      "            result['passed'].append('Parts 3-4: reaching the goal on the final round finishes the game.')",
       "        if on_goal_mid.round_transition_time is not None:",
-      "            result['passed'].append('Part 2: reaching the goal mid-game moves on to the next round.')",
+      "            result['passed'].append('Parts 3-4: reaching the goal mid-game moves on to the next round.')",
       "        if not on_goal_mid.cleared() and not on_goal_last.cleared():",
       "            result['warnings'].append('Heads up: even with every item collected and the player standing on the goal, nothing clears the round — as written, this game cannot be won. Check that you still set self.game_clear or self.round_transition_time somewhere.')",
       "        elif on_goal_left.cleared():",
-      "            result['passed'].append('Part 2: reaching the goal is enough to clear the round (no extra condition).')",
+      "            result['passed'].append('Parts 3-4: reaching the goal is enough to clear the round (no extra condition).')",
       "        else:",
-      "            result['passed'].append('Part 2: you added an extra win condition — reaching the goal is not enough on its own until the rest is done. Make sure MISSION_RULES says so too!')",
+      "            result['passed'].append('Parts 3-4: you added an extra win condition — reaching the goal is not enough on its own until the rest is done. Make sure MISSION_RULES says so too!')",
       "        if not no_items.cleared() and not on_goal_left.cleared():",
       "            result['warnings'].append('Heads up: your extra win condition also blocks a round that has no items at all. If any round sets custom_item_count to 0, that round could never be finished.')",
       "    return _finish(result)",
@@ -3237,7 +3303,27 @@
     var fn3 = buildFnSource("current, direction", code3, "    ");
     var fn4 = buildFnSource("self, dr, dc", code4, "    ");
     return [
-      "import json, base64, traceback",
+      "import json, base64, traceback, sys",
+      // Same line-budget guard the GRADING harnesses use (see _run_guarded in
+      // PY_BONUS_HELPERS). It was missing here, which meant a `while True:`
+      // left in a student's TODO 2 draft froze the Play tab / kiosk window
+      // outright - Pyodide runs on the UI thread, so there was no way back
+      // except closing the tab. This is the preview path, so it is reached
+      // on every single key press, graded or not.
+      "class _PreviewBudget(Exception):",
+      "    pass",
+      "def _preview_guarded(fn, args, budget=200000):",
+      "    counter = [0]",
+      "    def _tracer(frame, event, arg):",
+      "        counter[0] += 1",
+      "        if counter[0] > budget:",
+      "            raise _PreviewBudget()",
+      "        return _tracer",
+      "    sys.settrace(_tracer)",
+      "    try:",
+      "        return fn(*args)",
+      "    finally:",
+      "        sys.settrace(None)",
       b64Line("FN2_SRC", fn2),
       b64Line("FN3_SRC", fn3),
       b64Line("FN4_SRC", fn4),
@@ -3256,7 +3342,11 @@
       "        exec(compile(FN4_SRC, '<t4>', 'exec'), {}, {})",
       "    except SyntaxError as e:",
       "        result['ok'] = False",
-      "        result['error'] = 'Python syntax error on line %s: %s.' % (e.lineno, e.msg)",
+      // buildFnSource() prepends exactly one `def _fn(...)` line to each of
+      // the three snippets, so Python's line number is one ahead of what the
+      // student sees in the editor. The grading path already corrected for
+      // this (see _compile_body); this preview path did not.
+      "        result['error'] = 'Python syntax error on line %s: %s.' % (max(1, (e.lineno or 1) - 1), e.msg)",
       "        return json.dumps(result)",
       "    fn2 = ns2['_fn']",
       "    class Cell:",
@@ -3308,7 +3398,7 @@
       "    self_.player = player",
       "    self_.maze = maze",
       "    try:",
-      "        out2 = fn2(self_, pygame, keys, False)",
+      "        out2 = _preview_guarded(fn2, (self_, pygame, keys, False))",
       "        moved = out2.get('moved', False) if isinstance(out2, dict) else out2",
       "        result['moved'] = moved if isinstance(moved, bool) else bool(moved)",
       "        old_row, old_col = START_ROW, START_COL",
@@ -3325,6 +3415,12 @@
       "                exp_row, exp_col = old_row + dr, old_col + dc",
       "                if player.row != exp_row or player.col != exp_col:",
       "                    result['unexpected_delta'] = True",
+      // Must come BEFORE `except Exception` - _PreviewBudget is one.
+      "    except _PreviewBudget:",
+      "        result['ok'] = False",
+      "        result['error'] = ('your code never finished - it was still running after a very long '",
+      "                           'time, so it was stopped. This almost always means a loop that never '",
+      "                           'ends; check that every while loop can actually reach its stopping condition.')",
       "    except Exception as e:",
       "        result['ok'] = False",
       "        result['error'] = '%s: %s' % (type(e).__name__, e)",
@@ -3941,7 +4037,7 @@
     }
 
     function runFresh() {
-      // TODO 8 is two parts now (Part 1/2 settings.py data, Part 2/2
+      // TODO 8 is six parts now (Part 1/6 settings.py data, Parts 2/6-6/6
       // game.py effect code) - this preview only needs Part 1's data.
       var code = state.steps["8"].code[0];
       if (refs) refs.verdict.info("Running your code…");
@@ -4216,7 +4312,7 @@
   var MAP_WINDOW_PIXEL_W = 976, MAP_WINDOW_PIXEL_H = 542;
   var MAP_MIN_COMFY_CELL = 16;
   var ROUND_CONFIG_KEY_ORDER = ["rows", "cols", "cell_size", "extra_open_walls", "bomb_count", "custom_item_count", "time_limit_seconds"];
-  // Students may add or remove rounds freely (TODO 6 Part 1/3). These caps
+  // Students may add or remove rounds freely (TODO 6 Part 1/6). These caps
   // exist only so the map editor stays usable and one stray paste can't
   // make the browser draw a 500x500 board or 300 round tabs - the real
   // pygame game has no such limit, and the grader only ever warns.
@@ -4524,10 +4620,11 @@
     };
   }
 
-  // TODO 6 is a multi-part step: part 0 is the ROUND_CONFIGS block, part 1
-  // the pacing settings, part 2 the placement code in game.py. Anything
-  // reading "the student's rounds" goes through here so an older save (or
-  // a future re-split) can never index a string by mistake.
+  // TODO 6 is a multi-part step. Since the Bonus split it has SIX parts:
+  // 0 = ROUND_CONFIGS, 1 = PLAYER_MOVE_DELAY_MS, 2 = ALLOW_PATH_HINT +
+  // MAX_HINT_COUNT, 3/4/5 = the placement code in game.py. Anything reading
+  // "the student's rounds" goes through here so an older save (from back
+  // when parts 1 and 2 were one block) can never index a string by mistake.
   function step6PartCode(index) {
     try {
       var sd = state && state.steps && state.steps["6"];
@@ -4557,8 +4654,8 @@
     return list[i] || list[list.length - 1] || PLAY_ROUND_DEFAULTS[0];
   }
 
-  // TODO 6 Part 2/3's pacing numbers, read live the same way, so the Play
-  // tab actually feels like the game the student is designing.
+  // TODO 6 Parts 2/6 and 3/6's pacing numbers, read live the same way, so
+  // the Play tab actually feels like the game the student is designing.
   function parseNumberSetting(code, name, lo, hi, fallback) {
     try {
       var m = String(code || "").match(new RegExp("^\\s*" + name + "\\s*=\\s*(-?\\d+(?:\\.\\d+)?)", "m"));
@@ -4575,7 +4672,10 @@
     } catch (e) { return fallback; }
   }
   function playPacing() {
-    var raw = step6PartCode(1);
+    // Part 1 is the walking speed on its own; part 2 is the two hint
+    // settings. Both are read together (and joined) so a save made before
+    // the split - where all three lived in part 1 - still works.
+    var raw = step6PartCode(1) + "\n" + step6PartCode(2);
     return {
       moveDelayMs: parseNumberSetting(raw, "PLAYER_MOVE_DELAY_MS", 0, 2000, 100),
       allowHint: parseBoolSetting(raw, "ALLOW_PATH_HINT", true),
@@ -4627,7 +4727,7 @@
     var windowMouseupAttached = false;
     // Cross-file dependency (Task 3's "harder, multi-file" philosophy
     // applied to TODO 6): the map editor reads the student's OWN CUSTOM_ITEMS
-    // (TODO 8 Part 1/2, settings.py) so a specific item from their own list
+    // (TODO 8 Part 1/6, settings.py) so a specific item from their own list
     // can be placed on the map, not just a generic "an item goes here"
     // marker. itemDefsCache is a plain preview cache (never authoritative -
     // PlayEngine re-derives the real thing the same way at Play-tab time),
@@ -4772,7 +4872,7 @@
             ? "Paints \"" + def.name + "\" — click again while selected to cycle to your next item (" + itemDefsCache.length + " defined in TODO 8)"
             : "Paints \"" + def.name + "\" here.";
         } else if (t === "CUSTOM_ITEM") {
-          title = "Finish TODO 8 (Part 1/2) to define your own item(s) here — using a generic placeholder for now.";
+          title = "Finish TODO 8 (Part 1/6) to define your own item(s) here — using a generic placeholder for now.";
         }
         var swatch = el("button", {
           class: "map-palette-item" + (tool === t && !eraseMode ? " is-active" : ""),
@@ -4841,7 +4941,7 @@
       } else {
         // Multi-part step: only part 0 (ROUND_CONFIGS) belongs to the map
         // editor. Assigning the whole `code` here would replace the parts
-        // array with a bare string and wipe Part 2/3 and Part 3/3.
+        // array with a bare string and wipe every later part.
         var sd = state.steps["6"];
         if (Array.isArray(sd.code)) sd.code[0] = newCode; else sd.code = newCode;
         persist();
@@ -5000,7 +5100,7 @@
       mount: function (container) {
         container.innerHTML = "";
         // One tab per round the student's OWN ROUND_CONFIGS declares, not a
-        // fixed three - adding a 4th dictionary in TODO 6 Part 1/3 makes a
+        // fixed three - adding a 4th dictionary in TODO 6 Part 1/6 makes a
         // "Round 4" tab appear here as soon as it parses, so the map editor
         // never silently ignores rounds they invented.
         var tabs = el("div", { class: "viz-controlbar" });
@@ -5101,26 +5201,36 @@
   //     precise copy instructions when the API is unavailable, permission
   //     is denied, or the page is opened via file://.
 
+  // partIndex tracks TODO 7's part split (8 parts since the Bonus split):
+  // 0 = player+goal images, 1 = bomb+floor images, 5 = the two sound paths.
+  // ASSET_PATH_PARTS is the same list, deduplicated - every part that can
+  // legally contain one of these names.
   var ASSET_SLOTS = [
     { key: "PLAYER_IMAGE_PATH", kind: "image", partIndex: 0, label: "Player sprite" },
     { key: "GOAL_IMAGE_PATH", kind: "image", partIndex: 0, label: "Goal sprite" },
-    { key: "BOMB_IMAGE_PATH", kind: "image", partIndex: 0, label: "Bomb" },
-    { key: "FLOOR_TILE_IMAGE_PATH", kind: "image", partIndex: 0, label: "Floor tile" },
-    { key: "BOMB_SOUND_PATH", kind: "sound", partIndex: 1, label: "Bomb explosion sound" },
-    { key: "BACKGROUND_MUSIC_PATH", kind: "sound", partIndex: 1, label: "Background music" },
+    { key: "BOMB_IMAGE_PATH", kind: "image", partIndex: 1, label: "Bomb" },
+    { key: "FLOOR_TILE_IMAGE_PATH", kind: "image", partIndex: 1, label: "Floor tile" },
+    { key: "BOMB_SOUND_PATH", kind: "sound", partIndex: 5, label: "Bomb explosion sound" },
+    { key: "BACKGROUND_MUSIC_PATH", kind: "sound", partIndex: 5, label: "Background music" },
   ];
+  var ASSET_PATH_PARTS = [0, 1, 5];
   var IMAGE_EXT_OK = ["png", "jpg", "jpeg", "gif", "webp"];
   var SOUND_EXT_OK = ["wav", "mp3", "ogg"];
   var IDB_NAME = "dijkstraMazeAssets", IDB_STORE = "handles", IDB_DIR_KEY = "projectDir";
 
-  function parseAssetPaths(code0, code1) {
+  // Takes TODO 7's whole per-part code array (or any subset of it) and
+  // reads every NAME = None | "path" it can find. Scanning the parts that
+  // actually hold paths (ASSET_PATH_PARTS) rather than a fixed code0/code1
+  // pair is what kept this working when TODO 7 was split into 8 parts.
+  function parseAssetPaths(codes) {
     var out = {};
     var re = /([A-Z_]+)\s*=\s*(None|"[^"]*"|'[^']*')/g;
-    [code0 || "", code1 || ""].forEach(function (text) {
+    (Array.isArray(codes) ? codes : [codes]).forEach(function (text) {
       var m;
-      while ((m = re.exec(text))) {
-        var raw = m[2];
-        out[m[1]] = raw === "None" ? null : raw.slice(1, -1);
+      re.lastIndex = 0;
+      while ((m = re.exec(text || ""))) {
+        var literal = m[2];
+        out[m[1]] = literal === "None" ? null : literal.slice(1, -1);
       }
     });
     return out;
@@ -5210,7 +5320,7 @@
 
     function currentPaths() {
       var code = state.steps["7"].code;
-      return parseAssetPaths(code[0], code[1]);
+      return parseAssetPaths(ASSET_PATH_PARTS.map(function (i) { return code[i]; }));
     }
 
     function writeAssetSlot(slot, valueLiteral) {
@@ -5664,23 +5774,148 @@
     }
     function allRequiredCompleteExact() { return REQUIRED_ORDER.every(isDoneExact); }
 
+    // ---------------------------------------------------------- board sizing
+    //
+    // Three sizing profiles, not two. The board used to be sized for width
+    // only, against a canvas that was created once at a hardcoded 360x260
+    // and never resized - so any board bigger than that was simply clipped.
+    // Everything below exists to make the canvas match the REAL board size
+    // (cellSize * cols by cellSize * rows) and to keep that true across
+    // round changes, window resizes, and entering/leaving fullscreen.
+    //
+    //   "roomy"  = the kiosk popout (?mode=play) OR the in-page Play tab
+    //              while #vizPanel is the fullscreen element. Both are
+    //              whole-screen views whose entire point is "the maze fills
+    //              the screen", so both get the same generous treatment.
+    //   normal   = the in-page Play tab inside the narrow sticky sidebar.
+    //              Unchanged from before: 380px wide, per-round cellSize.
+    //
+    // playBoardIsFullscreen(): true when the element currently in fullscreen
+    // is the one this board lives inside. #vizPanel is the root passed to
+    // initFullscreenToggle("#stepViewFullscreenBtn", "#vizPanel"); the
+    // contains() check also covers #kioskRoot's own fullscreen button and
+    // any future wrapper, so the board never has to know which one it is.
+    function playBoardIsFullscreen() {
+      var fsEl = document.fullscreenElement || document.webkitFullscreenElement || null;
+      if (!fsEl) return false;
+      if (refs && refs.canvas && fsEl.contains(refs.canvas)) return true;
+      var panel = document.getElementById("vizPanel");
+      return !!panel && fsEl === panel;
+    }
+    function playBoardRoomy() { return isKioskMode() || playBoardIsFullscreen(); }
+
     // The board's max CSS width. The normal in-page Play tab lives in a
-    // narrow sidebar panel (380px is already generous there); the kiosk
-    // popout is a whole separate window with real space to spare, and the
-    // whole point of that view is "the game board fills the window" - so
-    // it gets a much bigger cap. fitWidth() still clamps to the actual
-    // container width, so a smaller kiosk window just uses what it has.
+    // narrow sidebar panel (380px is already generous there); a roomy view
+    // is a whole screen, so the cap is only there to stop something absurd
+    // on an ultrawide monitor - fitWidth() still clamps to the actual
+    // container width, so a smaller window just uses what it has.
     function playBoardMaxWidth() {
-      return isKioskMode() ? 900 : 380;
+      return playBoardRoomy() ? 2400 : 380;
     }
     // Per-round cell size is normally capped at PLAY_ROUND_CONFIGS' own
-    // cellSize (tuned for the narrow sidebar) - in kiosk mode that cap is
-    // too small for a board meant to dominate the window, so it scales up
-    // to fill the available width instead (still capped at something
-    // sane so tiles never render absurdly large on a tiny painted map).
+    // cellSize (tuned for the narrow sidebar) - in a roomy view that cap is
+    // far too small for a board meant to dominate the screen, so it scales
+    // up to fill the available box instead (still capped at something sane
+    // so tiles never render absurdly large on a tiny painted map).
     function playBoardCellCap() {
-      return isKioskMode() ? 56 : 999;
+      return playBoardRoomy() ? 120 : 999;
     }
+
+    // Vertical room the board actually has. This is the half that was
+    // missing entirely: cellSize used to be Math.floor(width / cols) with
+    // no height term at all, so a tall/narrow maze overflowed downwards
+    // even once the canvas resized correctly.
+    //
+    // The play frame is a flex column (title card / toolbar / board / notice
+    // / HUD / checklist / banner), so the board's budget is "viewport below
+    // the frame's top, minus every sibling that is not the board". Measured
+    // live from the DOM rather than hardcoded, so it stays correct after
+    // entering fullscreen (where the title card and checklist are still
+    // shown) and in kiosk mode (where CSS display:none's them, and a
+    // display:none element measures 0 here automatically).
+    var PLAY_BOARD_V_SLACK = 24; // flex gaps + .viz-board-wrap margin + breathing room
+    function playBoardMaxHeight() {
+      var roomy = playBoardRoomy();
+      var viewportH = window.innerHeight || document.documentElement.clientHeight || 700;
+      // Never let a mis-measure collapse the board to nothing.
+      var floorPx = roomy ? 240 : 320;
+      if (!refs || !refs.frame || !refs.boardWrap || !refs.frame.parentNode) {
+        return roomy ? Math.max(floorPx, viewportH - 180) : 99999;
+      }
+      var top = refs.frame.getBoundingClientRect().top;
+      var used = 0;
+      var kids = refs.frame.children;
+      for (var i = 0; i < kids.length; i++) {
+        if (kids[i] === refs.boardWrap) continue;
+        used += kids[i].getBoundingClientRect().height;
+      }
+      var budget = viewportH - Math.max(0, top) - used - PLAY_BOARD_V_SLACK;
+      return Math.max(floorPx, budget);
+    }
+
+    // The one place cell size is decided. Constrained by BOTH axes.
+    // roundCellHint is the round's own cell_size (TODO 6 / PLAY_ROUND_CONFIGS)
+    // and only caps the normal sidebar view - a painted map passes null, and
+    // a roomy view ignores it entirely in favour of filling the screen.
+    function computeCellSize(r, c, roundCellHint) {
+      // Measure the play frame, not the container: the container is
+      // .viz-content / #kioskPlayView, whose clientWidth INCLUDES its 16px
+      // padding, and overshooting there makes .viz-canvas's `max-width:100%`
+      // squash the board horizontally while its style.height stays put.
+      // .play-frame is the padding-free box the canvas actually gets.
+      var host = (refs && refs.frame && refs.frame.clientWidth) ? refs.frame : (refs ? refs.container : document.body);
+      var width = fitWidth(host, playBoardMaxWidth()) - 2;
+      var height = playBoardMaxHeight();
+      var cap = playBoardCellCap();
+      if (!playBoardRoomy() && roundCellHint) cap = Math.min(cap, roundCellHint);
+      var byWidth = Math.floor(width / Math.max(1, c));
+      var byHeight = Math.floor(height / Math.max(1, r));
+      return Math.max(6, Math.min(cap, byWidth, byHeight));
+    }
+
+    // Resizes the canvas element itself - both the drawing buffer
+    // (width/height, in device pixels) and the CSS box (style.width/height),
+    // honouring devicePixelRatio exactly the way makeCanvas() does. Without
+    // this the canvas stayed at its mount-time 360x260 forever and anything
+    // larger was clipped.
+    function applyBoardSize() {
+      if (!refs || !refs.canvas || !cols || !rows) return;
+      var dpr = window.devicePixelRatio || 1;
+      var cssW = Math.max(1, cellSize * cols);
+      var cssH = Math.max(1, cellSize * rows);
+      var bufW = Math.max(1, Math.round(cssW * dpr));
+      var bufH = Math.max(1, Math.round(cssH * dpr));
+      // Assigning width/height clears the canvas, so only do it on a real
+      // change (also resets the transform, hence the setTransform below).
+      if (refs.canvas.width !== bufW || refs.canvas.height !== bufH) {
+        refs.canvas.width = bufW;
+        refs.canvas.height = bufH;
+      }
+      refs.canvas.style.width = cssW + "px";
+      refs.canvas.style.height = cssH + "px";
+      refs.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    // Recompute + reapply the board size for the CURRENT round, without
+    // regenerating it. Called on window resize, on fullscreenchange, and
+    // whenever the surrounding container could have changed size.
+    var roundCellHint = null;
+    function relayout() {
+      if (!refs || !maze || !rows || !cols) return;
+      var next = computeCellSize(rows, cols, roundCellHint);
+      if (next !== cellSize) cellSize = next;
+      applyBoardSize();
+      draw();
+    }
+    // Fullscreen/resize geometry isn't always final on the event itself
+    // (the UA may still be animating into fullscreen), so re-measure once
+    // more on the next frame and again shortly after.
+    function relayoutSoon() {
+      relayout();
+      if (typeof requestAnimationFrame === "function") requestAnimationFrame(relayout);
+      setTimeout(relayout, 180);
+    }
+    function onViewportChange() { relayoutSoon(); }
 
     function emptyWalledGrid(r, c) {
       var g = [];
@@ -5844,8 +6079,10 @@
       if (caps.mapEditor && state.mapEditorData.rounds[index]) {
         var painted = state.mapEditorData.rounds[index];
         rows = painted.rows; cols = painted.cols;
-        var pw = fitWidth(refs ? refs.container : document.body, playBoardMaxWidth());
-        cellSize = Math.max(6, Math.min(playBoardCellCap(), Math.floor(pw / cols)));
+        // A hand-painted map has no per-round cell_size of its own, so it
+        // sizes purely to the available box (both axes).
+        roundCellHint = null;
+        cellSize = computeCellSize(rows, cols, null);
         maze = paintedGridToWallGrid(painted.grid);
         var extracted = paintedItemsAndBombs(painted.grid, painted.itemAssignments);
         items = extracted.items.map(function (p) { return { row: p[0], col: p[1], active: true, itemDef: pickCustomItemDef(p[2]) }; });
@@ -5854,14 +6091,16 @@
         playerStart = { row: painted.start[0], col: painted.start[1] };
         goal = { row: painted.goal[0], col: painted.goal[1] };
         timeLeft = cfg.timeLimitSeconds;
+        applyBoardSize();
         statusLine(teachingNote("Using your hand-painted map for this round (TODO 6)."));
         renderAll();
         return;
       }
 
       rows = cfg.rows; cols = cfg.cols;
-      var width = fitWidth(refs ? refs.container : document.body, playBoardMaxWidth());
-      cellSize = Math.max(8, Math.min(isKioskMode() ? playBoardCellCap() : cfg.cellSize, Math.floor(width / cols)));
+      roundCellHint = cfg.cellSize;
+      cellSize = computeCellSize(rows, cols, roundCellHint);
+      applyBoardSize();
       player = { row: 0, col: 0 };
       playerStart = { row: 0, col: 0 };
       goal = { row: rows - 1, col: cols - 1 };
@@ -5900,13 +6139,17 @@
 
     function playVisuals() {
       var sd = state.steps["7"];
-      var code = Array.isArray(sd.code) ? sd.code : [sd.code || "", "", ""];
-      var paths = parseAssetPaths(code[0], code[1]);
+      var code = Array.isArray(sd.code) ? sd.code : [sd.code || ""];
+      // Since TODO 7's split: images live in parts 0/1, the sizes in part 2,
+      // the sound paths in part 5. Everything is joined for the scale reads
+      // so a save made before the split (all of it in part 0) still works.
+      var all = code.join("\n");
+      var paths = parseAssetPaths(code);
       return {
         paths: paths,
-        playerScale: parseNumberSetting(code[0], "PLAYER_IMAGE_SCALE", 0.1, 3, 1),
-        goalScale: parseNumberSetting(code[0], "GOAL_IMAGE_SCALE", 0.1, 3, 1),
-        bombScale: parseNumberSetting(code[0], "BOMB_IMAGE_SCALE", 0.1, 3, 1),
+        playerScale: parseNumberSetting(all, "PLAYER_IMAGE_SCALE", 0.1, 3, 1),
+        goalScale: parseNumberSetting(all, "GOAL_IMAGE_SCALE", 0.1, 3, 1),
+        bombScale: parseNumberSetting(all, "BOMB_IMAGE_SCALE", 0.1, 3, 1),
       };
     }
 
@@ -5954,9 +6197,13 @@
       if (!refs || !maze) return;
       var ctx = refs.ctx;
       var vis = playVisuals();
-      ctx.clearRect(0, 0, refs.canvas.width, refs.canvas.height);
+      // In CSS pixels, not device pixels: ctx is pre-scaled by devicePixelRatio
+      // (see applyBoardSize/makeCanvas), so canvas.width/height would over-draw
+      // by that factor on a HiDPI screen.
+      var cssW = cellSize * cols, cssH = cellSize * rows;
+      ctx.clearRect(0, 0, cssW, cssH);
       ctx.fillStyle = "#12100c";
-      ctx.fillRect(0, 0, refs.canvas.width, refs.canvas.height);
+      ctx.fillRect(0, 0, cssW, cssH);
       if (playImages.floor) {
         for (var fr = 0; fr < rows; fr++) {
           for (var fc = 0; fc < cols; fc++) {
@@ -6150,7 +6397,7 @@
     function onHint() {
       var caps = capabilities();
       if (!caps.hint) return;
-      // ALLOW_PATH_HINT (TODO 6 Part 2/3) can switch the Hint button off
+      // ALLOW_PATH_HINT (TODO 6 Part 3/6) can switch the Hint button off
       // entirely - the Play tab has to respect the student's own setting,
       // or the game they are designing isn't the game they are testing.
       if (!playPacing().allowHint) {
@@ -6215,6 +6462,10 @@
         topbar.appendChild(playBtn); topbar.appendChild(pauseBtn); topbar.appendChild(restartBtn); topbar.appendChild(hintBtn); topbar.appendChild(soundLabel);
         frame.appendChild(topbar);
         var boardWrap = el("div", { class: "viz-board-wrap" });
+        // Placeholder size only - startRound() -> applyBoardSize() resizes
+        // this to the real board immediately, and again on every round
+        // change / resize / fullscreen transition. (It used to stay at this
+        // fixed size forever, which is exactly why bigger mazes were clipped.)
         var made = makeCanvas(360, 260);
         made.canvas.tabIndex = 0;
         made.canvas.className = "viz-canvas viz-canvas-focusable";
@@ -6239,11 +6490,20 @@
 
         refs = {
           container: container, canvas: made.canvas, ctx: made.ctx,
+          // frame + boardWrap are what playBoardMaxHeight() measures against.
+          frame: frame, boardWrap: boardWrap,
           playBtn: playBtn, pauseBtn: pauseBtn, notice: notice,
           roundEl: roundItem.querySelector(".value"), timeEl: timeItem.querySelector(".value"),
           hintsEl: hintsItem.querySelector(".value"),
           checklist: checklist, liveBanner: liveBanner, titleBox: titleBox, hintBtn: hintBtn,
         };
+
+        // Keep the board sized to whatever room it currently has: window
+        // resizes, and entering/leaving fullscreen (both the Step View
+        // toggle on #vizPanel and the kiosk window's own button).
+        window.addEventListener("resize", onViewportChange);
+        document.addEventListener("fullscreenchange", onViewportChange);
+        document.addEventListener("webkitfullscreenchange", onViewportChange);
 
         made.canvas.addEventListener("keydown", onKeydown);
         playBtn.addEventListener("click", function () {
@@ -6264,6 +6524,10 @@
         refreshTitleCard();
         loadCustomItems();
         startRound(0);
+        // The title card only gets its real height once refreshTitleCard()
+        // has run, and the kiosk window may still be settling its layout -
+        // re-measure once the first frame is on screen.
+        relayoutSoon();
       },
       refresh: function () {
         if (!mounted) return;
@@ -6273,11 +6537,18 @@
         // game immediately, without waiting for the next round to start.
         refreshPlayImages();
         refreshChecklist();
+        // The title card / checklist above the board can change height here
+        // (a newly-completed TODO adds a line), which changes the board's
+        // vertical budget.
+        relayoutSoon();
       },
       unmount: function () {
         if (timerId) clearInterval(timerId);
         if (hintTimeout) clearTimeout(hintTimeout);
         if (refs && refs.canvas) refs.canvas.removeEventListener("keydown", onKeydown);
+        window.removeEventListener("resize", onViewportChange);
+        document.removeEventListener("fullscreenchange", onViewportChange);
+        document.removeEventListener("webkitfullscreenchange", onViewportChange);
         mounted = false; refs = null;
       },
     };
@@ -6913,31 +7184,38 @@
         '     "bomb_count": 6, "custom_item_count": 4, "time_limit_seconds": 60},',
         "]",
       ].join("\n"),
-      [
-        "PLAYER_MOVE_DELAY_MS = 90",
-        "ALLOW_PATH_HINT = True",
-        "MAX_HINT_COUNT = 2",
-      ].join("\n"),
-      "",
+      "PLAYER_MOVE_DELAY_MS = 90",
+      ["ALLOW_PATH_HINT = True", "MAX_HINT_COUNT = 2"].join("\n"),
+      "", "", "",
     ],
     "7": [
       [
         'PLAYER_IMAGE_PATH = "assets/images/player_ninja.png"',
         'GOAL_IMAGE_PATH = "assets/images/goal_chest.png"',
+      ].join("\n"),
+      [
         'BOMB_IMAGE_PATH = "assets/images/bomb_2.png"',
         'FLOOR_TILE_IMAGE_PATH = "assets/images/floor_tile_1.png"',
+      ].join("\n"),
+      [
         "PLAYER_IMAGE_SCALE = 1.1",
         "GOAL_IMAGE_SCALE = 1.0",
         "BOMB_IMAGE_SCALE = 0.9",
+      ].join("\n"),
+      [
         "WALL_COLOR = (30, 41, 59)",
         "PLAYER_COLOR = (37, 99, 235)",
         "GOAL_COLOR = (250, 204, 21)",
+      ].join("\n"),
+      [
         "BOMB_COLOR = (15, 23, 42)",
         "BOMB_EXPLOSION_COLOR = (239, 68, 68)",
       ].join("\n"),
       [
         'BOMB_SOUND_PATH = "assets/sounds/explosion_1.wav"',
         'BACKGROUND_MUSIC_PATH = "assets/sounds/bgm_1.wav"',
+      ].join("\n"),
+      [
         "BOMB_EXPLOSION_DURATION_MS = 500",
         "BACKGROUND_MUSIC_VOLUME = 0.25",
       ].join("\n"),
@@ -6984,14 +7262,16 @@
         '    "Reach the vault before time runs out.",',
         '    "Grab crystals along the way for extra seconds.",',
         "]",
+      ].join("\n"),
+      [
         "HOW_TO_PLAY_RULES = [",
         '    "Move with the Arrow Keys (or E/F/C/D on a controller).",',
-        '    "You build up speed, and slide a little when you let go.",',
+        '    "One key press moves you one cell.",',
         '    "Bombs send you back to the start - avoid them.",',
         '    "Time Crystals add time; Hint Scrolls add a hint use.",',
         "]",
       ].join("\n"),
-      "",
+      "", "",
     ],
   };
 

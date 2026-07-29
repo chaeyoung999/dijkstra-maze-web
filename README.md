@@ -1,8 +1,12 @@
 # Dijkstra Maze — TODO Quest (웹 버전) 안내
 
 학생이 `student/` 폴더를 직접 뒤져서 TODO를 찾는 대신, 한 페이지짜리 웹사이트에서
-**19개 코드 칸**(Required 8 + Bonus 11, TODO 번호로는 9개)을 한 단계씩 풀 수 있게 만든
+**30개 코드 칸**(Required 6 + Bonus 24, TODO 번호로는 9개)을 한 단계씩 풀 수 있게 만든
 결과물입니다.
+
+> Bonus 파트는 이번에 11개 → **24개**로 잘게 나뉘었습니다. 학생들이 Required 5개를
+> 30분 만에 끝내고 Bonus를 너무 어려워한다는 피드백에 따라, **새 기능을 추가한 게 아니라
+> 기존 내용을 더 작고 순서가 분명한 단계로 쪼갠 것**입니다. 한 파트당 보통 1~3줄입니다.
 
 학생이 "Run my code"를 누르면 **자기 코드를 Pyodide로 실제 실행한** 결과를
 애니메이션·미리보기로 보여줍니다. 미리 만들어둔 정답 애니메이션이 아닙니다.
@@ -71,26 +75,26 @@
 | TODO | 파일 | 파트 |
 |---|---|---|
 | 1 | `settings.py` | 게임 제목 |
-| **2** | `game.py` | **3파트** — 키→가속도 · 마찰 · 속도가 문턱을 넘으면 한 칸 이동 |
+| **2** | `game.py` | **1파트** — 방향키/컨트롤러 키를 눌러 **한 번에 한 칸** 이동 |
 | 3 | `player.py` | 가드 절 |
 | 4 | `player.py` | 행/열 갱신 |
 | **5** | `pathfinding.py` | **2파트** — 다익스트라 완화 (힌트 버튼의 유일한 동력원) |
 
-**TODO 2는 Reach the Star 예제와 같은 물리입니다.** `velocity += acceleration`,
-`velocity *= friction` 을 그대로 쓰고, 마지막 파트에서만 "격자 한 칸"으로 연결합니다.
-미로는 여전히 격자라서 벽·다익스트라·맵 에디터는 그대로 동작합니다.
-출발이 살짝 굼뜨고, 키를 놓아도 한 칸쯤 미끄러집니다.
+**TODO 2는 한 번 누르면 한 칸입니다.** 가속도·마찰은 쓰지 않습니다.
+키는 **방향키 + 교실 블루투스 컨트롤러의 E/F/C/D** 뿐이고, WASD는 쓰지 않습니다.
+(K=종료, M=리셋, H=힌트)
 
 ### Bonus (개방형, Required를 끝내면 4개가 한꺼번에 열림)
 
 모든 Bonus가 **두 파일에 걸쳐** 있습니다 — 설정으로 시작해서 마지막 파트는 진짜 게임 코드입니다.
+**순서대로 한 파트씩** 하면 되도록, 파트마다 할 일이 하나씩만 있습니다.
 
-| TODO | 파트 |
-|---|---|
-| **6** | 1/3 `ROUND_CONFIGS` (라운드 **개수 변경 가능**) · 2/3 이동 느낌·힌트 · 3/3 `create_game_objects` 배치 규칙 |
-| **7** | 1/3 이미지 + **크기 배율** + 색 · 2/3 소리·타이밍 · 3/3 `load_background_music` 재생 방식 |
-| **8** | 1/3 `CUSTOM_ITEMS` (개수 무제한, 각자 이미지·소리·크기) · 2/3 효과 적용 · 3/3 `check_items` 획득 처리 |
-| **9** | 1/2 규칙을 글로 · 2/2 `check_goal` 승리 조건을 코드로 |
+| TODO | 파트 수 | 파트 |
+|---|---|---|
+| **6** | 6 | 1 `ROUND_CONFIGS`(라운드 개수 변경 가능) · 2 걷는 속도 한 줄 · 3 힌트 버튼 · 4 아이템 위치 · 5 아이템 생성 · 6 폭탄 |
+| **7** | 8 | 1 플레이어·목표 이미지 · 2 폭탄·바닥 이미지 · 3 크기 배율 · 4 벽·플레이어·목표 색 · 5 폭탄·폭발 색 · 6 소리 파일 · 7 폭발 길이·음량 · 8 `load_background_music` 재생 방식 |
+| **8** | 6 | 1 `CUSTOM_ITEMS`(개수 무제한, 각자 이미지·소리·크기) · 2 `add_time` · 3 `add_hint` · 4 발밑 아이템 찾기 · 5 효과 실행 · 6 아이템별 소리 |
+| **9** | 4 | 1 `MISSION_RULES` · 2 `HOW_TO_PLAY_RULES` · 3 승리 가드 · 4 승리 처리 |
 
 ---
 
@@ -106,29 +110,43 @@
 
 ### 수업 중 나올 수 있는 "게임이 안 돌아가요" 3가지
 
-1. **캐릭터가 아예 안 움직임** — TODO 6 Part 2/3에서
-   `ACCELERATION × FRICTION ÷ (1 − FRICTION)` 이 `MOVE_THRESHOLD` 보다 작아진 경우.
-   friction만 `0.88 → 0.6` 으로 낮춰도 이렇게 됩니다. 채점기가 **정확한 숫자와 함께** 경고합니다.
-2. **라운드를 절대 못 깸** — TODO 9 Part 2/2에서 "아이템 전부 수집" 조건을 넣었는데
+1. **움직임이 너무 느림/빠름** — TODO 6 Part 2/6의 `PLAYER_MOVE_DELAY_MS`.
+   `5000` 처럼 터무니없는 값을 넣으면 채점기가 경고하지만 **통과는 시킵니다**(개방형 원칙).
+2. **라운드를 절대 못 깸** — TODO 9 Part 3/4에서 "아이템 전부 수집" 조건을 넣었는데
    아이템이 0개인 라운드가 있는 경우. 역시 경고합니다.
-3. **아이템 효과가 무한히 쌓임** — TODO 8 Part 3/3에서 `item.active = False` 누락. 오답 처리됩니다.
+3. **아이템 효과가 무한히 쌓임** — TODO 8 Part 4/6에서 `item.active = False` 누락. 오답 처리됩니다.
+4. **Part 5/6·6/6에서 들여쓰기 오류** — TODO 8의 이 두 파트는 Part 4/6이 연 `if` **안쪽**에
+   들어갑니다. Part 4/6의 `for`/`if` 두 줄을 지우면 다음 파트가 문법 오류가 납니다.
 
 ---
 
 ## 6. 테스트 (코드를 고쳤다면 반드시 재실행)
 
 ```
+node   tests/test_app_load.js              # 가장 빠름. 세 가지 모드 부팅 + 파트/마커 정합성
+node   tests/test_board_sizing.js          # Play 보드 캔버스 크기 (키오스크·전체화면·리사이즈)
 python tests/test_alt_implementations.py   # 채점 하네스 회귀 (동등 구현 / 오답 통제군)
-python tests/test_trace_harnesses.py       # Play 탭·시각화 미리보기 경로
+python tests/test_trace_harnesses.py       # Play 탭·시각화 미리보기 경로 (느림)
 python tests/test_fuzz_harnesses.py        # 온갖 이상한 학생 코드로 하네스 공격 (오래 걸림)
-node   tests/test_app_load.js              # 세 가지 모드가 전부 정상 부팅하는지
 ```
 
 `tests/extract_harnesses.py` 는 **실제 `app.js`에서 하네스 생성 함수를 그대로 추출해서**
 돌립니다 — 손으로 다시 타이핑한 대역이 아니라 진짜 배포되는 로직을 검증합니다.
 
-`export-data.js` 와 `answers.html` 은 파이썬 원본에서 자동 생성됩니다.
-`dijkstra_maze/student/*.py` 또는 `complete/*.py` 를 고쳤다면 반드시 재생성하세요.
+### 자동 생성 파일 — 손으로 고치지 마세요
+
+파이썬 원본(`dijkstra_maze/student/*.py`, `complete/*.py`)이나 `data.js` 를 고쳤다면
+아래를 **반드시** 다시 돌리세요. 생성기는 이제 저장소 안(`scripts/`)에 있습니다.
+
+```
+node scripts/gen_export_data.js   # student/*.py  -> export-data.js
+node scripts/gen_answers.js       # complete/*.py -> answers.html + 교사용/정답_해설.md
+node scripts/gen_todos.js         # data.js       -> dijkstra_maze/todos.json
+```
+
+`gen_answers.js` 는 정답 코드를 **항상 `complete/*.py` 에서 직접 뽑습니다** — 한국어 해설만
+`scripts/answer_notes.json` 에 손으로 적혀 있으므로, 정답이 실제 코드와 어긋날 수 없습니다.
+`0924` 게이트는 그대로 유지됩니다.
 
 ---
 
@@ -150,7 +168,7 @@ node   tests/test_app_load.js              # 세 가지 모드가 전부 정상 
 **위치: `pygame/교사용/`** (이 폴더 **바깥**입니다 — 학생 배포 폴더와 절대 섞이지 않도록).
 
 - `수업_운영안.md` — 2시간 진행안, 막히는 지점, 빨리 끝낸 학생에게 줄 과제, 채점 기준안
-- `정답_해설.md` — 19개 파트 전체 정답 (`complete/*.py` 에서 자동 생성)
+- `정답_해설.md` — 30개 파트 전체 정답 (`complete/*.py` 에서 `node scripts/gen_answers.js` 로 자동 생성)
 - `체크리스트.md` — 한 장 요약
 
 **학생에게는 `dijkstra_maze_web/` 폴더만 전달하세요.**

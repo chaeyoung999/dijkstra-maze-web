@@ -256,9 +256,13 @@ body.kiosk-mode #pyodideBanner {
   height: 100%;
   overflow-y: auto;
 }
+/* 920px used to be the cap here and on .kiosk-play-view below - which
+   silently capped the game board too, since app.js sizes the board to its
+   container's clientWidth. The kiosk window exists so the maze fills the
+   screen, so the cap is now only a sanity limit for ultrawide monitors. */
 .kiosk-header {
   width: 100%;
-  max-width: 920px;
+  max-width: 1600px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -282,7 +286,7 @@ body.kiosk-mode #pyodideBanner {
 .kiosk-header-actions .icon-btn { color: var(--text); border-color: var(--panel-border); background: transparent; }
 .kiosk-header-actions .icon-btn:hover { background: color-mix(in srgb, var(--text) 8%, transparent); }
 .kiosk-editor-link { font-size: 0.75rem; color: var(--text-faint); white-space: nowrap; }
-.kiosk-play-view { width: 100%; max-width: 920px; }
+.kiosk-play-view { width: 100%; max-width: 1600px; }
 
 /* The kiosk popout must read as an actual, finished game - never a
    teaching/debug view - REGARDLESS of how much the student has completed.
@@ -942,6 +946,21 @@ a.btn { text-decoration: none; cursor: pointer; }
   height: 100%;
   max-height: none;
   background: var(--panel);
+}
+/* Fullscreen has the same point the kiosk popout has: the maze fills the
+   screen. The "Capabilities" checklist and the "YOUR GAME IS LIVE" banner
+   are progress chrome, not the game, and they were eating ~150px of the
+   board's vertical budget (app.js's playBoardMaxHeight() measures whatever
+   is actually visible, so hiding them hands that space straight to the
+   maze). The student's own title card stays - unlike kiosk mode, there is
+   no separate header showing it here. */
+.viz-panel:fullscreen #vizPlayView .sidebar-group-title,
+.viz-panel:fullscreen #vizPlayView .play-checklist,
+.viz-panel:fullscreen #vizPlayView .play-live-banner,
+.viz-panel:-webkit-full-screen #vizPlayView .sidebar-group-title,
+.viz-panel:-webkit-full-screen #vizPlayView .play-checklist,
+.viz-panel:-webkit-full-screen #vizPlayView .play-live-banner {
+  display: none !important;
 }
 .viz-placeholder {
   border: 2px dashed var(--panel-border);

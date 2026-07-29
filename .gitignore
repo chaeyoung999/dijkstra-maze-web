@@ -1,3 +1,12 @@
 .DS_Store
 Thumbs.db
 *.log
+
+# Scratch files the test suites write next to themselves while running.
+tests/__pycache__/
+tests/_alt_test_case.py
+tests/_trace_test_case_*.py
+tests/_fuzz_case_*.py
+tests/_harness_call_*.js
+tests/_harness_out_*.py
+tests/fuzz_report.txt
