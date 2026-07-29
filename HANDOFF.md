@@ -13,8 +13,40 @@
 | 작업 | 상태 | 커밋 |
 |---|---|---|
 | **1. Bonus 파트를 전부 독립 단계로 분리** | ✅ 완료·푸시 | `9451ece` |
-| **2. 쉬운 Bonus 단계 추가 (24 → 30)** | ✅ 완료·푸시 | 아래 참조 |
-| **3. 전체 프로젝트 zip 내보내기 검증** | ⏳ 진행 예정 | — |
+| **2. 쉬운 Bonus 단계 추가 (24 → 30)** | ✅ 완료·푸시 | `05ddf5f` |
+| **3. 전체 프로젝트 zip 내보내기 검증** | ✅ 완료·푸시 | 아래 참조 |
+
+### 작업 3 — zip 내보내기 검증 (완료, 재작성 안 함)
+
+**결론: 내보내기 기능 자체는 멀쩡했습니다.** 마커를 기준으로 동작하는 범용 코드라
+작업 1의 번호 재배치를 **자동으로 따라왔습니다.** 메커니즘은 손대지 않았습니다.
+
+새 테스트 **`tests/test_project_export.js`** 를 만들어 실제로 증명했습니다.
+(이전엔 "내보내기가 돌아간다"를 확인하는 테스트가 아예 없었습니다.)
+
+- 파일 목록 완전성: `main.py` `game.py` `maze.py` `pathfinding.py` `settings.py`
+  `cell.py` `goal.py` `items.py` `player.py` `requirements.txt` — **전부 포함**.
+  `student/` 안의 `.py` 9개 중 빠진 게 없다는 것도 검사합니다.
+  zip에는 여기에 `HOW_TO_RUN.txt` + `assets/images` + `assets/sounds`가 더 들어갑니다.
+- 마커 **36개 전부** `complete/` 에서 정답 구간을 찾아내고, app.js **본인의 splice 코드**로
+  이어붙인 뒤, **진짜 파이썬으로 임시 폴더에서 실행**해 `Game()` 이 뜨는지까지 봅니다.
+- TODO 영역 밖 코드도 그대로 남아 있는지(= "모든 줄을 고칠 수 있다") 확인합니다.
+
+**고친 것 (기능이 아니라 안내 문구·작은 버그)**:
+
+1. 내보내기 헤더의 `(part n/2)` 라벨이 **2로 하드코딩**돼 있었습니다. TODO 5만 파트가
+   남아서 지금은 우연히 맞지만, 실제 파트 수를 읽도록 고쳤습니다.
+2. **모달 문구가 이 기능을 과소평가하고 있었습니다** — 열자마자 진행률 숫자만 보여줬습니다.
+   지금은 맨 위에 "**완성된 게임 전체가 진짜 파이썬 파일로**, VS Code로 열고
+   `python main.py`, **모든 줄을 고칠 수 있음**"을 먼저 말합니다.
+3. `HOW_TO_RUN.txt` 에도 같은 문장을 넣었습니다.
+4. **마지막 단계까지 끝낸 학생에게** "더 넓은 데서 하고 싶으면 내 프로젝트 내려받기"
+   링크가 뜨도록 했습니다 (빨리 끝내는 학생이 이 기능을 발견할 확률이 가장 낮았음).
+
+> 참고로 `README.md` / `TODO_CHECKLIST.md` 같은 **문서 파일은 zip에 안 들어갑니다.**
+> 대신 `HOW_TO_RUN.txt` 가 생성돼 들어갑니다. 선생님이 요청한 파일 목록은 전부 있으므로
+> 이번엔 그대로 뒀습니다 — 문서도 넣고 싶으면 `gen_export_data.js` 의 `FILE_ORDER` 에
+> 추가하면 됩니다.
 
 ### 작업 2 — 간단한 Bonus 단계 6개 추가 (완료)
 
@@ -208,9 +240,10 @@ Play 탭이 멈출 수 있습니다. `traceHarness_playerMove` 에 넣은 `_prev
 
 ```
 cd C:\Users\손채영\Desktop\kazh\pygame\dijkstra_maze_web
-node   tests/test_app_load.js               # 가장 빠름
-node   tests/test_board_sizing.js           # 이번에 추가 (보드 크기)
-python tests/test_alt_implementations.py    # 72 케이스
+node   tests/test_app_load.js               # 가장 빠름 (구조 + 잠금 규칙)
+node   tests/test_project_export.js         # 이번에 추가 (zip 내용물 + 실제 실행)
+node   tests/test_board_sizing.js           # 보드 크기
+python tests/test_alt_implementations.py    # 102 케이스
 python tests/test_trace_harnesses.py        # 18 케이스
 ```
 

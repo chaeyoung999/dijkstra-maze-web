@@ -1334,6 +1334,16 @@
         svgIcon('<path d="M4 12.5 9.5 18 20 6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>'),
         el("span", {}, ["You've reached the last step. Nice work getting all the way through."]),
       ]));
+      // The obvious next thing for whoever gets here first: take the whole
+      // project away and keep going without the TODO boxes.
+      wrap.appendChild(el("div", { class: "small muted next-todo-reason" }, [
+        "Want more room? ",
+        el("button", {
+          class: "linklike", type: "button", text: "Download my project",
+          onclick: function () { openExportModal(); },
+        }),
+        " gives you the complete game as real Python files — every line editable, runnable with python main.py.",
+      ]));
       return wrap;
     }
     var nextStep = STEP_BY_ID[nextId];
@@ -6973,6 +6983,15 @@
     return reindentPython(raw, indent);
   }
 
+  // How many parts a step has, for labelling a marker. Only TODO 5 is
+  // still multi-part; this used to be hardcoded "/2" for exactly that
+  // reason, which would have started lying the moment anything else
+  // gained parts.
+  function markerPartCount(stepId) {
+    var step = STEP_BY_ID[stepId];
+    return step && step.parts ? step.parts.length : 1;
+  }
+
   function exportMarkersForFile(fileName) {
     return EXPORT_DATA.EXPORT_MARKERS.filter(function (m) { return m[1] === fileName; });
   }
@@ -7053,7 +7072,7 @@
     markers.forEach(function (m) {
       var body = getBodyForMarker(m);
       text = spliceOneMarker(text, m[4], m[5], body);
-      var label = "TODO " + m[0] + (m[2] != null ? " (part " + (m[2] + 1) + "/2)" : "");
+      var label = "TODO " + m[0] + (m[2] != null ? " (part " + (m[2] + 1) + "/" + markerPartCount(m[0]) + ")" : "");
       stages.push({ text: text, label: label });
     });
     return stages;
@@ -7126,7 +7145,7 @@
         markers.forEach(function (m) {
           var st = state.steps[m[0]].status;
           if (st !== "completed") {
-            unfinishedForFile.push("TODO " + m[0] + (m[2] != null ? " (part " + (m[2] + 1) + "/2)" : "") + " - " + (st === "skipped" ? "skipped" : "not attempted yet"));
+            unfinishedForFile.push("TODO " + m[0] + (m[2] != null ? " (part " + (m[2] + 1) + "/" + markerPartCount(m[0]) + ")" : "") + " - " + (st === "skipped" ? "skipped" : "not attempted yet"));
           }
         });
         if (unfinishedForFile.length) {
@@ -7146,6 +7165,11 @@
     return [
       "Dijkstra Maze - How to run your project",
       "========================================",
+      "",
+      "This folder is the COMPLETE game, not just the parts you filled in on",
+      "the website. Every source file is here and every line of it is yours",
+      "to change - open the folder in VS Code and edit whatever you like.",
+      "You are not limited to the TODO regions any more.",
       "",
       "1. Install Python 3.9+ if you don't have it: https://www.python.org/downloads/",
       "   (check \"Add python.exe to PATH\" during install)",
@@ -7255,6 +7279,7 @@
         },
       }),
     ]);
+    container.appendChild(el("div", { class: "small muted", text: "Unzip it anywhere, open the folder in VS Code, then: pip install -r requirements.txt and python main.py (HOW_TO_RUN.txt inside repeats this)." }));
     container.appendChild(el("div", { class: "small muted mt-8", text: "Or just one file, if you already have the folder:" }));
     container.appendChild(singleRow);
 
@@ -7298,7 +7323,19 @@
     var box = el("div", { class: "modal-box export-modal" });
     var overlay = el("div", { class: "modal-overlay", role: "dialog", "aria-modal": "true", "aria-label": "Download my project" }, [box]);
     box.appendChild(el("div", { class: "modal-title", text: "Download my project" }));
-    box.appendChild(el("div", { class: "modal-message", text: summary.summaryText }));
+    // What this actually IS, said first. The modal used to open straight
+    // into a progress tally, which reads like a report card rather than
+    // "here is your whole game" - and the students most likely to want
+    // this are the fast ones looking for room to move.
+    box.appendChild(el("div", { class: "modal-message rich-text", html: richTextToHtml(
+      "**The complete game, as real Python files** — `main.py`, `game.py`, `maze.py`, "
+      + "`pathfinding.py`, `settings.py`, `cell.py`, `goal.py`, `items.py`, `player.py`, "
+      + "`requirements.txt`, and every picture and sound.\n\n"
+      + "Your answers are already spliced in. Open the folder in **VS Code** and run "
+      + "`python main.py`. **Every line is yours to change** — you are not limited to the "
+      + "TODO boxes any more."
+    ) }));
+    box.appendChild(el("div", { class: "small muted", text: summary.summaryText }));
     if (summary.unfinished.length) {
       box.appendChild(el("div", { class: "small muted", text: "Still unfinished (starter code will be kept for these):" }));
       var list = el("ul", { class: "export-unfinished-list" });
@@ -7823,6 +7860,12 @@
     computeStatus: computeStatus,
     nextStepAfter: nextStepAfter,
     bonusGroupComplete: bonusGroupComplete,
+    // tests/test_project_export.js splices a full answer set through this
+    // and then RUNS the result with a real Python, which is the only way
+    // to prove the downloaded project is still runnable after a marker
+    // renumbering.
+    buildFullFileLive: buildFullFileLive,
+    exportFileNames: function () { return Object.keys(EXPORT_DATA.EXPORT_FILES); },
   };
 
   document.addEventListener("DOMContentLoaded", function () {

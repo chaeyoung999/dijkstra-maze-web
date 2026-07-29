@@ -131,7 +131,8 @@
 ## 6. 테스트 (코드를 고쳤다면 반드시 재실행)
 
 ```
-node   tests/test_app_load.js              # 가장 빠름. 세 가지 모드 부팅 + 파트/마커 정합성
+node   tests/test_app_load.js              # 가장 빠름. 세 가지 모드 부팅 + 단계/마커 정합성 + 잠금 규칙
+node   tests/test_project_export.js        # zip 파일 목록 + 정답 splice 후 실제 파이썬 실행
 node   tests/test_board_sizing.js          # Play 보드 캔버스 크기 (키오스크·전체화면·리사이즈)
 python tests/test_alt_implementations.py   # 채점 하네스 회귀 (동등 구현 / 오답 통제군)
 python tests/test_trace_harnesses.py       # Play 탭·시각화 미리보기 경로 (느림)
