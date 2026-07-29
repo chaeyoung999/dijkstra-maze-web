@@ -44,130 +44,78 @@ def case(step, label, harness_fn, code_args, expect_ok=True, expect_warning=None
 
 
 # ---------------------------------------------------------------- TODO 2
-# Three parts now: acceleration, friction, and one grid step.
-CANONICAL_2A = (
+# One grid step per key press: the arrow keys plus the classroom bluetooth
+# controller's E/F/C/D. No acceleration, no friction, no WASD.
+CANONICAL_2 = (
     'if keys[pygame.K_LEFT] or keys[pygame.K_e]:\n'
-    '    self.player.velocity.x -= self.player.acceleration\n'
-    'if keys[pygame.K_RIGHT] or keys[pygame.K_f]:\n'
-    '    self.player.velocity.x += self.player.acceleration\n'
-    'if keys[pygame.K_UP] or keys[pygame.K_c]:\n'
-    '    self.player.velocity.y -= self.player.acceleration\n'
-    'if keys[pygame.K_DOWN] or keys[pygame.K_d]:\n'
-    '    self.player.velocity.y += self.player.acceleration\n'
+    '    moved = self.player.try_move("left", self.maze)\n'
+    'elif keys[pygame.K_RIGHT] or keys[pygame.K_f]:\n'
+    '    moved = self.player.try_move("right", self.maze)\n'
+    'elif keys[pygame.K_UP] or keys[pygame.K_c]:\n'
+    '    moved = self.player.try_move("top", self.maze)\n'
+    'elif keys[pygame.K_DOWN] or keys[pygame.K_d]:\n'
+    '    moved = self.player.try_move("bottom", self.maze)\n'
 )
-# Alt A: a data-driven loop instead of four ifs.
-ALT_2A_TABLE = (
-    'moves = [\n'
-    '    ((pygame.K_LEFT, pygame.K_e), "x", -1),\n'
-    '    ((pygame.K_RIGHT, pygame.K_f), "x", 1),\n'
-    '    ((pygame.K_UP, pygame.K_c), "y", -1),\n'
-    '    ((pygame.K_DOWN, pygame.K_d), "y", 1),\n'
+# Alt A: loop+break over a lookup table instead of an if/elif chain (still
+# calls try_move) - a genuinely different control-flow shape.
+ALT_2_LOOP = (
+    'key_direction_pairs = [\n'
+    '    (pygame.K_LEFT, "left"), (pygame.K_e, "left"),\n'
+    '    (pygame.K_RIGHT, "right"), (pygame.K_f, "right"),\n'
+    '    (pygame.K_UP, "top"), (pygame.K_c, "top"),\n'
+    '    (pygame.K_DOWN, "bottom"), (pygame.K_d, "bottom"),\n'
     ']\n'
-    'for key_pair, axis, sign in moves:\n'
-    '    if keys[key_pair[0]] or keys[key_pair[1]]:\n'
-    '        step = sign * self.player.acceleration\n'
-    '        if axis == "x":\n'
-    '            self.player.velocity.x += step\n'
-    '        else:\n'
-    '            self.player.velocity.y += step\n'
+    'moved = False\n'
+    'for key_const, direction in key_direction_pairs:\n'
+    '    if keys[key_const]:\n'
+    '        moved = self.player.try_move(direction, self.maze)\n'
+    '        break\n'
 )
-# Alt B: writes the acceleration as a literal instead of reading the
-# attribute - warns about retunability, but must still pass.
-ALT_2A_LITERAL = CANONICAL_2A.replace('self.player.acceleration', '0.9')
-# Alt C: expanded form instead of -= / +=.
-ALT_2A_EXPANDED = (
-    'if keys[pygame.K_LEFT] or keys[pygame.K_e]:\n'
-    '    self.player.velocity.x = self.player.velocity.x - self.player.acceleration\n'
-    'if keys[pygame.K_RIGHT] or keys[pygame.K_f]:\n'
-    '    self.player.velocity.x = self.player.velocity.x + self.player.acceleration\n'
-    'if keys[pygame.K_UP] or keys[pygame.K_c]:\n'
-    '    self.player.velocity.y = self.player.velocity.y - self.player.acceleration\n'
-    'if keys[pygame.K_DOWN] or keys[pygame.K_d]:\n'
-    '    self.player.velocity.y = self.player.velocity.y + self.player.acceleration\n'
-)
-
-CANONICAL_2B = (
-    'self.player.velocity.x *= self.player.friction\n'
-    'self.player.velocity.y *= self.player.friction\n'
-)
-ALT_2B_EXPANDED = (
-    'self.player.velocity.x = self.player.velocity.x * self.player.friction\n'
-    'self.player.velocity.y = self.player.velocity.y * self.player.friction\n'
-)
-ALT_2B_UPDATE = (
-    'self.player.velocity.update(\n'
-    '    self.player.velocity.x * self.player.friction,\n'
-    '    self.player.velocity.y * self.player.friction,\n'
-    ')\n'
-)
-# A harsher friction is a legitimate design choice, not an error.
-ALT_2B_HARSH = (
-    'self.player.velocity.x *= 0.5\n'
-    'self.player.velocity.y *= 0.5\n'
-)
-
-CANONICAL_2C = (
-    'speed_x = self.player.velocity.x\n'
-    'speed_y = self.player.velocity.y\n'
-    'if abs(speed_x) >= abs(speed_y) and abs(speed_x) >= PLAYER_MOVE_THRESHOLD:\n'
-    '    direction = "right" if speed_x > 0 else "left"\n'
-    '    moved = self.player.try_move(direction, self.maze)\n'
-    'elif abs(speed_y) >= PLAYER_MOVE_THRESHOLD:\n'
-    '    direction = "bottom" if speed_y > 0 else "top"\n'
-    '    moved = self.player.try_move(direction, self.maze)\n'
-)
-# Alt: bypasses try_move ENTIRELY - inlines its own row/col math AND its
+# Alt B: bypasses try_move ENTIRELY - inlines its own row/col math AND its
 # own wall check, with different variable names throughout.
-ALT_2C_BYPASS = (
-    'vx = self.player.velocity.x\n'
-    'vy = self.player.velocity.y\n'
-    'pick = None\n'
-    'if abs(vx) >= abs(vy) and abs(vx) >= PLAYER_MOVE_THRESHOLD:\n'
-    '    pick = ("right", 0, 1) if vx > 0 else ("left", 0, -1)\n'
-    'elif abs(vy) >= PLAYER_MOVE_THRESHOLD:\n'
-    '    pick = ("bottom", 1, 0) if vy > 0 else ("top", -1, 0)\n'
-    'if pick is None:\n'
+ALT_2_BYPASS = (
+    'chosen = None\n'
+    'if keys[pygame.K_LEFT] or keys[pygame.K_e]:\n'
+    '    chosen = ("left", 0, -1)\n'
+    'elif keys[pygame.K_RIGHT] or keys[pygame.K_f]:\n'
+    '    chosen = ("right", 0, 1)\n'
+    'elif keys[pygame.K_UP] or keys[pygame.K_c]:\n'
+    '    chosen = ("top", -1, 0)\n'
+    'elif keys[pygame.K_DOWN] or keys[pygame.K_d]:\n'
+    '    chosen = ("bottom", 1, 0)\n'
+    'if chosen is None:\n'
     '    moved = False\n'
     'else:\n'
-    '    want, dr, dc = pick\n'
-    '    here = self.maze.get_cell(self.player.row, self.player.col)\n'
-    '    if here is not None and not here.walls[want]:\n'
-    '        self.player.row += dr\n'
-    '        self.player.col += dc\n'
+    '    want_dir, delta_r, delta_c = chosen\n'
+    '    target_cell = self.maze.get_cell(self.player.row, self.player.col)\n'
+    '    if target_cell is not None and not target_cell.walls[want_dir]:\n'
+    '        self.player.row += delta_r\n'
+    '        self.player.col += delta_c\n'
     '        moved = True\n'
     '    else:\n'
     '        moved = False\n'
 )
-case("2", "canonical (accel / friction / try_move)", "harness_movement_2", (CANONICAL_2A, CANONICAL_2B, CANONICAL_2C))
-case("2 Part1/3", "alt: data-driven key table", "harness_movement_2", (ALT_2A_TABLE, CANONICAL_2B, CANONICAL_2C))
-case("2 Part1/3", "alt: literal 0.9 instead of the attribute (warns)", "harness_movement_2", (ALT_2A_LITERAL, CANONICAL_2B, CANONICAL_2C))
-case("2 Part1/3", "alt: expanded x = x - accel form", "harness_movement_2", (ALT_2A_EXPANDED, CANONICAL_2B, CANONICAL_2C))
-case("2 Part2/3", "alt: expanded multiply form", "harness_movement_2", (CANONICAL_2A, ALT_2B_EXPANDED, CANONICAL_2C))
-case("2 Part2/3", "alt: velocity.update(...)", "harness_movement_2", (CANONICAL_2A, ALT_2B_UPDATE, CANONICAL_2C))
-case("2 Part2/3", "alt: much harsher friction (0.5)", "harness_movement_2", (CANONICAL_2A, ALT_2B_HARSH, CANONICAL_2C))
-case("2 Part3/3", "alt: bypasses try_move, inlines move+wall check", "harness_movement_2", (CANONICAL_2A, CANONICAL_2B, ALT_2C_BYPASS))
+case("2", "canonical (try_move, if/elif)", "harness_movement_2", (CANONICAL_2,))
+case("2", "alt: loop+break lookup table", "harness_movement_2", (ALT_2_LOOP,))
+case("2", "alt: bypasses try_move, inlines own move+wall check", "harness_movement_2", (ALT_2_BYPASS,))
 
-BAD_2A_WRONG_SIGN = CANONICAL_2A.replace(
+# Negative controls: a genuinely wrong implementation must still be caught.
+BAD_2_SWAPPED = (
     'if keys[pygame.K_LEFT] or keys[pygame.K_e]:\n'
-    '    self.player.velocity.x -= self.player.acceleration\n',
-    'if keys[pygame.K_LEFT] or keys[pygame.K_e]:\n'
-    '    self.player.velocity.x += self.player.acceleration\n')
-case("2 Part1/3", "BAD: left accelerates right (negative control)", "harness_movement_2", (BAD_2A_WRONG_SIGN, CANONICAL_2B, CANONICAL_2C), expect_ok=False)
-BAD_2A_NOTHING = 'pass\n'
-case("2 Part1/3", "BAD: does nothing (negative control)", "harness_movement_2", (BAD_2A_NOTHING, CANONICAL_2B, CANONICAL_2C), expect_ok=False)
-BAD_2B_GROWS = (
-    'self.player.velocity.x *= 1.1\n'
-    'self.player.velocity.y *= 1.1\n'
+    '    moved = self.player.try_move("right", self.maze)\n'
+    'elif keys[pygame.K_RIGHT] or keys[pygame.K_f]:\n'
+    '    moved = self.player.try_move("left", self.maze)\n'
+    'elif keys[pygame.K_UP] or keys[pygame.K_c]:\n'
+    '    moved = self.player.try_move("top", self.maze)\n'
+    'elif keys[pygame.K_DOWN] or keys[pygame.K_d]:\n'
+    '    moved = self.player.try_move("bottom", self.maze)\n'
 )
-case("2 Part2/3", "BAD: friction above 1, never stops (negative control)", "harness_movement_2", (CANONICAL_2A, BAD_2B_GROWS, CANONICAL_2C), expect_ok=False)
-BAD_2B_NOTHING = 'pass\n'
-case("2 Part2/3", "BAD: no friction at all (negative control)", "harness_movement_2", (CANONICAL_2A, BAD_2B_NOTHING, CANONICAL_2C), expect_ok=False)
-BAD_2C_LEFT_RIGHT_SWAP = CANONICAL_2C.replace(
-    '    direction = "right" if speed_x > 0 else "left"',
-    '    direction = "left" if speed_x > 0 else "right"')
-case("2 Part3/3", "BAD: left/right swapped (negative control)", "harness_movement_2", (CANONICAL_2A, CANONICAL_2B, BAD_2C_LEFT_RIGHT_SWAP), expect_ok=False)
-BAD_2C_NO_MOVED = CANONICAL_2C.replace('moved = self.player.try_move', 'self.player.try_move')
-case("2 Part3/3", "BAD: never stores the try_move result in moved (negative control)", "harness_movement_2", (CANONICAL_2A, CANONICAL_2B, BAD_2C_NO_MOVED), expect_ok=False)
+case("2", "BAD: left/right swapped (negative control)", "harness_movement_2", (BAD_2_SWAPPED,), expect_ok=False)
+BAD_2_NOTHING = 'pass\n'
+case("2", "BAD: does nothing (negative control)", "harness_movement_2", (BAD_2_NOTHING,), expect_ok=False)
+BAD_2_NO_MOVED = CANONICAL_2.replace("moved = self.player.try_move", "self.player.try_move")
+case("2", "BAD: never stores the try_move result in moved (negative control)", "harness_movement_2", (BAD_2_NO_MOVED,), expect_ok=False)
+
 
 # ---------------------------------------------------------------- TODO 3
 CANONICAL_3 = 'if current is None or current.walls[direction]:\n    return False\n'

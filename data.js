@@ -93,83 +93,46 @@ const COURSE_STEPS = [
   // ------------------------------------------------------------------ TODO 2
   {
     id: "2", step: 2, kind: "Required", required: true, file: "game.py",
-    title: "Move the player with acceleration and friction.",
-    lead: "Right now your maze ignores the keyboard entirely. `update_player()` runs every frame, and you are going to fill it in with the **same physics you already wrote in Reach the Star**: holding a key doesn't move the player directly — it builds up **speed**, and friction bleeds that speed away again.\n\nThe difference here is the last step. Reach the Star moved a character by pixels; a maze is a **grid**, so once your speed is big enough, the player steps exactly **one cell**.\n\n- **Part 1/3** — a held key adds to `self.player.velocity` (`-=` for left/up, `+=` for right/down).\n- **Part 2/3** — every frame, multiply the velocity by `self.player.friction` so it fades.\n- **Part 3/3** — when the speed passes `PLAYER_MOVE_THRESHOLD`, call `try_move` to take one step.\n\nThe payoff is a game that *feels* like something: the player takes a moment to get going, and keeps gliding for a cell or so after you let go — which makes a bomb next to a corner genuinely dangerous.\n\n**Controls**: the arrow keys, or **E / F / C / D** (left / right / up / down) on the classroom controller. Both sets do exactly the same thing.",
+    title: "Connect the arrow keys and the controller to maze movement.",
+    lead: "Right now your maze ignores the keyboard entirely. Each frame, `update_player()` checks which key is currently held down and needs to move the player one cell in that direction. Inside the branch for each key, call **`self.player.try_move(direction, self.maze)`** — `direction` is one of the strings `\"left\"`/`\"right\"`/`\"top\"`/`\"bottom\"` (note: `\"top\"`/`\"bottom\"`, not `\"up\"`/`\"down\"`) — and store what it returns in **`moved`**. Use `if` for the first key check and `elif` for the rest (not four separate `if`s), so only one direction can win when two keys are pressed together.\n\nOne press moves exactly **one cell** — this is a grid, not free movement.\n\n**Controls**: the arrow keys, or the classroom controller's **E / F / C / D** (left / right / up / down). Both sets do exactly the same thing.",
     codeReference: [
-      ["self.player.velocity", "A vector with .x and .y. Negative .x is left, positive .x is right; negative .y is up, positive .y is down."],
-      ["self.player.acceleration", "How much speed one frame of holding a key adds (0.9 by default — you can retune it in Bonus TODO 6)."],
-      ["self.player.friction", "How much speed survives each frame: 0.88 means 88% is kept and 12% is lost. Always just under 1."],
-      ["PLAYER_MOVE_THRESHOLD", "How fast the player has to be going before a cell step actually happens, so a tiny leftover speed doesn't twitch the player."],
-      ["self.player.try_move(direction, self.maze)", "Moves the player one cell in direction. Returns True if the step happened, False if a wall blocked it."],
-      ["moved", "A boolean you set to the result of try_move. The code after your TODO reads it to decide whether to restart the move timer."],
-      ["pygame.K_LEFT / K_e, K_RIGHT / K_f, K_UP / K_c, K_DOWN / K_d", "The key constants for the arrow keys and the controller buttons. keys[...] is True while that key is held down."],
-      ['"left" / "right" / "top" / "bottom"', 'The four direction strings try_move understands — note the vertical ones are "top"/"bottom", not "up"/"down".'],
+      ["self.player.try_move(direction, self.maze)", "Attempts to move the player one cell in direction. Returns True if the move succeeded, False if it was blocked."],
+      ["moved", "A boolean you set to the result of try_move. The code right after your TODO reads it to decide whether to reset the movement timer."],
+      ["pygame.K_LEFT / K_e, K_RIGHT / K_f, K_UP / K_c, K_DOWN / K_d", "The key constants for the arrow keys and the classroom controller. keys[...] is True while that key is held down."],
+      ['"left" / "right" / "top" / "bottom"', 'The four direction strings try_move and the maze understand — note the vertical directions are "top"/"bottom", not "up"/"down".'],
     ],
-    parts: [
-      {
-        part: "1/3", title: "Turn key presses into speed.",
-        lead: "Exactly the acceleration step from Reach the Star. For each key that is held down, change **`self.player.velocity.x`** or **`.y`** by **`self.player.acceleration`**.\n\nRemember which way is which: **left is `-x`**, **right is `+x`**, **up is `-y`**, **down is `+y`**. So left and up use `-=`, right and down use `+=`.\n\nThese are four separate `if` statements rather than `if`/`elif` on purpose — holding Left and Up together should build speed in both directions at once.",
-        contextBefore: [
-          "    def update_player(self):",
-          '        """Runs every frame: momentum in, one grid step out."""',
-          "        keys = pygame.key.get_pressed()",
-          "        moved = False",
-        ],
-        contextAfter: [],
-        starter: [
-          "        if keys[pygame.K_LEFT] or keys[pygame.K_e]:",
-          "            pass  # Write your code here. Hint: this is the -x direction.",
-          "        if keys[pygame.K_RIGHT] or keys[pygame.K_f]:",
-          "            pass  # Write your code here. Hint: this is the +x direction.",
-          "        if keys[pygame.K_UP] or keys[pygame.K_c]:",
-          "            pass  # Write your code here. Hint: this is the -y direction.",
-          "        if keys[pygame.K_DOWN] or keys[pygame.K_d]:",
-          "            pass  # Write your code here. Hint: this is the +y direction.",
-        ],
-      },
-      {
-        part: "2/3", title: "Slow the player down with friction.",
-        lead: "Without this, speed would only ever grow and the player would never stop — the uncontrolled sliding you saw in Reach the Star before friction was added.\n\nMultiply **both** `self.player.velocity.x` and `self.player.velocity.y` by **`self.player.friction`**. It's a number just under 1 (`0.88`), so each frame keeps 88% of the speed and loses the other 12%. Use **`*=`** so the velocity is scaled in place.",
-        contextBefore: [],
-        contextAfter: [
-          "        now = pygame.time.get_ticks()",
-          "        if now - self.last_player_move_time < PLAYER_MOVE_DELAY_MS:",
-          "            return",
-        ],
-        starter: [
-          "        pass  # Write your code here.",
-        ],
-      },
-      {
-        part: "3/3", title: "Turn that speed into one maze step.",
-        lead: "The maze is a grid, so the player moves whole cells, not pixels.\n\nThe two `if` lines below are already written for you: they work out which way the player is leaning (whichever of x/y is bigger wins) and check it beats `PLAYER_MOVE_THRESHOLD`, so a tiny leftover speed can't twitch the player. **`direction`** is already set to the right string in each branch.\n\nAll that's missing is the step itself. In **both** branches, write the same line:\n\n- `moved = self.player.try_move(direction, self.maze)`\n\n`try_move` returns `True` if the step happened and `False` if a wall was in the way, and the code below uses `moved` to decide whether to restart the move timer.",
-        contextBefore: [],
-        contextAfter: [
-          "        if moved:",
-          "            self.last_player_move_time = now",
-          "            self.maze.clear_path_display()",
-        ],
-        starter: [
-          "        speed_x = self.player.velocity.x",
-          "        speed_y = self.player.velocity.y",
-          "        if abs(speed_x) >= abs(speed_y) and abs(speed_x) >= PLAYER_MOVE_THRESHOLD:",
-          '            direction = "right" if speed_x > 0 else "left"',
-          "            pass  # Write your code here.",
-          "        elif abs(speed_y) >= PLAYER_MOVE_THRESHOLD:",
-          '            direction = "bottom" if speed_y > 0 else "top"',
-          "            pass  # Write your code here.",
-        ],
-      },
+    contextBefore: [
+      "    def update_player(self):",
+      "        now = pygame.time.get_ticks()",
+      "        if now - self.last_player_move_time < PLAYER_MOVE_DELAY_MS:",
+      "            return",
+      "",
+      "        keys = pygame.key.get_pressed()",
+      "        moved = False",
+    ],
+    contextAfter: [
+      "        if moved:",
+      "            self.last_player_move_time = now",
+      "            self.maze.clear_path_display()",
+    ],
+    starter: [
+      "        if keys[pygame.K_LEFT] or keys[pygame.K_e]:",
+      '            pass  # Write your code here. Hint: the direction string is "left"',
+      "        elif keys[pygame.K_RIGHT] or keys[pygame.K_f]:",
+      '            pass  # Write your code here. Hint: the direction string is "right"',
+      "        elif keys[pygame.K_UP] or keys[pygame.K_c]:",
+      '            pass  # Write your code here. Hint: the direction string is "top"',
+      "        elif keys[pygame.K_DOWN] or keys[pygame.K_d]:",
+      '            pass  # Write your code here. Hint: the direction string is "bottom"',
     ],
     hints: [
-      'Part 1: inside each `if`, one line. Left is `self.player.velocity.x -= self.player.acceleration`, and right is the same line with `+=`. Up and down are the same two lines again with `.y` instead of `.x`.\nPart 2:\n```\nself.player.velocity.x *= self.player.friction\nself.player.velocity.y *= self.player.friction\n```\nTwo lines, using `*=` (not `=`), so the speed is scaled rather than replaced.\nPart 3: replace each `pass` with the exact same line — `moved = self.player.try_move(direction, self.maze)`. `direction` is already set for you just above each one, so nothing else changes between the two branches.',
+      'moved = self.player.try_move("???", self.maze) — this exact line goes in all four branches; just swap in the matching direction string each time: "left", "right", "top", "bottom".',
     ],
     visualizer: "playerMove",
     grading: {
       mode: "behaviour",
       harness: "movement_2",
-      casesDescription: "Part 1: each direction key is held on its own and the velocity has to change the right way (left/up negative, right/down positive), for the arrow keys and the E/F/C/D controller keys alike; two keys held together must build speed on both axes. Part 2: a known velocity has to come back smaller but the same sign, and repeated frames have to approach zero — any friction factor between 0 and 1 is accepted. Part 3: with a velocity supplied directly, the player's final position must match the correct neighbouring cell (or stay put against a wall), and moved must reflect what happened. Every part is outcome-based: no specific function call or variable name is required.",
-      multiPart: true,
+      casesDescription: "Given a starting position and a key press (in a maze with known walls), asserts the player's final position matches the correct neighboring cell for that direction, or stays put when a wall blocks it. Also checks moved reflects whether the position actually changed, and pressing two opposite keys together moves at most one cell. Implementation-agnostic: does not check for any specific function call, only the resulting position/moved values (a student who inlines their own row/col math and their own wall check, bypassing try_move entirely, still passes).",
     },
   },
 
@@ -349,16 +312,15 @@ const COURSE_STEPS = [
   // ------------------------------------------------------------------ TODO 6
   {
     id: "6", step: 6, kind: "Bonus", required: false, file: "settings.py",
-    title: "Redesign the three rounds, tune the pacing, and decide where things spawn.",
-    lead: "This Bonus TODO spans **two files** and gets steadily more open-ended as you go.\n\nPart 1/3 and Part 2/3 are settings (`settings.py`). **`ROUND_CONFIGS`** is the difficulty curve of your whole game — one dictionary per round, read in order as the player advances. You can change `rows`, `cols`, `cell_size`, `extra_open_walls`, `bomb_count`, `custom_item_count`, and `time_limit_seconds`. **`PLAYER_MOVE_DELAY_MS`**, **`ALLOW_PATH_HINT`**, and **`MAX_HINT_COUNT`** control how the player moves and how much help they get. Note the last one interacts with Bonus TODO 8's `\"add_hint\"` item effect — a very low `MAX_HINT_COUNT` makes an add_hint item much more valuable (and vice versa), which isn't a bug, just something to keep in mind when balancing your game.\n\nPart 3/3 is real code (`game.py`), and it's where this step stops being about numbers: **`create_game_objects()`** decides **where** every item and bomb actually lands. The starter does the plain random thing; the interesting work is inventing a *rule* — bombs never near the start, an item always in one corner, every item in your list guaranteed to appear, whatever fits the game you're building.\n\nPrefer not to hand-edit `ROUND_CONFIGS`? The map editor on the right lets you paint a layout directly, tile by tile — pick a piece from the palette, then click or drag on the board, including exactly where the player starts, where the goal is, and (once Bonus TODO 8 has at least one item) which of your own custom items goes where.",
+    title: "Redesign the rounds, tune the movement feel, and decide where things spawn.",
+    lead: "This step is the shape of your whole game, and it gets more open-ended as you go:\n\n- **Part 1/3** — the rounds themselves (and how many there are).\n- **Part 2/3** — how the game *feels* to play.\n- **Part 3/3** — real code: where every item and bomb actually lands.\n\nPrefer not to hand-edit numbers? The **map editor** on the right paints a layout tile by tile — including where the player starts, where the goal is, and (once TODO 8 has an item) exactly which of your own items goes where.",
     codeReference: [
-      ["ROUND_CONFIGS", "(settings.py) A list of exactly 3 dictionaries, one per round, read in order as the player clears rounds."],
+      ["ROUND_CONFIGS", "(settings.py) A list of dictionaries, one per round, read in order as the player clears rounds. It ships with 3 — add a fourth to make your game longer, or delete one to make it shorter."],
       ["rows, cols, cell_size", "Grid dimensions and pixel size of one cell; bigger rows/cols means a bigger maze."],
       ["extra_open_walls", "Extra connections punched into the perfect maze so it has loops, not just one solution path."],
       ["bomb_count, custom_item_count", "How many of each object are placed on the map."],
       ["time_limit_seconds", "How long the player has to finish the round."],
       ["PLAYER_MOVE_DELAY_MS", "The shortest gap between two cell steps, in milliseconds — smaller is faster."],
-      ["PLAYER_ACCELERATION / PLAYER_FRICTION / PLAYER_MOVE_THRESHOLD", "The movement feel from Required TODO 2: how fast speed builds, how much of it survives each frame (just under 1), and how fast you must be going before a step happens."],
       ["ALLOW_PATH_HINT", "True/False — whether the Hint button exists at all."],
       ["MAX_HINT_COUNT", "How many times Hint can be used per round; interacts with TODO 8's add_hint effect."],
       ["create_game_objects(self)", "(game.py) Called once per round, right after the maze finishes generating. Your job in Part 3/3 is to fill self.items and self.bombs."],
@@ -369,10 +331,11 @@ const COURSE_STEPS = [
     ],
     parts: [
       {
-        part: "1/3", title: "Redesign the three rounds.",
+        part: "1/3", title: "Redesign the rounds (and add or remove some).",
+        lead: "Each dictionary in this list is one round, played in order. Change the numbers to redraw your difficulty curve — bigger `rows`/`cols` for a longer maze, more `bomb_count`, a stricter `time_limit_seconds`.\n\n**You are not stuck with three rounds.** Copy a dictionary and paste it at the end for a fourth round; delete one for a shorter game. The map editor on the right grows or shrinks its round tabs to match.\n\nKeep every key inside each dictionary though — the engine reads all of them by name, so deleting one will crash the game.",
         contextBefore: [],
         contextAfter: [
-          "# TODO 6 [Bonus] (Part 2/2): Tune movement speed and hint availability.",
+          "# TODO 6 [Bonus] (Part 2/3): Tune movement speed and hint availability.",
           "# Detailed hint:",
         ],
         starter: [
@@ -408,26 +371,23 @@ const COURSE_STEPS = [
         ],
       },
       {
-        part: "2/3", title: "Tune the movement feel and hint availability.",
+        part: "2/3", title: "Tune movement speed and hint availability.",
         contextBefore: [],
         contextAfter: [
           "# =========================================================",
           "# Route weights for the Hint button's Dijkstra route (given, not a TODO)",
           "# =========================================================",
         ],
-        lead: "These six numbers decide how your game *feels* to play.\n\nThe first four are the movement physics from Required TODO 2, now yours to retune: **`PLAYER_MOVE_DELAY_MS`** is the shortest gap between two cell steps (smaller is faster), **`PLAYER_ACCELERATION`** is how quickly speed builds while a key is held, **`PLAYER_FRICTION`** (just under 1) is how much speed survives each frame, and **`PLAYER_MOVE_THRESHOLD`** is how fast you must be going before a step happens at all.\n\nTry the extremes — a friction of `0.97` makes the player skate around like it's on ice and turns every corner into a hazard.\n\n⚠️ These three work **together**. Holding a key settles at a top speed of `acceleration × friction ÷ (1 − friction)`, and if that never reaches `PLAYER_MOVE_THRESHOLD` the player **can't move at all**. Lowering friction a long way (say `0.6`) without also lowering the threshold is the usual way to end up stuck. Run your code and the checker will tell you the exact numbers if that happens.\n\nThe last two are help: **`ALLOW_PATH_HINT`** switches the Hint button off entirely, and **`MAX_HINT_COUNT`** limits how many times it can be used per round.",
+        lead: "Two more settings decide how your game feels to play. **`PLAYER_MOVE_DELAY_MS`** is the shortest gap between two cell steps, in milliseconds — smaller is faster (less waiting between moves). **`ALLOW_PATH_HINT`** switches the Hint button off entirely if you set it to `False`, and **`MAX_HINT_COUNT`** limits how many times it can be used per round. Note the last one interacts with Bonus TODO 8's `\"add_hint\"` item effect — a very low `MAX_HINT_COUNT` makes an add_hint item much more valuable (and vice versa), which isn't a bug, just something to keep in mind when balancing your game.",
         starter: [
           "PLAYER_MOVE_DELAY_MS = 100",
-          "PLAYER_ACCELERATION = 0.9",
-          "PLAYER_FRICTION = 0.88",
-          "PLAYER_MOVE_THRESHOLD = 1.5",
           "ALLOW_PATH_HINT = True",
           "MAX_HINT_COUNT = 2",
         ],
       },
       {
         part: "3/3", title: "Decide where the items and bombs go.", file: "game.py",
-        lead: "Every round, once the maze has finished generating, `create_game_objects()` runs exactly once and has to fill two lists: **`self.items`** (your collectibles) and **`self.bombs`**. The starter below is the plain version — scatter both at random. Your job is to make the placement *mean* something.\n\n**`create_random_positions(rows, cols, count, forbidden)`** hands you a list of `(row, col)` tuples and never picks a cell that's already in **`forbidden`**. Keep adding the positions you use back into `forbidden` and nothing will ever overlap. A few directions worth trying:\n\n- Keep bombs away from the start so round 1 isn't instantly unfair — drop any position where `r + c < 4`.\n- Guarantee variety: instead of `random.choice(CUSTOM_ITEMS)`, use `CUSTOM_ITEMS[i % len(CUSTOM_ITEMS)]` so every item you designed actually shows up.\n- Make the final round brutal: `self.config[\"bomb_count\"] * 2`.\n- Hand-place something at a fixed cell every single round.\n\nThe only hard rule: `self.items` and `self.bombs` must both end up as **lists** (empty is fine) — anything else and the drawing code later on crashes.",
+        lead: "Every round, once the maze has finished generating, `create_game_objects()` runs exactly once and has to fill two lists: **`self.items`** (your collectibles) and **`self.bombs`**. The starter below is the plain version — scatter both at random. Your job is to make the placement *mean* something.\n\n**`create_random_positions(rows, cols, count, forbidden)`** hands you a list of `(row, col)` tuples and never picks a cell that's already in **`forbidden`**. Keep adding the positions you use back into `forbidden` and nothing will ever overlap.\n\n**Different items in different rounds.** `self.current_round` is `0` for round 1, `1` for round 2, and so on — so you can hand each round its own selection out of your `CUSTOM_ITEMS`:\n\n- `choices = CUSTOM_ITEMS[:2] if self.current_round == 0 else CUSTOM_ITEMS`\n  → round 1 only ever spawns your first two items; later rounds can spawn anything.\n\nOther directions worth trying:\n\n- Guarantee variety: instead of `random.choice(CUSTOM_ITEMS)`, use `CUSTOM_ITEMS[index % len(CUSTOM_ITEMS)]` so every item you designed actually shows up.\n- Keep bombs away from the start so round 1 isn't instantly unfair — drop any position where `r + c < 4`.\n- Make the final round brutal: `self.config[\"bomb_count\"] * 2`.\n- Hand-place something at a fixed cell every single round.\n\nThe only hard rule: `self.items` and `self.bombs` must both end up as **lists** (empty is fine) — anything else and the drawing code later on crashes.",
         contextBefore: [
           "    def create_game_objects(self):",
           '        """Fills self.items and self.bombs for the round that just',
@@ -469,7 +429,7 @@ const COURSE_STEPS = [
       },
     ],
     hints: [
-      "Part 1: Three dictionaries in a list, one per round. Every key already means something to the engine (deleting one will crash the game), so only change the numeric values, and keep them plain integers. Don't want to hand-edit the numbers? Use the map editor panel on the right: pick your rows and cols, paint the layout (plus the player/goal start tiles and your own custom items), then press Apply to write these numbers into the code for you automatically.\nPart 2: `PLAYER_MOVE_DELAY_MS` is milliseconds (a smaller number moves faster). `PLAYER_ACCELERATION` and `PLAYER_MOVE_THRESHOLD` are plain numbers; `PLAYER_FRICTION` must stay **between 0 and 1** (0.88 keeps 88% of the speed each frame — push it towards 1 for ice, towards 0.6 to stop dead). `ALLOW_PATH_HINT` is `True` or `False`; `MAX_HINT_COUNT` is a plain integer.\nPart 3: keep the starter's overall shape — ask `create_random_positions(...)` for a list of positions, build a list of objects from it, then `forbidden.update(...)` so the next thing you place can't land on top. To filter positions, wrap the call in a list comprehension: `spots = [p for p in create_random_positions(...) if p[0] + p[1] >= 4]`. Ask for a few extra positions than you need when you filter, since filtering throws some away. `self.items` and `self.bombs` must both still be lists at the end.",
+      "Part 1: a list of dictionaries, one per round — three to start with, but you can copy one and paste it at the end for a fourth round, or delete one for a shorter game. Every key inside a dictionary means something to the engine (deleting one will crash the game), so only change the numeric values, and keep them plain integers. Don't want to hand-edit the numbers? Use the map editor panel on the right: paint the layout (plus the player/goal start tiles and your own custom items) and the numbers are written into the code for you.\nPart 2: `PLAYER_MOVE_DELAY_MS` is milliseconds (a smaller number moves faster); `ALLOW_PATH_HINT` is `True` or `False`; `MAX_HINT_COUNT` is a plain integer — how many times Hint can be used per round.\nPart 3: keep the starter's overall shape — ask `create_random_positions(...)` for a list of positions, build a list of objects from it, then `forbidden.update(...)` so the next thing you place can't land on top. To filter positions, wrap the call in a list comprehension: `spots = [p for p in create_random_positions(...) if p[0] + p[1] >= 4]` (ask for a few more than you need, since filtering throws some away). To choose which item spawns, replace `random.choice(CUSTOM_ITEMS)` with your own pick — `CUSTOM_ITEMS[index % len(CUSTOM_ITEMS)]` inside a `for index, (row, col) in enumerate(spots):` loop, or a per-round list built from `self.current_round`. `self.items` and `self.bombs` must both still be lists at the end.",
     ],
     visualizer: "mapEditor",
     grading: {
