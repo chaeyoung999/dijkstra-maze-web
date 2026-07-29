@@ -126,7 +126,7 @@
   "code": "if neighbor not in distance or new_cost < distance[neighbor]:\n    distance[neighbor] = new_cost\n    parent[neighbor] = current\n    heapq.heappush(queue, (new_cost, neighbor))"
  },
  {
-  "label": "TODO 6 (Part 1/6)",
+  "label": "TODO 6-1",
   "kind": "Bonus",
   "file": "settings.py",
   "title": "라운드 설계",
@@ -135,7 +135,7 @@
   "code": "ROUND_CONFIGS = [\n    {\n        \"rows\": 11,\n        \"cols\": 15,\n        \"cell_size\": 38,\n        \"extra_open_walls\": 5,\n        \"bomb_count\": 2,\n        \"custom_item_count\": 2,\n        \"time_limit_seconds\": 70,\n    },\n    {\n        \"rows\": 15,\n        \"cols\": 21,\n        \"cell_size\": 30,\n        \"extra_open_walls\": 6,\n        \"bomb_count\": 4,\n        \"custom_item_count\": 3,\n        \"time_limit_seconds\": 55,\n    },\n    {\n        \"rows\": 17,\n        \"cols\": 25,\n        \"cell_size\": 25,\n        \"extra_open_walls\": 8,\n        \"bomb_count\": 6,\n        \"custom_item_count\": 4,\n        \"time_limit_seconds\": 45,\n    },\n]"
  },
  {
-  "label": "TODO 6 (Part 2/6)",
+  "label": "TODO 6-2",
   "kind": "Bonus",
   "file": "settings.py",
   "title": "걷는 속도 한 줄",
@@ -144,7 +144,7 @@
   "code": "PLAYER_MOVE_DELAY_MS = 100"
  },
  {
-  "label": "TODO 6 (Part 3/6)",
+  "label": "TODO 6-3",
   "kind": "Bonus",
   "file": "settings.py",
   "title": "힌트 버튼 설정",
@@ -153,7 +153,7 @@
   "code": "ALLOW_PATH_HINT = True\nMAX_HINT_COUNT = 2"
  },
  {
-  "label": "TODO 6 (Part 4/6)",
+  "label": "TODO 6-4",
   "kind": "Bonus",
   "file": "game.py",
   "title": "아이템 위치 요청",
@@ -162,25 +162,25 @@
   "code": "custom_positions = create_random_positions(\n    self.config[\"rows\"], self.config[\"cols\"],\n    self.config.get(\"custom_item_count\", 0), forbidden,\n)"
  },
  {
-  "label": "TODO 6 (Part 5/6)",
+  "label": "TODO 6-5",
   "kind": "Bonus",
   "file": "game.py",
   "title": "아이템 객체 생성",
   "englishTitle": "Turn those positions into real items.",
-  "note": "random.choice(CUSTOM_ITEMS)를 CUSTOM_ITEMS[0] 등으로 바꾸면 어떤 아이템이 나올지 지정할 수 있습니다. 마지막 forbidden.update(...)는 반드시 남겨야 다음 파트에서 폭탄이 겹치지 않습니다.",
+  "note": "random.choice(CUSTOM_ITEMS)를 CUSTOM_ITEMS[0] 등으로 바꾸면 어떤 아이템이 나올지 지정할 수 있습니다. 마지막 forbidden.update(...)는 반드시 남겨야 TODO 6-6에서 폭탄이 겹치지 않습니다.",
   "code": "self.items = [\n    CustomItem(row, col, self.config[\"cell_size\"], random.choice(CUSTOM_ITEMS))\n    for row, col in custom_positions\n]\nforbidden.update(custom_positions)"
  },
  {
-  "label": "TODO 6 (Part 6/6)",
+  "label": "TODO 6-6",
   "kind": "Bonus",
   "file": "game.py",
   "title": "폭탄 배치",
   "englishTitle": "Now do the same for the bombs.",
-  "note": "앞의 두 파트와 완전히 같은 모양입니다. self.items와 self.bombs가 끝에 반드시 list여야 하는 것이 유일한 강제 조건입니다.",
+  "note": "앞의 두 단계(6-4·6-5)와 완전히 같은 모양입니다. self.items와 self.bombs가 끝에 반드시 list여야 하는 것이 유일한 강제 조건입니다.",
   "code": "bomb_positions = create_random_positions(\n    self.config[\"rows\"],\n    self.config[\"cols\"],\n    self.config[\"bomb_count\"],\n    forbidden,\n)\nself.bombs = [\n    Bomb(row, col, self.config[\"cell_size\"])\n    for row, col in bomb_positions\n]"
  },
  {
-  "label": "TODO 7 (Part 1/8)",
+  "label": "TODO 7-1",
   "kind": "Bonus",
   "file": "settings.py",
   "title": "플레이어·목표 이미지",
@@ -189,7 +189,7 @@
   "code": "PLAYER_IMAGE_PATH = \"assets/images/player_ninja.png\"\nGOAL_IMAGE_PATH = \"assets/images/goal_chest.png\""
  },
  {
-  "label": "TODO 7 (Part 2/8)",
+  "label": "TODO 7-2",
   "kind": "Bonus",
   "file": "settings.py",
   "title": "폭탄·바닥 이미지",
@@ -198,7 +198,7 @@
   "code": "BOMB_IMAGE_PATH = \"assets/images/bomb_2.png\"\nFLOOR_TILE_IMAGE_PATH = \"assets/images/floor_tile_1.png\"  # Background floor for open path cells."
  },
  {
-  "label": "TODO 7 (Part 3/8)",
+  "label": "TODO 7-3",
   "kind": "Bonus",
   "file": "settings.py",
   "title": "크기 배수",
@@ -207,7 +207,7 @@
   "code": "PLAYER_IMAGE_SCALE = 1.0\nGOAL_IMAGE_SCALE = 1.0\nBOMB_IMAGE_SCALE = 1.0"
  },
  {
-  "label": "TODO 7 (Part 4/8)",
+  "label": "TODO 7-4",
   "kind": "Bonus",
   "file": "settings.py",
   "title": "벽·플레이어·목표 색",
@@ -216,7 +216,7 @@
   "code": "WALL_COLOR = (30, 41, 59)\nPLAYER_COLOR = (37, 99, 235)\nGOAL_COLOR = (250, 204, 21)"
  },
  {
-  "label": "TODO 7 (Part 5/8)",
+  "label": "TODO 7-5",
   "kind": "Bonus",
   "file": "settings.py",
   "title": "폭탄·폭발 색",
@@ -225,16 +225,16 @@
   "code": "BOMB_COLOR = (15, 23, 42)\nBOMB_EXPLOSION_COLOR = (239, 68, 68)"
  },
  {
-  "label": "TODO 7 (Part 6/8)",
+  "label": "TODO 7-6",
   "kind": "Bonus",
   "file": "settings.py",
   "title": "사운드 파일 두 개",
   "englishTitle": "Choose two sound files.",
-  "note": "None 또는 assets/sounds/ 아래 경로. 여기서는 '어떤 파일'만 고르고, 실제 재생 방식은 8/8에서 정합니다.",
+  "note": "None 또는 assets/sounds/ 아래 경로. 여기서는 '어떤 파일'만 고르고, 실제 재생 방식은 TODO 7-8에서 정합니다.",
   "code": "BOMB_SOUND_PATH = \"assets/sounds/explosion_1.wav\"\nBACKGROUND_MUSIC_PATH = \"assets/sounds/bgm_1.wav\""
  },
  {
-  "label": "TODO 7 (Part 7/8)",
+  "label": "TODO 7-7",
   "kind": "Bonus",
   "file": "settings.py",
   "title": "폭발 길이 · 음량",
@@ -243,7 +243,7 @@
   "code": "BOMB_EXPLOSION_DURATION_MS = 500\nBACKGROUND_MUSIC_VOLUME = 0.25"
  },
  {
-  "label": "TODO 7 (Part 8/8)",
+  "label": "TODO 7-8",
   "kind": "Bonus",
   "file": "game.py",
   "title": "음악 재생 방식",
@@ -252,7 +252,7 @@
   "code": "if BACKGROUND_MUSIC_PATH is None:\n    return\ntry:\n    if not pygame.mixer.get_init():\n        pygame.mixer.init()\n    pygame.mixer.music.load(BACKGROUND_MUSIC_PATH)\n    pygame.mixer.music.set_volume(BACKGROUND_MUSIC_VOLUME)\n    pygame.mixer.music.play(-1)\nexcept (pygame.error, FileNotFoundError, TypeError) as error:\n    print(f\"[Info] Background music load failed: {error}\")"
  },
  {
-  "label": "TODO 8 (Part 1/6)",
+  "label": "TODO 8-1",
   "kind": "Bonus",
   "file": "settings.py",
   "title": "커스텀 아이템 설계",
@@ -261,25 +261,25 @@
   "code": "CUSTOM_ITEMS = [\n    {\n        \"name\": \"Time Crystal\",\n        \"color\": (14, 165, 233),\n        \"image\": \"assets/images/item_gem_1.png\",\n        \"sound\": \"assets/sounds/pickup_1.wav\",\n        \"size\": 1.0,\n        \"effect\": \"add_time\",\n        \"amount\": 15,\n    },\n    {\n        \"name\": \"Hint Scroll\",\n        \"color\": (250, 204, 21),\n        \"image\": \"assets/images/item_star.png\",\n        \"sound\": \"assets/sounds/pickup_3.wav\",\n        \"size\": 1.0,\n        \"effect\": \"add_hint\",\n        \"amount\": 1,\n    },\n]"
  },
  {
-  "label": "TODO 8 (Part 2/6)",
+  "label": "TODO 8-2",
   "kind": "Bonus",
   "file": "game.py",
   "title": "add_time 분기",
   "englishTitle": "Handle the \"add_time\" effect.",
-  "note": "두 줄. elif가 아니라 독립된 if로 쓰게 되어 있어서, 3/6과 순서가 바뀌어도 동작이 같습니다.",
+  "note": "두 줄. elif가 아니라 독립된 if로 쓰게 되어 있어서, TODO 8-3과 순서가 바뀌어도 동작이 같습니다.",
   "code": "if effect == \"add_time\":\n    self.bonus_time_seconds += amount"
  },
  {
-  "label": "TODO 8 (Part 3/6)",
+  "label": "TODO 8-3",
   "kind": "Bonus",
   "file": "game.py",
   "title": "add_hint 분기",
   "englishTitle": "Handle the \"add_hint\" effect.",
-  "note": "2/6과 똑같은 모양. 둘 다 아닌 effect 문자열은 자동으로 아무 일도 안 하는 안전한 no-op이 됩니다 — 학생이 따로 쓸 코드가 없다는 점을 짚어주세요.",
+  "note": "TODO 8-2와 똑같은 모양. 둘 다 아닌 effect 문자열은 자동으로 아무 일도 안 하는 안전한 no-op이 됩니다 — 학생이 따로 쓸 코드가 없다는 점을 짚어주세요.",
   "code": "if effect == \"add_hint\":\n    self.hints_remaining += amount"
  },
  {
-  "label": "TODO 8 (Part 4/6)",
+  "label": "TODO 8-4",
   "kind": "Bonus",
   "file": "game.py",
   "title": "발밑 아이템 찾기",
@@ -288,16 +288,16 @@
   "code": "for item in self.items:\n    if item.active and item.get_position() == player_position:\n        item.active = False"
  },
  {
-  "label": "TODO 8 (Part 5/6)",
+  "label": "TODO 8-5",
   "kind": "Bonus",
   "file": "game.py",
   "title": "효과 실행 한 줄",
   "englishTitle": "Make its effect actually happen.",
-  "note": "한 줄이지만 들여쓰기가 4/6의 if 안쪽(16칸)이어야 합니다. 여기서 학생 본인이 쓴 2/6·3/6 코드가 실행됩니다.",
+  "note": "한 줄이지만 들여쓰기가 TODO 8-4의 if 안쪽(16칸)이어야 합니다. 여기서 학생 본인이 쓴 TODO 8-2·8-3 코드가 실행됩니다.",
   "code": "self.apply_custom_item_effect(item.item_def)"
  },
  {
-  "label": "TODO 8 (Part 6/6)",
+  "label": "TODO 8-6",
   "kind": "Bonus",
   "file": "game.py",
   "title": "아이템별 소리 재생",
@@ -306,7 +306,7 @@
   "code": "item_sound = self.get_custom_item_sound(item.item_def.get(\"sound\"))\nif item_sound:\n    item_sound.play()"
  },
  {
-  "label": "TODO 9 (Part 1/4)",
+  "label": "TODO 9-1",
   "kind": "Bonus",
   "file": "settings.py",
   "title": "미션 규칙(글)",
@@ -315,7 +315,7 @@
   "code": "MISSION_RULES = [\n    \"Reach the goal before time runs out.\",\n]"
  },
  {
-  "label": "TODO 9 (Part 2/4)",
+  "label": "TODO 9-2",
   "kind": "Bonus",
   "file": "settings.py",
   "title": "조작법 안내(글)",
@@ -324,7 +324,7 @@
   "code": "HOW_TO_PLAY_RULES = [\n    \"Reach the goal to clear each round.\",\n    \"Move with the Arrow Keys (or E/F/C/D on a controller).\",\n    \"Bombs send you back to the start - avoid them.\",\n    \"Collect items for a helpful bonus effect.\",\n]"
  },
  {
-  "label": "TODO 9 (Part 3/4)",
+  "label": "TODO 9-3",
   "kind": "Bonus",
   "file": "game.py",
   "title": "아직 못 이긴 경우",
@@ -333,7 +333,7 @@
   "code": "if self.player.get_position() != self.goal.get_position():\n    return"
  },
  {
-  "label": "TODO 9 (Part 4/4)",
+  "label": "TODO 9-4",
   "kind": "Bonus",
   "file": "game.py",
   "title": "이겼을 때 하는 일",

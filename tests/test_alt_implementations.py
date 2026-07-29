@@ -662,6 +662,57 @@ BAD_9B_RAISES = 'raise ValueError("nope")\n'
 case("9 Part2/2", "BAD: raises (negative control)", "harness_gameRules_9", args9(RULES_9A, BAD_9B_RAISES), expect_ok=False)
 
 
+# ------------------------------------------------- focused Bonus grading
+#
+# Every Bonus sub-step is its own sidebar step now, but several of them are
+# consecutive statement groups of ONE Python method, so the whole group's
+# code is still spliced together before it runs. The harnesses take a
+# trailing `focus` argument naming the one sub-step being graded, and only
+# that sub-step's checks decide pass/fail.
+#
+# The cases below are the ones that would silently break if `focus` were
+# ever dropped: a student sitting on 8-2 has NOT written 8-3 yet, so 8-3
+# still holds its bare `pass` starter. Grading the group as a whole would
+# fail them for work they have not been asked to do yet. Same story for
+# 6-1 vs the placement code, and for 9-1 vs 9-2.
+# The real 8-2/8-3 starter, at the same base indent the other fixtures in
+# this file use (buildFnSourceParts reindents the JOINED group once, so the
+# two halves have to agree with each other - which they do in data.js).
+STARTER_PASS = 'pass  # Write your code here.\n'
+
+# 8-2 done, 8-3 still the untouched `pass` starter -> 8-2 must PASS.
+case("8-2 focused", "add_time done while add_hint is still the starter", "harness_customItems_8",
+     args8(ITEM1_MINIMAL, None, None,
+           effect_split=(CANON_8_ADD_TIME, STARTER_PASS),
+           pickup_split=(CANON_8_SPOT, CANON_8_APPLY, CANON_8_SOUND)) + ("2",))
+# ...and the same group, focused on 8-3, must FAIL - the sub-step being
+# graded really is unwritten.
+case("8-3 focused", "BAD: add_hint still the starter (negative control)", "harness_customItems_8",
+     args8(ITEM1_MINIMAL, None, None,
+           effect_split=(CANON_8_ADD_TIME, STARTER_PASS),
+           pickup_split=(CANON_8_SPOT, CANON_8_APPLY, CANON_8_SOUND)) + ("3",), expect_ok=False)
+# The reverse: 8-3 written, 8-2 untouched -> focusing 8-3 passes.
+case("8-3 focused", "add_hint done while add_time is still the starter", "harness_customItems_8",
+     args8(ITEM1_MINIMAL, None, None,
+           effect_split=(STARTER_PASS, CANON_8_ADD_HINT),
+           pickup_split=(CANON_8_SPOT, CANON_8_APPLY, CANON_8_SOUND)) + ("3",))
+# A settings sub-step must not be failed by a LATER sibling being missing.
+case("6-1 focused", "rounds done while the hint settings are still missing", "harness_roundDesign_6",
+     args6(ROUNDS_3, DELAY_6, '', CANONICAL_6C) + ("1",))
+case("6-3 focused", "BAD: the focused hint settings really are missing", "harness_roundDesign_6",
+     args6(ROUNDS_3, DELAY_6, '', CANONICAL_6C) + ("3",), expect_ok=False)
+# TODO 7's eight sub-steps are fully independent settings blocks.
+case("7-1 focused", "images done while a later color block is missing", "harness_lookAndFeel_7",
+     args7(CANONICAL_7C, colors_b=BAD_7_MISSING_COLOR) + ("1",))
+case("7-5 focused", "BAD: the focused color block really is missing", "harness_lookAndFeel_7",
+     args7(CANONICAL_7C, colors_b=BAD_7_MISSING_COLOR) + ("5",), expect_ok=False)
+# TODO 9's two text sub-steps are independent of each other.
+case("9-1 focused", "mission written while how-to-play is still missing", "harness_gameRules_9",
+     args9((MISSION_9, ''), CANONICAL_9B) + ("1",))
+case("9-2 focused", "BAD: the focused how-to-play list really is missing", "harness_gameRules_9",
+     args9((MISSION_9, ''), CANONICAL_9B) + ("2",), expect_ok=False)
+
+
 def main():
     print("%-14s | %-55s | %-4s | notes" % ("Step", "Implementation", "PASS"))
     print("-" * 110)

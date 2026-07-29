@@ -1,12 +1,4 @@
 {
-  "_readme": [
-    "Teacher-written Korean commentary for the answer key. The CODE itself is",
-    "always extracted live from dijkstra_maze/complete/*.py by",
-    "scripts/gen_answers.js - never typed here - so this file can never drift",
-    "out of sync with the real answers. Only the short Korean title and the",
-    "note are hand-written.",
-    "Keys are the step id, plus '#<0-based part index>' for multi-part steps."
-  ],
   "1": {
     "title": "게임 이름 짓기",
     "note": "문자열 두 개만 바꾸면 됩니다. 따옴표를 지우는 실수가 가장 흔합니다."
@@ -23,6 +15,14 @@
     "title": "행/열 갱신",
     "note": "+= 두 줄. = 로 쓰면 이전 위치가 사라집니다."
   },
+  "_readme": [
+    "Teacher-written Korean commentary for the answer key. The CODE itself is",
+    "always extracted live from dijkstra_maze/complete/*.py by",
+    "scripts/gen_answers.js - never typed here - so this file can never drift",
+    "out of sync with the real answers. Only the short Korean title and the",
+    "note are hand-written.",
+    "Keys are the step id, plus '#<0-based part index>' for multi-part steps."
+  ],
   "5#0": {
     "title": "다익스트라 — 후보 비용",
     "note": "지금까지 온 비용 + 이번 칸 비용. 한 줄입니다."
@@ -31,103 +31,99 @@
     "title": "다익스트라 — 더 좋으면 갱신",
     "note": "더 작을 때만 distance/parent를 갱신하고 큐에 넣습니다. 부등호 방향(<)과 push 순서 (비용, 위치)를 확인하세요."
   },
-
-  "6#0": {
+  "6-1": {
     "title": "라운드 설계",
     "note": "개방형. 라운드 개수는 자유(복사·삭제 가능)이고, 딕셔너리 키는 전부 남겨야 합니다. 값은 정수만. 맵 에디터로 그리면 숫자가 자동으로 채워집니다."
   },
-  "6#1": {
+  "6-2": {
     "title": "걷는 속도 한 줄",
     "note": "숫자 하나. 작을수록 빠릅니다. 이 파트는 '한 줄만 바꾸고 바로 확인'이 목적이라 틀릴 여지가 거의 없습니다."
   },
-  "6#2": {
+  "6-3": {
     "title": "힌트 버튼 설정",
     "note": "ALLOW_PATH_HINT는 True/False, MAX_HINT_COUNT는 정수. False로 두면 힌트 버튼 자체가 사라집니다."
   },
-  "6#3": {
+  "6-4": {
     "title": "아이템 위치 요청",
     "note": "주어진 코드 그대로 두어도 통과입니다. 바꿀 곳은 세 번째 인자(개수)뿐이라고 안내하세요."
   },
-  "6#4": {
+  "6-5": {
     "title": "아이템 객체 생성",
-    "note": "random.choice(CUSTOM_ITEMS)를 CUSTOM_ITEMS[0] 등으로 바꾸면 어떤 아이템이 나올지 지정할 수 있습니다. 마지막 forbidden.update(...)는 반드시 남겨야 다음 파트에서 폭탄이 겹치지 않습니다."
+    "note": "random.choice(CUSTOM_ITEMS)를 CUSTOM_ITEMS[0] 등으로 바꾸면 어떤 아이템이 나올지 지정할 수 있습니다. 마지막 forbidden.update(...)는 반드시 남겨야 TODO 6-6에서 폭탄이 겹치지 않습니다."
   },
-  "6#5": {
+  "6-6": {
     "title": "폭탄 배치",
-    "note": "앞의 두 파트와 완전히 같은 모양입니다. self.items와 self.bombs가 끝에 반드시 list여야 하는 것이 유일한 강제 조건입니다."
+    "note": "앞의 두 단계(6-4·6-5)와 완전히 같은 모양입니다. self.items와 self.bombs가 끝에 반드시 list여야 하는 것이 유일한 강제 조건입니다."
   },
-
-  "7#0": {
+  "7-1": {
     "title": "플레이어·목표 이미지",
     "note": "None 또는 따옴표 친 경로. 오른쪽 에셋 피커로 클릭하면 자동으로 채워집니다."
   },
-  "7#1": {
+  "7-2": {
     "title": "폭탄·바닥 이미지",
     "note": "같은 규칙. FLOOR_TILE_IMAGE_PATH 한 줄만 바꿔도 미로 전체 분위기가 달라져서 성취감이 큽니다."
   },
-  "7#2": {
+  "7-3": {
     "title": "크기 배수",
     "note": "1.0이 기본. 이미지가 없어도 기본 도형 크기가 같이 바뀝니다. 0.1~3.0 밖은 경고만 나오고 통과합니다."
   },
-  "7#3": {
+  "7-4": {
     "title": "벽·플레이어·목표 색",
     "note": "(R, G, B) 정수 3개. WALL_COLOR를 먼저 바꾸게 하면 변화가 가장 크게 보입니다."
   },
-  "7#4": {
+  "7-5": {
     "title": "폭탄·폭발 색",
     "note": "같은 규칙 두 줄. BOMB_EXPLOSION_COLOR는 잠깐 번쩍이므로 밝은 색이 좋습니다."
   },
-  "7#5": {
+  "7-6": {
     "title": "사운드 파일 두 개",
-    "note": "None 또는 assets/sounds/ 아래 경로. 여기서는 '어떤 파일'만 고르고, 실제 재생 방식은 8/8에서 정합니다."
+    "note": "None 또는 assets/sounds/ 아래 경로. 여기서는 '어떤 파일'만 고르고, 실제 재생 방식은 TODO 7-8에서 정합니다."
   },
-  "7#6": {
+  "7-7": {
     "title": "폭발 길이 · 음량",
     "note": "밀리초 정수와 0.0~1.0 실수. 범위를 벗어나도 경고만 나옵니다."
   },
-  "7#7": {
+  "7-8": {
     "title": "음악 재생 방식",
     "note": "play() 안의 숫자 하나만 바꾸면 되는 파트입니다. -1 무한반복 / 0 한 번 / 3 네 번. try/except는 반드시 남겨야 사운드 파일이 없는 친구도 게임을 열 수 있습니다."
   },
-
-  "8#0": {
+  "8-1": {
     "title": "커스텀 아이템 설계",
     "note": "개방형. 아이템 개수 무제한이고, 각자 이미지·소리·크기를 따로 가질 수 있습니다. 블록 하나를 통째로 복사해 붙여넣으면 두 번째 아이템이 됩니다."
   },
-  "8#1": {
+  "8-2": {
     "title": "add_time 분기",
-    "note": "두 줄. elif가 아니라 독립된 if로 쓰게 되어 있어서, 3/6과 순서가 바뀌어도 동작이 같습니다."
+    "note": "두 줄. elif가 아니라 독립된 if로 쓰게 되어 있어서, TODO 8-3과 순서가 바뀌어도 동작이 같습니다."
   },
-  "8#2": {
+  "8-3": {
     "title": "add_hint 분기",
-    "note": "2/6과 똑같은 모양. 둘 다 아닌 effect 문자열은 자동으로 아무 일도 안 하는 안전한 no-op이 됩니다 — 학생이 따로 쓸 코드가 없다는 점을 짚어주세요."
+    "note": "TODO 8-2와 똑같은 모양. 둘 다 아닌 effect 문자열은 자동으로 아무 일도 안 하는 안전한 no-op이 됩니다 — 학생이 따로 쓸 코드가 없다는 점을 짚어주세요."
   },
-  "8#3": {
+  "8-4": {
     "title": "발밑 아이템 찾기",
     "note": "item.active를 먼저 False로 만드는 것이 핵심입니다. 그래야 같은 프레임에서 두 번 먹히지 않습니다."
   },
-  "8#4": {
+  "8-5": {
     "title": "효과 실행 한 줄",
-    "note": "한 줄이지만 들여쓰기가 4/6의 if 안쪽(16칸)이어야 합니다. 여기서 학생 본인이 쓴 2/6·3/6 코드가 실행됩니다."
+    "note": "한 줄이지만 들여쓰기가 TODO 8-4의 if 안쪽(16칸)이어야 합니다. 여기서 학생 본인이 쓴 TODO 8-2·8-3 코드가 실행됩니다."
   },
-  "8#5": {
+  "8-6": {
     "title": "아이템별 소리 재생",
     "note": "get_custom_item_sound는 파일이 없으면 None을 돌려주므로 if로 감싸야 합니다. 소리를 아예 안 넣어도 경고만 나오고 통과합니다."
   },
-
-  "9#0": {
+  "9-1": {
     "title": "미션 규칙(글)",
     "note": "문자열 리스트. 각 줄마다 따옴표와 쉼표가 필요합니다. 자기가 만든 아이템 이름을 넣게 하세요."
   },
-  "9#1": {
+  "9-2": {
     "title": "조작법 안내(글)",
     "note": "같은 모양. 방향키/컨트롤러 설명이 실제 조작과 맞는지만 확인하면 됩니다."
   },
-  "9#2": {
+  "9-3": {
     "title": "아직 못 이긴 경우",
     "note": "기본형 그대로 두어도 정답입니다. 추가 조건을 넣고 싶으면 같은 모양의 가드를 밑에 한 쌍 더 붙이면 됩니다."
   },
-  "9#3": {
+  "9-4": {
     "title": "이겼을 때 하는 일",
     "note": "마지막 라운드면 game_clear, 아니면 round_transition_time. 목표에서 멀리 있는데도 클리어되면 오답입니다. '모든 아이템 수집' 조건을 넣을 때 아이템이 0개인 라운드가 있으면 클리어 불가가 되니 주의."
   }

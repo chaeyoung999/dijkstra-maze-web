@@ -13,11 +13,12 @@
 //   node scripts/gen_export_data.js
 //
 // Marker format in the .py files:
-//   # --- TODO 6 (Part 2/6): WRITE YOUR CODE BELOW ---
-//   ...student code...
-//   # --- END OF TODO 6 (Part 2/6) ---
-// and, for single-part TODOs:
 //   # --- TODO 3: WRITE YOUR CODE BELOW ---   /   # --- END OF TODO 3 ---
+// Bonus sub-steps use a hyphenated id (they are standalone steps now, not
+// parts of a bigger one):
+//   # --- TODO 6-2: WRITE YOUR CODE BELOW ---  /  # --- END OF TODO 6-2 ---
+// The (Part n/m) form survives only for TODO 5, the one Required step that
+// is still genuinely two coupled halves of a single expression.
 "use strict";
 
 const fs = require("fs");
@@ -32,8 +33,8 @@ const FILE_ORDER = [
   "cell.py", "goal.py", "items.py", "main.py", "requirements.txt",
 ];
 
-const BEGIN_RE = /^([ \t]*)#\s*---\s*TODO\s+(\d+)(?:\s*\(Part\s+(\d+)\/(\d+)\))?\s*:\s*WRITE YOUR CODE BELOW\s*---\s*$/;
-const END_RE = /^[ \t]*#\s*---\s*END OF TODO\s+(\d+)(?:\s*\(Part\s+(\d+)\/(\d+)\))?\s*---\s*$/;
+const BEGIN_RE = /^([ \t]*)#\s*---\s*TODO\s+(\d+(?:-\d+)?)(?:\s*\(Part\s+(\d+)\/(\d+)\))?\s*:\s*WRITE YOUR CODE BELOW\s*---\s*$/;
+const END_RE = /^[ \t]*#\s*---\s*END OF TODO\s+(\d+(?:-\d+)?)(?:\s*\(Part\s+(\d+)\/(\d+)\))?\s*---\s*$/;
 
 function readFileLF(p) {
   return fs.readFileSync(p, "utf8").replace(/\r\n/g, "\n");

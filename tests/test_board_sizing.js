@@ -20,6 +20,18 @@ const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
 
+// Course structure, read from the real data.js - the fixtures below need
+// to know which sub-steps make up a Bonus group.
+const DATA = (function () {
+  const box = { window: {} };
+  vm.runInContext(
+    fs.readFileSync(path.join(__dirname, "..", "data.js"), "utf8"),
+    vm.createContext(box),
+    { filename: "data.js" }
+  );
+  return box.window.COURSE_DATA;
+})();
+
 const ROOT = path.join(__dirname, "..");
 const failures = [];
 
@@ -278,9 +290,16 @@ function paintedProgress(rows, cols) {
     for (let c = 0; c < cols; c++) row.push("FLOOR");
     grid.push(row);
   }
+  // The map editor unlocks once EVERY sub-step of the TODO 6 group is
+  // completed (it used to be the single step "6", before each part became
+  // its own step), so the fixture has to complete the whole group.
+  const steps = {};
+  DATA.BONUS_GROUPS.filter((g) => g.id === "6")[0].ids.forEach((id) => {
+    steps[id] = { status: "completed" };
+  });
   return {
     currentStepId: "1",
-    steps: { "6": { status: "completed" } },
+    steps: steps,
     mapEditorData: { activeRound: 0, rounds: [{ rows, cols, seed: 1, clusterSize: 3, grid, start: [0, 0], goal: [rows - 1, cols - 1] }] },
   };
 }
