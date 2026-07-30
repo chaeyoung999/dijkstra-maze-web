@@ -3451,15 +3451,114 @@
     });
   }
 
+  // ------------------------------------------- progress file with assets
+  //
+  // The pictures and sounds a student uploads live in IndexedDB, not in
+  // `state` - putting megabytes of base64 in `state` would blow
+  // localStorage's ~5MB quota on every keystroke. So they are folded into
+  // the DOWNLOADED file only, as a top-level `uploads` map of
+  // path -> data: URL, and unpacked back into IndexedDB on load. That makes
+  // progress.json genuinely portable: save on one computer, load on
+  // another, and your own images are still there.
+  function blobToDataUrl(blob) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function () { resolve(String(reader.result)); };
+      reader.onerror = function () { reject(reader.error || new Error("could not read file")); };
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  function dataUrlToBlob(dataUrl) {
+    var m = /^data:([^;,]*)(;base64)?,([\s\S]*)$/.exec(String(dataUrl || ""));
+    if (!m) return null;
+    var mime = m[1] || "application/octet-stream";
+    var bytes;
+    if (m[2]) {
+      var bin = atob(m[3]);
+      bytes = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    } else {
+      var txt = decodeURIComponent(m[3]);
+      bytes = new Uint8Array(txt.length);
+      for (var j = 0; j < txt.length; j++) bytes[j] = txt.charCodeAt(j);
+    }
+    return new Blob([bytes], { type: mime });
+  }
+
+  function collectUploadsForExport() {
+    return idbAllUploads().then(function (map) {
+      var paths = [];
+      for (var p in map) { if (map.hasOwnProperty(p) && map[p]) paths.push(p); }
+      if (!paths.length) return {};
+      return Promise.all(paths.map(function (path) {
+        return blobToDataUrl(map[path]).then(function (dataUrl) {
+          return { path: path, dataUrl: dataUrl };
+        }).catch(function () { return null; });
+      })).then(function (entries) {
+        var out = {};
+        entries.forEach(function (e) { if (e) out[e.path] = e.dataUrl; });
+        return out;
+      });
+    }).catch(function () { return {}; });
+  }
+
+  function humanSize(bytes) {
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + " KB";
+    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+  }
+
   function exportProgress() {
-    downloadJSON("progress.json", { kind: "dijkstra-maze-todo-progress", version: 1, savedAt: new Date().toISOString(), state: state });
-    if (state.assetData && state.assetData.uploadedFiles && state.assetData.uploadedFiles.length) {
+    collectUploadsForExport().then(function (uploads) {
+      var payload = {
+        kind: "dijkstra-maze-todo-progress",
+        version: 2,
+        savedAt: new Date().toISOString(),
+        state: state,
+        uploads: uploads,
+      };
+      var text = JSON.stringify(payload, null, 2);
+      downloadJSON("progress.json", payload);
+
+      var count = 0;
+      for (var k in uploads) { if (uploads.hasOwnProperty(k)) count++; }
+      if (!count) return;
       showConfirm(
-        "Remember your uploaded files",
-        "progress.json saved your code, your painted maps, and the names of the " + state.assetData.uploadedFiles.length + " file(s) you uploaded in TODO 9 — but NOT the pictures and sounds themselves. Those are stored in THIS browser, so they keep working here, but on another computer you'd upload them again. To keep a copy of the files, use \"Download my project\" — the zip includes them.",
+        "Saved, pictures and sounds included",
+        "progress.json holds your code, your painted maps AND the " + count + " file(s) you uploaded (" + humanSize(text.length) + " in total). Load it on any computer and your own images will be there too — no re-uploading.",
         { confirmLabel: "Got it", cancelLabel: "Close" }
       );
-    }
+    }).catch(function (err) {
+      showConfirm(
+        "Could not save",
+        "Something went wrong building progress.json (" + (err && err.message ? err.message : err) + "). Nothing was changed — try again.",
+        { confirmLabel: "OK", cancelLabel: "Close" }
+      );
+    });
+  }
+
+  // Replaces this browser's uploads with the ones inside a progress file.
+  // Only called when the file actually carries an `uploads` field: a file
+  // saved by an older version has none, and wiping the student's real
+  // images because their save file predates the feature would be worse
+  // than leaving them in place.
+  function restoreUploads(uploads) {
+    var wanted = [];
+    for (var p in uploads) { if (uploads.hasOwnProperty(p)) wanted.push(p); }
+    var existing = [];
+    for (var q in UPLOADED_URLS) { if (UPLOADED_URLS.hasOwnProperty(q)) existing.push(q); }
+    // Clear first, so a file that no longer references an old upload does
+    // not leave it behind to be silently bundled into the next project zip.
+    return Promise.all(existing.map(function (path) {
+      return wanted.indexOf(path) === -1 ? forgetUploadedAsset(path) : Promise.resolve();
+    })).then(function () {
+      return Promise.all(wanted.map(function (path) {
+        var blob = dataUrlToBlob(uploads[path]);
+        if (!blob) return Promise.resolve();
+        return rememberUploadedAsset(path, blob).catch(function () {});
+      }));
+    });
   }
 
   function importProgressFile(file) {
@@ -3471,16 +3570,49 @@
       if (!ok) return;
       var reader = new FileReader();
       reader.onload = function () {
+        var parsed;
         try {
-          var parsed = JSON.parse(String(reader.result));
+          parsed = JSON.parse(String(reader.result));
+        } catch (e) {
+          showConfirm("Could not load file", "This does not look like a valid progress.json file (" + e.message + ").", { confirmLabel: "OK", cancelLabel: "Close" });
+          return;
+        }
+        try {
           var payload = parsed && parsed.state ? parsed.state : parsed;
           state = normalizeLoadedState(payload);
           saveState();
           renderAll();
           PlayEngine.refresh();
-        } catch (e) {
-          showConfirm("Could not load file", "This does not look like a valid progress.json file (" + e.message + ").", { confirmLabel: "OK", cancelLabel: "Close" });
+        } catch (e2) {
+          showConfirm("Could not load file", "This does not look like a valid progress.json file (" + e2.message + ").", { confirmLabel: "OK", cancelLabel: "Close" });
+          return;
         }
+
+        var listed = (state.assetData && state.assetData.uploadedFiles) ? state.assetData.uploadedFiles.length : 0;
+        if (!parsed || !parsed.uploads) {
+          // Saved by a version that couldn't carry the files themselves.
+          if (listed) {
+            showConfirm(
+              "Loaded — but without the pictures and sounds",
+              "This file was saved by an older version of the site, so it lists " + listed + " uploaded file(s) but doesn't contain them. Your code and maps are restored. Upload those files again here (or open the file on the computer that made it and press \"Save my work\" once to make a new, complete copy).",
+              { confirmLabel: "Got it", cancelLabel: "Close" }
+            );
+          }
+          return;
+        }
+        restoreUploads(parsed.uploads).then(function () {
+          renderAll();
+          PlayEngine.refresh();
+          var restored = 0;
+          for (var k in parsed.uploads) { if (parsed.uploads.hasOwnProperty(k)) restored++; }
+          if (restored) {
+            showConfirm(
+              "Loaded, pictures and sounds included",
+              "Your code, your maps and " + restored + " uploaded file(s) are all back. They're stored in this browser now, so they'll still be here next time you open the site on this computer.",
+              { confirmLabel: "Got it", cancelLabel: "Close" }
+            );
+          }
+        });
       };
       reader.readAsText(file);
     });
@@ -6252,7 +6384,7 @@
         ul.appendChild(row);
       });
       box.appendChild(ul);
-      box.appendChild(el("p", { class: "small muted", text: "These live in assets/ now: they keep working here after a reload, and they're included automatically when you download your project. They are NOT inside progress.json, so on a different computer you'd upload them again." }));
+      box.appendChild(el("p", { class: "small muted", text: "These live in assets/ now: they keep working here after a reload, they're included when you download your project, and they're saved inside progress.json too — so \"Save my work\" here and \"Load my work\" on another computer brings them with you." }));
       container.appendChild(box);
     }
 

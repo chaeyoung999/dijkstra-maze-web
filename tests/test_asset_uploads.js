@@ -68,6 +68,9 @@ const NAMES = [
   "resolveAssetPath", "availableAssetNames", "loadUploadedAssets",
   "rememberUploadedAsset", "forgetUploadedAsset", "audioForPath",
   "loadImageCached",
+  // progress.json round trip: uploads are folded into the downloaded file
+  // as data: URLs and unpacked back into IndexedDB on load.
+  "blobToDataUrl", "dataUrlToBlob", "collectUploadsForExport", "restoreUploads",
 ];
 
 // The two constants the extracted functions close over. Read from app.js so
@@ -166,6 +169,36 @@ function makeEnv(idbOpts, sharedDbs) {
     // for things the fake "server"/blob store actually has.
     _imageSrcs: [],
     Audio: function (src) { this.src = src; this.play = () => Promise.resolve(); },
+    Uint8Array,
+    decodeURIComponent,
+    atob: (b64) => Buffer.from(b64, "base64").toString("binary"),
+    // Enough of Blob/FileReader for the progress.json round trip: bytes in,
+    // data: URL out, bytes back.
+    Blob: function (parts, opts) {
+      const bytes = [];
+      (parts || []).forEach((p) => {
+        if (typeof p === "string") { for (let i = 0; i < p.length; i++) bytes.push(p.charCodeAt(i) & 0xff); }
+        else { for (const b of p) bytes.push(b); }
+      });
+      this._bytes = Uint8Array.from(bytes);
+      this.type = (opts && opts.type) || "";
+      this.size = this._bytes.length;
+      this.arrayBuffer = () => Promise.resolve(this._bytes.buffer);
+    },
+    FileReader: function () {
+      this.readAsDataURL = (blob) => {
+        setTimeout(() => {
+          if (!blob || !blob._bytes) {
+            this.error = new Error("not a blob");
+            if (this.onerror) this.onerror();
+            return;
+          }
+          const b64 = Buffer.from(blob._bytes).toString("base64");
+          this.result = "data:" + (blob.type || "application/octet-stream") + ";base64," + b64;
+          if (this.onload) this.onload();
+        }, 0);
+      };
+    },
   };
   // app.js gates on window.indexedDB but calls the bare global, exactly as a
   // browser exposes it - mirror both onto the same object.
@@ -298,6 +331,77 @@ const tick = () => new Promise((r) => setTimeout(r, 5));
     !env.UPLOADED_URLS[PATH] && env._revoked.includes(doomedUrl));
   check("removing one upload leaves the others alone",
     !!env.UPLOADED_URLS[sPath]);
+
+  // ---- 6b. progress.json carries the pictures to another computer ------
+  // The teacher's report: "save the json, load it on another computer, and
+  // it says the image is missing". The uploads have to travel INSIDE the
+  // file, because IndexedDB obviously doesn't follow it.
+  const pcA = {};
+  const envA = makeEnv({}, pcA);
+  const PNG_BYTES = [137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3];
+  const WAV_BYTES = [82, 73, 70, 70, 9, 9];
+  vm.runInContext(
+    `IMG_BLOB = new Blob([new Uint8Array(${JSON.stringify(PNG_BYTES)})], { type: "image/png" });` +
+    `SND_BLOB = new Blob([new Uint8Array(${JSON.stringify(WAV_BYTES)})], { type: "audio/wav" });`,
+    envA
+  );
+  await vm.runInContext(`rememberUploadedAsset("assets/images/nubzuki.png", IMG_BLOB)`, envA);
+  await vm.runInContext(`rememberUploadedAsset("assets/sounds/ding.wav", SND_BLOB)`, envA);
+  await tick();
+
+  const exported = await vm.runInContext(`collectUploadsForExport()`, envA);
+  check("saving collects every upload into the progress file",
+    Object.keys(exported).sort().join(",") === "assets/images/nubzuki.png,assets/sounds/ding.wav",
+    `(${Object.keys(exported).join(", ")})`);
+  check("each upload travels as a data: URL with its real mime type",
+    /^data:image\/png;base64,/.test(exported["assets/images/nubzuki.png"]) &&
+    /^data:audio\/wav;base64,/.test(exported["assets/sounds/ding.wav"]));
+  // The exported map must survive JSON, since that is literally the file.
+  const throughJson = JSON.parse(JSON.stringify(exported));
+
+  // A different computer: brand-new browser storage, nothing uploaded.
+  const pcB = {};
+  const envB = makeEnv({}, pcB);
+  await vm.runInContext(`loadUploadedAssets()`, envB);
+  await tick();
+  check("the second computer starts with no uploads at all",
+    Object.keys(envB.UPLOADED_URLS).length === 0);
+
+  envB.INCOMING = throughJson;
+  await vm.runInContext(`restoreUploads(INCOMING)`, envB);
+  await tick();
+  check("loading the progress file restores the uploads on the new computer",
+    Object.keys(envB.UPLOADED_URLS).sort().join(",") === "assets/images/nubzuki.png,assets/sounds/ding.wav",
+    `(${Object.keys(envB.UPLOADED_URLS).join(", ")})`);
+
+  const restoredBytes = Array.from(pcB[IDB_NAME].stores[IDB_UPLOADS].get("assets/images/nubzuki.png")._bytes);
+  check("the restored picture is byte-for-byte the original",
+    restoredBytes.join(",") === PNG_BYTES.join(","), `(${restoredBytes.join(",")})`);
+  check("the restored picture's mime type survived",
+    pcB[IDB_NAME].stores[IDB_UPLOADS].get("assets/images/nubzuki.png").type === "image/png");
+
+  envB._imageSrcs.length = 0;
+  await vm.runInContext(`loadImageCached("assets/images/nubzuki.png")`, envB);
+  await tick();
+  check("and it renders on the new computer instead of 'not found'",
+    envB._imageSrcs.includes(envB.UPLOADED_URLS["assets/images/nubzuki.png"]));
+  const namesB = vm.runInContext(`availableAssetNames("image")`, envB);
+  check("the grader on the new computer accepts the restored path too",
+    namesB.includes("nubzuki.png"), `(${namesB.join(", ")})`);
+
+  // Loading a file that no longer lists an upload must not leave the old
+  // one behind, or it would be silently bundled into the next zip.
+  envB.INCOMING2 = { "assets/images/nubzuki.png": throughJson["assets/images/nubzuki.png"] };
+  await vm.runInContext(`restoreUploads(INCOMING2)`, envB);
+  await tick();
+  check("loading a file without an old upload clears that upload",
+    !envB.UPLOADED_URLS["assets/sounds/ding.wav"] &&
+    !pcB[IDB_NAME].stores[IDB_UPLOADS].has("assets/sounds/ding.wav"));
+  check("uploads the new file still lists are kept",
+    !!envB.UPLOADED_URLS["assets/images/nubzuki.png"]);
+
+  check("a malformed data: URL is skipped rather than crashing the load",
+    vm.runInContext(`dataUrlToBlob("not-a-data-url")`, envB) === null);
 
   // ---- 7. a browser that refuses storage fails LOUDLY -----------------
   // finishUpload must not claim success when nothing was stored, or the
