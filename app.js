@@ -7093,14 +7093,29 @@
       refs.playBtn.disabled = isRunning;
       refs.pauseBtn.disabled = !isRunning;
       refs.pauseBtn.textContent = isRunning ? "Pause" : "Resume";
+      // Every play/pause/stop path sets `running` and then calls this, so
+      // this is the one place the background music has to follow.
+      syncBackgroundMusic();
     }
 
-    // `name` is either one of SPRITE_SOUND's built-in keys or a raw asset
-    // path (so a student's own uploaded sound plays here too, via
-    // resolveAssetPath inside audioForPath).
-    function playAudio(name) {
+    // Plays one sound effect. `chosen` is whatever the student's own code
+    // asked for (an item's "sound", or BOMB_SOUND_PATH):
+    //
+    //   a path        -> play exactly that, uploads included (audioForPath
+    //                    runs it through resolveAssetPath)
+    //   null          -> the student deliberately set None. Stay SILENT,
+    //                    which is what the real game does: load_sound(None)
+    //                    returns None and game.py skips the .play().
+    //   undefined     -> that setting has not been reached yet, so fall
+    //                    back to the bundled effect and the preview still
+    //                    gives feedback.
+    //
+    // Keeping null and undefined apart is the whole point: without it,
+    // "turn this sound off" was impossible to hear in the Play tab.
+    function playAudio(chosen, fallback) {
       if (!soundOn) return;
-      var a = audioForPath(SPRITE_SOUND[name] || name);
+      var path = chosen === undefined ? fallback : chosen;
+      var a = audioForPath(path);
       if (!a) return;
       try {
         a.volume = 0.5;
@@ -7112,6 +7127,41 @@
       pickup: "assets/sounds/pickup_3.wav",
       bomb: "assets/sounds/explosion_1.wav",
     };
+
+    // Background music (BACKGROUND_MUSIC_PATH / BACKGROUND_MUSIC_VOLUME,
+    // TODO 9-6 and 9-7). The Play tab used to ignore these two entirely, so
+    // a student could pick a track, hear it in the asset picker, and then
+    // never hear it in their own game. Loops for as long as a round is
+    // actually being played, and follows the Sound checkbox.
+    var musicEl = null, musicPath = null;
+    function syncBackgroundMusic() {
+      var vis = playVisuals();
+      var wanted = vis.paths.BACKGROUND_MUSIC_PATH;
+      var shouldPlay = soundOn && running && !!wanted;
+      if (!shouldPlay) {
+        if (musicEl) { try { musicEl.pause(); } catch (e) {} }
+        if (!wanted) { musicEl = null; musicPath = null; }
+        return;
+      }
+      if (!musicEl || musicPath !== wanted) {
+        if (musicEl) { try { musicEl.pause(); } catch (e) {} }
+        musicEl = audioForPath(wanted);
+        musicPath = wanted;
+        if (musicEl) musicEl.loop = true;
+      }
+      if (!musicEl) return;
+      var vol = parseNumberSetting(
+        BONUS_GROUP_IDS["9"].map(bonusCode).join("\n"),
+        "BACKGROUND_MUSIC_VOLUME", 0, 1, 0.25);
+      try {
+        musicEl.volume = vol;
+        var r = musicEl.play();
+        if (r && r.catch) r.catch(function () {});
+      } catch (e) { /* autoplay refused until the student clicks - fine */ }
+    }
+    function stopBackgroundMusic() {
+      if (musicEl) { try { musicEl.pause(); musicEl.currentTime = 0; } catch (e) {} }
+    }
 
     // Mirrors game.py's check_items()/apply_custom_item_effect()/
     // check_bombs()/check_goal() (D4's simplified game: pure maze-solving,
@@ -7138,7 +7188,9 @@
         } else {
           statusLine(teachingNote("Collected an item, but TODO 10 isn't finished yet, so it has no effect."));
         }
-        playAudio("pickup");
+        // Each item carries its OWN "sound" (TODO 10-1), exactly like
+        // game.py's check_items -> get_custom_item_sound(item_def["sound"]).
+        playAudio(def.sound, SPRITE_SOUND.pickup);
         updateStatusGrid();
       }
       // A bomb touch is a one-shot trigger (matches Bomb.trigger() in
@@ -7150,7 +7202,7 @@
           b.active = false;
           player.row = playerStart.row; player.col = playerStart.col;
           hintPath = [];
-          playAudio("bomb");
+          playAudio(playVisuals().paths.BOMB_SOUND_PATH, SPRITE_SOUND.bomb);
           statusLine("Boom! Back to the start.");
           updateStatusGrid();
           draw();
@@ -7330,7 +7382,12 @@
         });
         restartBtn.addEventListener("click", function () { startRound(0); });
         hintBtn.addEventListener("click", onHint);
-        soundCheckbox.addEventListener("change", function () { soundOn = soundCheckbox.checked; });
+        soundCheckbox.addEventListener("change", function () {
+          soundOn = soundCheckbox.checked;
+          // Ticking Sound during a round should start the music there and
+          // then, not only at the next round.
+          syncBackgroundMusic();
+        });
 
         refreshTitleCard();
         loadCustomItems();
@@ -7356,6 +7413,7 @@
       unmount: function () {
         if (timerId) clearInterval(timerId);
         if (hintTimeout) clearTimeout(hintTimeout);
+        stopBackgroundMusic();
         if (refs && refs.canvas) refs.canvas.removeEventListener("keydown", onKeydown);
         window.removeEventListener("resize", onViewportChange);
         document.removeEventListener("fullscreenchange", onViewportChange);
