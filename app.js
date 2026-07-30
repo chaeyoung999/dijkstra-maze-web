@@ -6248,6 +6248,48 @@
       }
     }
 
+    // Restores the BYTES of a file that is listed in the student's progress
+    // but isn't in this browser: either they uploaded it before the site
+    // could store uploads at all (it was only downloaded to their Downloads
+    // folder), or they loaded a progress.json saved by that older version.
+    //
+    // Unlike a normal upload this keeps the RECORDED filename and touches no
+    // code: the path is already written in their settings.py, so putting the
+    // bytes back under that exact path is all that's missing.
+    function reuploadMissing(file) {
+      var input = el("input", {
+        type: "file",
+        accept: file.kind === "image" ? "image/*" : "audio/*",
+        style: "display:none",
+      });
+      document.body.appendChild(input);
+      input.addEventListener("change", function () {
+        var picked = input.files && input.files[0];
+        input.remove();
+        if (!picked) return;
+        var ext = (picked.name.split(".").pop() || "").toLowerCase();
+        var okList = file.kind === "image" ? IMAGE_EXT_OK : SOUND_EXT_OK;
+        if (okList.indexOf(ext) === -1) {
+          showConfirm("Unsupported file type", "\"" + picked.name + "\" doesn't look like a " + file.kind + " file (expected: " + okList.join(", ") + ").", { confirmLabel: "OK", cancelLabel: "Close" });
+          return;
+        }
+        var path = pathFor(file.name, file.kind);
+        rememberUploadedAsset(path, picked).then(function () {
+          renderAllPanels();
+          if (typeof PlayEngine !== "undefined" && PlayEngine.refresh) PlayEngine.refresh();
+          var note = "\"" + file.name + "\" is back — it shows in the preview and the Play tab again, it's included when you download your project, and \"Save my work\" now stores it inside progress.json.";
+          var recordedExt = (file.name.split(".").pop() || "").toLowerCase();
+          if (ext !== recordedExt) {
+            note += " Note: you picked a ." + ext + " file but your code refers to \"" + path + "\", so it was saved under that name.";
+          }
+          showConfirm("Picture restored", note, { confirmLabel: "Got it", cancelLabel: "Close" });
+        }).catch(function (err) {
+          showConfirm("Could not store it", "This browser wouldn't let the site save the file (" + (err && err.message ? err.message : "storage unavailable") + ").", { confirmLabel: "OK", cancelLabel: "Close" });
+        });
+      });
+      input.click();
+    }
+
     function downloadUploadedCopy(file) {
       var path = pathFor(file.name, file.kind);
       idbGet(path, IDB_UPLOADS).then(function (blob) {
@@ -6408,7 +6450,12 @@
           }
           row.appendChild(el("button", { class: "btn btn-small", type: "button", text: "Download a copy", onclick: function () { downloadUploadedCopy(f); } }));
         } else {
-          row.appendChild(el("span", { class: "small verdict-bad-text", text: "not stored in this browser — upload again to use it here " }));
+          row.appendChild(el("span", { class: "small verdict-bad-text", text: "missing — pick the file again " }));
+          row.appendChild(el("button", {
+            class: "btn btn-small btn-primary", type: "button",
+            title: "Choose \"" + f.name + "\" again. Your code already points at it, so nothing else changes.",
+            onclick: function () { reuploadMissing(f); },
+          }, ["Re-upload"]));
         }
         row.appendChild(el("button", { class: "btn btn-small btn-outline-danger", type: "button", text: "Remove", onclick: function () { removeUploaded(f); } }));
         ul.appendChild(row);

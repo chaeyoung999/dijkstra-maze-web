@@ -1,5 +1,32 @@
 # HANDOFF — 다음 Claude 세션이 이어서 할 일
 
+## 🚨 지금 가장 중요한 것 — 오후 수업 학생들 이미지 (발표 전 필독)
+
+**상황**: 오후에 수업한 학생들이 올린 이미지는 **어디에도 없습니다.**
+그 시점의 코드는 업로드해도 파일을 저장하지 않고 **각자 PC의 다운로드 폴더로
+내려받기만** 했고, 사이트에는 파일 **이름만** 기록했습니다. 따라서:
+
+| 위치 | 그 학생들 이미지 있음? |
+|---|---|
+| `progress.json` | ❌ (기능이 나중에 들어감) |
+| 다운로드 zip | ❌ (zip 은 브라우저 저장소에서 가져옴 — 비어 있음) |
+| 브라우저 저장소(IndexedDB) | ❌ |
+| **각 학생 PC 의 다운로드 폴더** | ✅ **여기에만 있음** |
+
+**발표 전 해야 할 일 (학생당 1분)**:
+1. 자기 `progress.json` 을 Load
+2. TODO 9 에셋 패널 → "Files you've added" 목록에서 `missing` 표시된 줄의
+   **`Re-upload`** 버튼 → 다운로드 폴더에서 같은 파일 선택
+3. 전부 채운 뒤 **Save my work** → 이제 json 에 이미지가 들어갑니다
+4. 그 뒤로는 zip 에도, 다른 PC 에서도 그대로 따라옵니다
+
+`Re-upload` 는 **기록된 파일명 그대로** 저장하므로 학생 코드(`settings.py` 의 경로)를
+건드리지 않습니다. 파일명이 기억 안 나면 목록에 그대로 적혀 있습니다
+(예: `Zhanat.png`, `popeyes.png`, `floor1.png`, `roblox1.png`, `roblox-obby.png`).
+
+⚠️ 되살릴 코드는 없습니다. 바이트가 존재하지 않으므로 **다시 올리는 것이 유일한 방법**입니다.
+
+
 작성 시각: 2026-07-30 (Required 선행 제공 + 번호 재배치 세션 — 진행 중)
 저장소: `https://github.com/chaeyoung999/dijkstra-maze-web`
 배포: `https://dijkstra-maze-web.chaeyoungson9.workers.dev/` — **`main`에 push하면 Cloudflare가 자동 배포**
@@ -103,6 +130,18 @@ Required TODO를 **6·7번 두 개 추가**하기 위해 Bonus 묶음 번호를 
   기존 업로드는 **지웁니다** — 안 지우면 이전 학생의 잔재가 다음 zip 에 딸려 들어갑니다.
 - 옛 버전이 만든 파일에는 `uploads` 가 아예 없습니다. 그 경우 **기존 업로드를 건드리지
   않고** "이 파일엔 그림이 없다"고 알려줍니다 (지웠다간 멀쩡한 이미지를 날림).
+
+### 3-e. `Re-upload` 버튼 + 옛 저장분 자동 보정
+
+- **`Re-upload`**: "Files you've added" 목록에서 브라우저에 바이트가 없는 줄
+  (`missing`)에 뜹니다. `reuploadMissing(f)` → 파일 선택 → **기록된 경로 그대로**
+  IndexedDB 에 저장. 코드는 건드리지 않습니다 (경로가 이미 학생 코드에 있으므로).
+- **`LATE_ADDED_SETTINGS` 마이그레이션** (`normalizeLoadedState` 끝에서 호출):
+  설정 줄이 나중에 추가된 단계는, 옛 저장분을 불러올 때 빠진 줄을 스타터 기본값으로
+  채웁니다. 지금은 `9-2 / MAZE_BACKGROUND_IMAGE_PATH = None` 하나.
+  ⚠️ **앞으로 설정 단계에 줄을 추가하면 반드시 이 표에 추가하세요.** 안 그러면 옛
+  저장분이 `Missing definition(s)` 로 채점 실패하고, 내려받은 프로젝트는 import
+  에러로 아예 실행되지 않습니다.
 
 ### 3-d. 미로 전체 배경 이미지 `MAZE_BACKGROUND_IMAGE_PATH`
 
