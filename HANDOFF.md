@@ -1,8 +1,87 @@
 # HANDOFF — 다음 Claude 세션이 이어서 할 일
 
-작성 시각: 2026-07-29 (Bonus 완전 분리 세션 — 진행 중)
+작성 시각: 2026-07-30 (Required 선행 제공 + 번호 재배치 세션 — 진행 중)
 저장소: `https://github.com/chaeyoung999/dijkstra-maze-web`
 배포: `https://dijkstra-maze-web.chaeyoungson9.workers.dev/` — **`main`에 push하면 Cloudflare가 자동 배포**
+
+---
+
+## 🔢 번호가 전부 바뀌었습니다 (2026-07-30) — 이 표를 먼저 보세요
+
+Required TODO를 **6·7번 두 개 추가**하기 위해 Bonus 묶음 번호를 **전부 +2** 밀었습니다.
+
+| 예전 | 지금 | 내용 (내용은 하나도 안 바뀜) |
+|---|---|---|
+| `6-1` … `6-8` | **`8-1` … `8-8`** | 라운드·속도·배치 |
+| `7-1` … `7-12` | **`9-1` … `9-12`** | 그림·색·소리 |
+| `8-1` … `8-6` | **`10-1` … `10-6`** | 내가 만드는 아이템 |
+| `9-1` … `9-4` | **`11-1` … `11-4`** | 내 게임의 규칙 |
+
+하네스 이름도 같이 바뀌었습니다: `harness_roundDesign_6`→`_8`, `lookAndFeel_7`→`_9`,
+`customItems_8`→`_10`, `gameRules_9`→`_11`. `.py` 마커도 전부 새 번호입니다.
+`step:` 표시 번호는 Bonus가 6..35 → **8..37** 이 됐습니다.
+
+**아래 옛 세션 기록의 번호는 그때 당시 번호입니다** (역사 기록이라 일부러 안 고쳤습니다).
+이 표로 환산해서 읽으세요.
+
+---
+
+## 🟢 체크포인트 1 — Required 1~5를 정답이 미리 채워진 상태로 배포 (완료·푸시)
+
+커밋 `18e91b2` (그 앞에 번호 재배치 커밋 `33affa5`).
+
+**선생님이 직접 확인해준 의도적인 교육 방식 변경**입니다: Required는 이제 빈칸 채우기가
+아니라 **정답이 이미 편집기에 적혀 있는 상태**로 시작합니다. 학생은 읽고, 돌려보고,
+일부러 망가뜨려 보면서 이해합니다. **Bonus 30단계는 하나도 안 건드렸습니다** — 그대로 빈칸 과제입니다.
+
+- `data.js`: TODO **2·3·4·5(두 파트)** 의 `starter` 를 `complete/*.py` 정답 구간과
+  **바이트 단위로 동일**하게 교체했습니다.
+- **TODO 1은 바꿀 게 없었습니다** — 원래부터 동작하는 예시(`TITLE = "Maze Runner"`)였고,
+  학생이 자기 게임 이름으로 바꾸는 게 과제입니다. 그래서 **TODO 1의 lead에는
+  "이미 채워져 있다"는 문장을 일부러 넣지 않았습니다.** 넣으면 "안 바꿔도 된다"는
+  잘못된 신호가 됩니다.
+- TODO 2·3·4·5 lead 맨 앞에만 한 문장 추가: *"This one is already filled in for you…
+  feel free to change it, or break it on purpose… Reset this step always brings this
+  version back."* (힌트는 그대로 뒀습니다 — 안 쓰이면 그만입니다.)
+- `dijkstra_maze/student/*.py` 의 Required 마커 구간도 **정답으로 채웠습니다.**
+  이게 없으면 **편집기엔 정답이 보이는데 내려받은 프로젝트엔 `pass` 가 들어갑니다**
+  (내보내기는 채점 완료 전인 단계에 대해 raw starter 본문을 씁니다). 각 구간 위에
+  `# (Already filled in - read it, run it, then try changing it.)` 한 줄을 넣었고,
+  **마커 밖**에 두어서 splice 가 지워지지 않습니다.
+
+### "View full file" 뷰어는 고칠 게 없었습니다 (확인함)
+
+`getBodyForMarkerLive()` 가 **살아 있는 `stepData.code` 를 splice** 하므로 뷰어는
+student 트리와 무관하게 항상 지금 편집기 내용을 보여줍니다. student/*.py 를 채운 이유는
+**뷰어가 아니라 내보내기(export)** 때문입니다. 지금은 둘 다 일치하고, 테스트가 못박습니다.
+
+### 검증 — "그럴 것이다"가 아니라 실제로 돌려봤습니다
+
+- **새 테스트 `tests/test_prefilled_required.py`**: app.js **자신의 `freshState()`** 가
+  편집기에 넣는 코드를 그대로 꺼내서, app.js 에서 추출한 **진짜 채점 하네스**에 넣고
+  **진짜 파이썬으로 실행**합니다. 결과: **학생이 새로 열고 아무것도 안 하고 "Run my code"만
+  눌러도 Required 전부 통과** — TODO 2~5 에서 **하네스 검사 27개** 통과, 빈 통과 없음.
+  (TODO 1 은 syntax 모드라 `STEP_BY_ID`(data.js 구조)를 읽는데 ES3 추출 경로가 그걸
+  안 들고 옵니다. 억지로 흉내내면 테스트가 거짓말을 하게 되므로, 같은 두 가지 단정
+  (실행되는가 / TITLE·GAME_SUBTITLE 이 문자열로 정의되는가)을 따로 검사합니다.)
+  보조 파일 `tests/_dump_fresh_code.js` 가 fresh state 를 JSON 으로 덤프합니다.
+- **`tests/test_app_load.js` 4c 절 신규**: starter ≡ `complete/*.py` (바이트 단위) ·
+  `Write your code here` 잔재 없음 · lead 가 실제로 안내함 · **뷰어가 새로 열었을 때
+  raw student 파일과 완전히 일치** · **학생이 직접 쓴 (다르지만 맞는) 답이 새 기본값을
+  이깁니다** · **변경 전 세이브에 들어 있던 옛 빈칸도 그대로 복원**(몰래 정답으로
+  "업그레이드"하지 않음) · **빈칸이어야 할 Bonus 11개에 정답이 새지 않았음**.
+- `tests/test_project_export.js`: "splice 가 실제로 파일을 바꿨는가" 검사를 고쳤습니다.
+  `player.py`·`pathfinding.py` 는 Required 만 들어 있으니 정답을 splice 해도
+  **바이트 단위로 똑같아야 맞습니다.** 예전 검사보다 **더 엄격**해졌습니다 —
+  `data.js` 와 `student/*.py` 가 한 글자라도 어긋나면 여기서 터집니다.
+- `tests/test_trace_harnesses.py`: "still empty" / "left at the starter" 케이스 이름을
+  실제 의미대로 고쳤습니다 — 이제는 **학생이 동작하는 코드를 지웠거나 반쯤 고친** 상황이고,
+  새 안내 문구가 바로 그걸 권하고 있으니 더 중요한 케이스가 됐습니다.
+- 테스트 5종 + 신규 1종 전부 통과. `student/`·`complete/` 둘 다 실제 headless pygame
+  으로 부팅되고, **`student/` 는 이제 Required 이동이 진짜로 됩니다**
+  (열린 방향 이동 성공 / 벽 방향 거부 — `complete/` 와 동일).
+
+> ⚠️ `dijkstra_maze/` 는 **git 밖**입니다. student/*.py 변경은 `git status` 에 안 뜹니다. 백업 없습니다.
 
 ---
 
