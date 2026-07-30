@@ -88,6 +88,40 @@ Required TODO를 **6·7번 두 개 추가**하기 위해 Bonus 묶음 번호를 
    추출기의 `FUNCS` 에 `availableAssetNames`, 그리고 `var UPLOADED_URLS = {};` 추가했습니다.
 4. HOW_TO_RUN.txt 의 "직접 복사해 넣으세요" 문단 삭제, progress.json 경고문·README 갱신.
 
+### 3-c. progress.json 이 이미지·소리를 같이 들고 다님
+
+선생님 보고: "이미지 업로드하고 json 저장한 뒤 다른 컴퓨터에서 load 하면 이미지가 없다고 뜸."
+
+맞는 지적이었습니다. 업로드 바이트는 IndexedDB 에 있고 IndexedDB 는 다운로드 파일을
+따라가지 않으니, json 에는 **파일 이름만** 들어 있었습니다.
+
+- 내보낸 파일에 **최상위 `uploads`** 맵 추가 (`에셋경로 → data: URL`), `version: 2`.
+- ⚠️ **`state` 안에 넣으면 안 됩니다.** `state` 는 타이핑할 때마다 localStorage 에
+  저장되는데, base64 수 MB 를 넣으면 ~5MB 쿼터가 터집니다. 그래서 저장 시점에
+  IndexedDB 에서 읽어 **다운로드되는 파일에만** 합칩니다.
+- 불러올 때 `uploads` 를 IndexedDB 로 되돌립니다. 이때 그 파일이 더 이상 참조하지 않는
+  기존 업로드는 **지웁니다** — 안 지우면 이전 학생의 잔재가 다음 zip 에 딸려 들어갑니다.
+- 옛 버전이 만든 파일에는 `uploads` 가 아예 없습니다. 그 경우 **기존 업로드를 건드리지
+  않고** "이 파일엔 그림이 없다"고 알려줍니다 (지웠다간 멀쩡한 이미지를 날림).
+
+### 3-d. 미로 전체 배경 이미지 `MAZE_BACKGROUND_IMAGE_PATH`
+
+선생님 질문: "타일 하나만 바꿀 수 있는 거지? 전체 배경을 한 이미지로 넣을 수 있어?"
+
+`FLOOR_TILE_IMAGE_PATH` 는 작은 이미지를 **모든 칸에 반복**하므로 사진을 넣으면 축소본이
+격자로 깔렸습니다. 큰 그림 한 장을 쓸 방법이 없었습니다.
+
+- **새 설정** `MAZE_BACKGROUND_IMAGE_PATH` (TODO 9-2). 기존 타일 설정은 그대로 둡니다.
+- `Maze.draw()` 가 셀을 그리기 **전에** 미로 크기로 늘려서 blit → 타일·힌트 경로·스프
+  라이트·벽이 모두 그 위에 올라옵니다. **둘 다 설정하면 타일이 배경을 가립니다** (설명·
+  힌트에 명시). 범위는 **미로 격자만** — HUD/사이드 패널은 원래 디자인 유지.
+- Play 탭도 같은 순서(배경 → 타일)로 그립니다. 에셋 피커에 슬롯 추가, 기존 것은
+  "Floor tile (repeated)" 로 이름 변경.
+- 검증: headless pygame 으로 **픽셀을 읽어** 확인 (네 모서리+중앙 덮임, 격자 밖 안 새김,
+  타일이 위에 옴, 없는 경로면 무시). student/complete 양쪽 통과.
+- ⚠️ `tests/test_alt_implementations.py` 의 group 9 픽스처에 새 이름을 넣어야 합니다.
+  안 넣으면 "Missing definition(s): MAZE_BACKGROUND_IMAGE_PATH" 로 6건 실패합니다.
+
 ---
 
 ## 🟢 체크포인트 2 — Required 6·7 신규 추가 (완료·푸시) `baea5c8`
