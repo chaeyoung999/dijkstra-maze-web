@@ -75,7 +75,12 @@ CODE_2 = (
 )
 CODE_3 = 'if current is None or current.walls[direction]:\n    return False\n'
 CODE_4 = 'self.row += dr\nself.col += dc\n'
-STARTER_2 = (
+# Required 2-5 now START at the reference answer rather than a blank, so these
+# two are no longer "the student hasn't got there yet" - they are "the student
+# deleted or half-edited working code", which is exactly what the site now
+# invites them to do ("feel free to break it to understand it"). The preview
+# still has to survive it without erroring or freezing the Play tab.
+HALF_EDITED_2 = (
     'if keys[pygame.K_LEFT] or keys[pygame.K_e]:\n'
     '    pass\n'
 )
@@ -132,10 +137,10 @@ check("walking through a wall is flagged, not crashed",
 
 # Unfinished steps must degrade quietly rather than erroring.
 for label, c2, c3, c4 in (
-    ("TODO 2 still empty", EMPTY, CODE_3, CODE_4),
-    ("TODO 2 left at the starter", STARTER_2, CODE_3, CODE_4),
-    ("TODO 4 still empty", CODE_2, CODE_3, EMPTY),
-    ("all three still empty", EMPTY, EMPTY, EMPTY),
+    ("TODO 2 emptied out by the student", EMPTY, CODE_3, CODE_4),
+    ("TODO 2 half-edited (one branch left as pass)", HALF_EDITED_2, CODE_3, CODE_4),
+    ("TODO 4 emptied out by the student", CODE_2, CODE_3, EMPTY),
+    ("all three emptied out", EMPTY, EMPTY, EMPTY),
 ):
     d = trace(c2, c3, c4, "K_RIGHT")
     check("%s: runs without error, player stays put" % label,

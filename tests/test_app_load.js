@@ -231,6 +231,146 @@ check("every marker text appears in its file",
     return src.includes(m[4]) && src.includes(m[5]);
   }));
 
+// ---- 4c. Required 1-5 ship PRE-FILLED with the reference answer --------
+//
+// Deliberate pedagogical change, confirmed by the teacher: Required is no
+// longer a fill-in-the-blank exercise. The editor opens with the working
+// answer already typed in, for students to read and experiment with. Bonus
+// is untouched and stays a real exercise.
+//
+// Three separate things have to hold, and each one fails differently:
+//   a) the starter really is the answer (else the site ships a wrong answer)
+//   b) every surface agrees (else a student sees two versions of "their" code)
+//   c) a save still beats the default (else it silently eats their own work)
+(() => {
+  const hooks = sandbox.window.__courseTestHooks;
+  const COMPLETE = path.join(ROOT, "..", "dijkstra_maze", "complete");
+  const STUDENT = path.join(ROOT, "..", "dijkstra_maze", "student");
+  const PREFILLED = ["2", "3", "4", "5"];
+
+  // (a) starter === complete/*.py's marker region, read straight off disk.
+  // Nothing hand-copied: if data.js and complete/ ever drift, this fails.
+  function answerRegion(file, beginText, endText) {
+    const src = fs.readFileSync(path.join(COMPLETE, file), "utf8").replace(/\r\n/g, "\n").split("\n");
+    const b = src.findIndex((l) => l.trim() === beginText.trim());
+    const e = src.findIndex((l) => l.trim() === endText.trim());
+    return b === -1 || e <= b ? null : src.slice(b + 1, e).join("\n");
+  }
+  EXPORT.EXPORT_MARKERS.forEach((m) => {
+    const [id, file, partIndex, , begin, end] = m;
+    if (PREFILLED.indexOf(id) === -1) return;
+    const step = steps.find((s) => s.id === id);
+    const starter = partIndex == null ? step.starter : step.parts[partIndex].starter;
+    const starterText = (Array.isArray(starter) ? starter.join("\n") : String(starter));
+    const answer = answerRegion(file, begin, end);
+    const label = `TODO ${id}${partIndex == null ? "" : " part " + (partIndex + 1)}`;
+    check(`${label}: starter is byte-identical to complete/${file}'s answer`,
+      answer !== null && starterText === answer);
+  });
+
+  // A pre-filled step must not still be carrying a fill-in-the-blank stub.
+  PREFILLED.forEach((id) => {
+    const step = steps.find((s) => s.id === id);
+    const all = (step.parts ? step.parts.map((p) => p.starter) : [step.starter])
+      .map((s) => (Array.isArray(s) ? s.join("\n") : String(s))).join("\n");
+    check(`TODO ${id}: no "Write your code here" placeholder left in the starter`,
+      !/Write your code here/i.test(all) && !/^\s*pass\s*$/m.test(all));
+    // The framing sentence is what tells the student this one is to READ,
+    // not to write. Without it the pre-filled code just looks like a bug.
+    check(`TODO ${id}: lead tells the student it is already filled in`,
+      /already filled in/i.test(step.lead));
+  });
+
+  // Bonus must NOT have been swept up in this. The real guarantee is that
+  // a Bonus starter is still exactly whatever student/*.py ships, since the
+  // pre-fill only rewrote the Required regions of that tree.
+  //
+  // Note what this deliberately does NOT assert: that Bonus starters differ
+  // from complete/*.py. Most of them don't, and that is by design and
+  // predates this change - 19 of the 30 Bonus sub-steps hand over WORKING
+  // code or a working setting and ask the student to customize it ("the
+  // starter already does exactly that"), so starter == answer there is
+  // correct, not a leak. Only the 11 genuine blanks below must differ.
+  function studentRegion(file, beginText, endText) {
+    const src = fs.readFileSync(path.join(STUDENT, file), "utf8").replace(/\r\n/g, "\n").split("\n");
+    const b = src.findIndex((l) => l.trim() === beginText.trim());
+    const e = src.findIndex((l) => l.trim() === endText.trim());
+    return b === -1 || e <= b ? null : src.slice(b + 1, e).join("\n");
+  }
+  // The Bonus sub-steps that really are blanks a student must fill in. If
+  // the answer set ever leaks into one of these, Bonus silently stops being
+  // an exercise - the exact mistake this whole section exists to catch.
+  const BONUS_REAL_BLANKS = ["8-7", "9-1", "9-2", "9-6", "9-9", "9-10", "9-11", "9-12", "10-1", "10-2", "10-3"];
+  let bonusTotal = 0, bonusDrift = [], leaked = [], seenBlanks = [];
+  EXPORT.EXPORT_MARKERS.forEach((m) => {
+    const [id, file, partIndex, , begin, end] = m;
+    if (DATA.BONUS_ORDER.indexOf(id) === -1) return;
+    bonusTotal++;
+    const step = steps.find((s) => s.id === id);
+    const starter = partIndex == null ? step.starter : step.parts[partIndex].starter;
+    const starterText = Array.isArray(starter) ? starter.join("\n") : String(starter);
+    if (starterText !== studentRegion(file, begin, end)) bonusDrift.push(id);
+    if (BONUS_REAL_BLANKS.indexOf(id) !== -1) {
+      seenBlanks.push(id);
+      if (starterText === answerRegion(file, begin, end)) leaked.push(id);
+    }
+  });
+  check("every Bonus starter still matches the shipped student/*.py region",
+    bonusDrift.length === 0,
+    bonusDrift.length ? `(drifted: ${bonusDrift.join(", ")})` : `(${bonusTotal} markers)`);
+  check("no answer has leaked into a Bonus sub-step that is meant to be blank",
+    leaked.length === 0 && seenBlanks.length === BONUS_REAL_BLANKS.length,
+    leaked.length ? `(leaked: ${leaked.join(", ")})` : `(${seenBlanks.length} blanks checked)`);
+  check("no Bonus lead claims to be already filled in",
+    DATA.BONUS_ORDER.every((id) => !/already filled in/i.test(steps.find((s) => s.id === id).lead)));
+
+  // (b) every surface agrees. The "View full file" viewer splices the LIVE
+  // stepData.code over the raw student file, so on a fresh load it must
+  // show the answer - and because student/*.py's Required regions were
+  // un-blanked to match, the spliced result must equal the raw file exactly.
+  // That equality is the whole consistency guarantee in one line.
+  hooks.setState(hooks.freshState());
+  ["player.py", "pathfinding.py"].forEach((name) => {
+    const live = hooks.buildFullFileLive(name);
+    const raw = fs.readFileSync(path.join(STUDENT, name), "utf8").replace(/\r\n/g, "\n");
+    check(`View full file: ${name} on a fresh load matches the raw student file`, live === raw);
+    check(`View full file: ${name} shows no blank placeholder`,
+      typeof live === "string" && !/Write your code here/.test(live));
+  });
+  const liveGame = hooks.buildFullFileLive("game.py");
+  check("View full file: game.py shows TODO 2's answer, not a placeholder",
+    liveGame.includes('moved = self.player.try_move("left", self.maze)') &&
+    !liveGame.includes('the direction string is "left"'));
+
+  // (c) a student's OWN answer must survive a reload. Different variable
+  // names, different shape, same behaviour - exactly the case where a
+  // "restore the default" bug would look harmless and destroy real work.
+  const MY_3 = "        blocked = current is None or current.walls[direction]\n        if blocked:\n            return False";
+  const MY_5B = "            best = distance.get(neighbor)\n            if best is None or new_cost < best:\n                distance[neighbor] = new_cost\n                parent[neighbor] = current\n                heapq.heappush(queue, (new_cost, neighbor))";
+  const restored = hooks.normalizeLoadedState({
+    steps: {
+      "3": { code: MY_3, status: "completed", attempts: 2 },
+      "5": { code: ["            new_cost = step_cost + cost", MY_5B], status: "completed" },
+    },
+  });
+  check("a saved Required answer wins over the new pre-filled default (TODO 3)",
+    restored.steps["3"].code === MY_3);
+  check("a saved Required answer wins over the new pre-filled default (TODO 5, both parts)",
+    restored.steps["5"].code[0] === "            new_cost = step_cost + cost" &&
+    restored.steps["5"].code[1] === MY_5B);
+  check("the saved status/attempts survive too", restored.steps["3"].status === "completed" && restored.steps["3"].attempts === 2);
+  // A step the student never opened correctly falls back to the pre-fill.
+  const step4 = steps.find((s) => s.id === "4");
+  check("an untouched Required step still gets the pre-filled default",
+    restored.steps["4"].code === step4.starter.join("\n"));
+  // A save from BEFORE this change stored the old blank. It is still the
+  // student's own code, so it must be restored verbatim - we must not
+  // "helpfully" upgrade it to the answer behind their back.
+  const oldBlank = hooks.normalizeLoadedState({ steps: { "4": { code: "        pass  # Write your code here." } } });
+  check("a pre-change save holding the old blank is restored as-is, not silently upgraded",
+    oldBlank.steps["4"].code === "        pass  # Write your code here.");
+})();
+
 // ---- 4b. Bonus locking: sequential inside a group, free between them --
 //
 // Driven through app.js's REAL computeStatus (via the test seam), not a

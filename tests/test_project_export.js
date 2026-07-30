@@ -161,11 +161,23 @@ shipped.forEach((name) => { built[name] = hooks.buildFullFileLive(name); });
 check("every file spliced without returning null", shipped.every((n) => typeof built[n] === "string"));
 
 // A spliced file must not still contain a starter value the answer set
-// replaces - that would mean the splice silently no-op'd.
-check("splicing actually changed the files it should have",
+// replaces - that would mean the splice silently no-op'd. settings.py and
+// game.py both still hold Bonus TODOs, whose starters really are blanks, so
+// splicing the answers in MUST change them.
+check("splicing actually changed the files that still have blanks",
   built["settings.py"] !== EXPORT.EXPORT_FILES["settings.py"] &&
-  built["game.py"] !== EXPORT.EXPORT_FILES["game.py"] &&
-  built["pathfinding.py"] !== EXPORT.EXPORT_FILES["pathfinding.py"]);
+  built["game.py"] !== EXPORT.EXPORT_FILES["game.py"]);
+
+// The mirror image, and a much sharper check than it looks. player.py and
+// pathfinding.py contain ONLY Required TODOs, and Required starters are now
+// pre-filled with the reference answer in BOTH data.js and student/*.py. So
+// splicing the complete/*.py answer over them has to be a perfect no-op.
+// Any drift at all - a stray space, a renamed variable, data.js and
+// student/*.py disagreeing by one character - shows up right here.
+["player.py", "pathfinding.py"].forEach((name) => {
+  check(`${name} is byte-identical after splicing (pre-filled Required answers agree exactly)`,
+    built[name] === EXPORT.EXPORT_FILES[name]);
+});
 
 check("no TODO marker was consumed or duplicated by the splice",
   shipped.every((name) => {

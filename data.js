@@ -117,7 +117,7 @@ const COURSE_STEPS = [
   {
     id: "2", step: 2, kind: "Required", required: true, file: "game.py",
     title: "Connect the arrow keys and the controller to maze movement.",
-    lead: "Right now your maze ignores the keyboard entirely. Each frame, `update_player()` checks which key is currently held down and needs to move the player one cell in that direction. Inside the branch for each key, call **`self.player.try_move(direction, self.maze)`** — `direction` is one of the strings `\"left\"`/`\"right\"`/`\"top\"`/`\"bottom\"` (note: `\"top\"`/`\"bottom\"`, not `\"up\"`/`\"down\"`) — and store what it returns in **`moved`**. Use `if` for the first key check and `elif` for the rest (not four separate `if`s), so only one direction can win when two keys are pressed together.\n\nOne press moves exactly **one cell** — this is a grid, not free movement.\n\n**Controls**: the arrow keys, or the classroom controller's **E / F / C / D** (left / right / up / down). Both sets do exactly the same thing.",
+    lead: "**This one is already filled in for you.** Read it line by line, then press *Run my code* to see it work — and feel free to change it, or break it on purpose, to understand it better. *Reset this step* always brings this version back.\n\nRight now your maze ignores the keyboard entirely. Each frame, `update_player()` checks which key is currently held down and needs to move the player one cell in that direction. Inside the branch for each key, call **`self.player.try_move(direction, self.maze)`** — `direction` is one of the strings `\"left\"`/`\"right\"`/`\"top\"`/`\"bottom\"` (note: `\"top\"`/`\"bottom\"`, not `\"up\"`/`\"down\"`) — and store what it returns in **`moved`**. Use `if` for the first key check and `elif` for the rest (not four separate `if`s), so only one direction can win when two keys are pressed together.\n\nOne press moves exactly **one cell** — this is a grid, not free movement.\n\n**Controls**: the arrow keys, or the classroom controller's **E / F / C / D** (left / right / up / down). Both sets do exactly the same thing.",
     codeReference: [
       ["self.player.try_move(direction, self.maze)", "Attempts to move the player one cell in direction. Returns True if the move succeeded, False if it was blocked."],
       ["moved", "A boolean you set to the result of try_move. The code right after your TODO reads it to decide whether to reset the movement timer."],
@@ -138,15 +138,17 @@ const COURSE_STEPS = [
       "            self.last_player_move_time = now",
       "            self.maze.clear_path_display()",
     ],
+    // PRE-FILLED (see the Required-1-to-5 note at the top of COURSE_STEPS):
+    // identical to complete/game.py's TODO 2 marker region.
     starter: [
       "        if keys[pygame.K_LEFT] or keys[pygame.K_e]:",
-      '            pass  # Write your code here. Hint: the direction string is "left"',
+      '            moved = self.player.try_move("left", self.maze)',
       "        elif keys[pygame.K_RIGHT] or keys[pygame.K_f]:",
-      '            pass  # Write your code here. Hint: the direction string is "right"',
+      '            moved = self.player.try_move("right", self.maze)',
       "        elif keys[pygame.K_UP] or keys[pygame.K_c]:",
-      '            pass  # Write your code here. Hint: the direction string is "top"',
+      '            moved = self.player.try_move("top", self.maze)',
       "        elif keys[pygame.K_DOWN] or keys[pygame.K_d]:",
-      '            pass  # Write your code here. Hint: the direction string is "bottom"',
+      '            moved = self.player.try_move("bottom", self.maze)',
     ],
     hints: [
       'moved = self.player.try_move("???", self.maze) — this exact line goes in all four branches; just swap in the matching direction string each time: "left", "right", "top", "bottom".',
@@ -163,7 +165,7 @@ const COURSE_STEPS = [
   {
     id: "3", step: 3, kind: "Required", required: true, file: "player.py",
     title: "Stop movement when there is no cell or a wall blocks the direction.",
-    lead: "`try_move()` first looks up the cell the player is standing on (**`current`**), then needs to bail out before moving in two situations: there's no cell in that direction at all (**`current is None`** — happens at the edge of the maze) or a wall blocks the way (**`current.walls[direction]`** is `True`). Combine both checks with `or` in one `if`, and `return False` immediately when either is true — this is a guard clause: handle the bad cases first so the rest of `try_move` can assume the move is legal.",
+    lead: "**This one is already filled in for you.** Read it line by line, then press *Run my code* to see it work — and feel free to change it, or break it on purpose, to understand it better. *Reset this step* always brings this version back.\n\n`try_move()` first looks up the cell the player is standing on (**`current`**), then needs to bail out before moving in two situations: there's no cell in that direction at all (**`current is None`** — happens at the edge of the maze) or a wall blocks the way (**`current.walls[direction]`** is `True`). Combine both checks with `or` in one `if`, and `return False` immediately when either is true — this is a guard clause: handle the bad cases first so the rest of `try_move` can assume the move is legal.",
     codeReference: [
       ["current", "The Cell the player currently stands on, looked up just above. May be None if there is no cell there."],
       ["current.walls[direction]", "True when a wall blocks movement in direction from the current cell."],
@@ -178,8 +180,10 @@ const COURSE_STEPS = [
       '            "top": (-1, 0),',
       '            "right": (0, 1),',
     ],
+    // PRE-FILLED: identical to complete/player.py's TODO 3 marker region.
     starter: [
-      "        pass  # Write your code here.",
+      "        if current is None or current.walls[direction]:",
+      "            return False",
     ],
     hints: [
       "if current is None or current.walls[direction]:\n    return False — one `if` line joining both conditions with `or`, then `return False` indented once more on the next line. Use `is None` (not `== None`), the normal Python way to check for None.",
@@ -196,7 +200,7 @@ const COURSE_STEPS = [
   {
     id: "4", step: 4, kind: "Required", required: true, file: "player.py",
     title: "Update the player's row and column.",
-    lead: "Once `try_move()` knows the move is legal, **`dr`** and **`dc`** (already computed just above from the direction dictionary) tell you exactly how far to shift the player: `dr` is the row change, `dc` is the column change. Add each to the matching attribute on `self` using **`+=`** (`self.row += dr`, `self.col += dc`) so the position updates in place rather than being replaced.",
+    lead: "**This one is already filled in for you.** Read it line by line, then press *Run my code* to see it work — and feel free to change it, or break it on purpose, to understand it better. *Reset this step* always brings this version back.\n\nOnce `try_move()` knows the move is legal, **`dr`** and **`dc`** (already computed just above from the direction dictionary) tell you exactly how far to shift the player: `dr` is the row change, `dc` is the column change. Add each to the matching attribute on `self` using **`+=`** (`self.row += dr`, `self.col += dc`) so the position updates in place rather than being replaced.",
     codeReference: [
       ["dr, dc", "The row and column change for the chosen direction, already looked up on the line above."],
       ["self.row, self.col", "The player's current grid position; update both in place."],
@@ -218,8 +222,10 @@ const COURSE_STEPS = [
       "    def get_rect(self):",
       "        return pygame.Rect(",
     ],
+    // PRE-FILLED: identical to complete/player.py's TODO 4 marker region.
     starter: [
-      "        pass  # Write your code here.",
+      "        self.row += dr",
+      "        self.col += dc",
     ],
     hints: [
       "self.row += dr\nself.col += dc — two lines, in that order, using `+=` (not `=`) so the existing position is adjusted rather than overwritten.",
@@ -236,7 +242,7 @@ const COURSE_STEPS = [
   {
     id: "5", step: 5, kind: "Required", required: true, file: "pathfinding.py",
     title: "Calculate the cost to reach this neighbor, and record the better route.",
-    lead: "This function powers the player's Hint button: it finds the shortest route from the player to the goal, treating active bombs as very expensive so the route avoids them. Dijkstra's relaxation step here is really two separate ideas glued together: computing a candidate cost, then deciding whether to actually keep it. Each part below gets its own explanation, split the same way the Bonus TODOs are split into small sequential parts.",
+    lead: "**This one is already filled in for you.** Read it line by line, then press *Run my code* to see it work — and feel free to change it, or break it on purpose, to understand it better. *Reset this step* always brings this version back.\n\nThis function powers the player's Hint button: it finds the shortest route from the player to the goal, treating active bombs as very expensive so the route avoids them. Dijkstra's relaxation step here is really two separate ideas glued together: computing a candidate cost, then deciding whether to actually keep it. Each part below gets its own explanation, split the same way the Bonus TODOs are split into small sequential parts.",
     codeReference: [
       ["cost", "The total cost already spent reaching current, popped from the priority queue."],
       ["current", "The cell just popped from the queue this loop iteration (`cost, current = heapq.heappop(queue)`, part of the given setup shown above) — already in scope, not something you compute."],
@@ -278,8 +284,10 @@ const COURSE_STEPS = [
           "                )",
         ],
         contextAfter: [],
+        // PRE-FILLED: identical to complete/pathfinding.py's
+        // TODO 5 (Part 1/2) marker region.
         starter: [
-          "            new_cost = 0  # Write your code here.",
+          "            new_cost = cost + step_cost",
         ],
       },
       {
@@ -312,11 +320,16 @@ const COURSE_STEPS = [
           '                raise ValueError(',
           '                    "Adjusted Dijkstra weight must be positive."',
           "                )",
-          "            new_cost = 0  # Write your code here.",
+          "            new_cost = cost + step_cost",
         ],
         contextAfter: [],
+        // PRE-FILLED: identical to complete/pathfinding.py's
+        // TODO 5 (Part 2/2) marker region.
         starter: [
-          "            pass  # Write your code here.",
+          "            if neighbor not in distance or new_cost < distance[neighbor]:",
+          "                distance[neighbor] = new_cost",
+          "                parent[neighbor] = current",
+          "                heapq.heappush(queue, (new_cost, neighbor))",
         ],
       },
     ],

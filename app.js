@@ -7867,6 +7867,14 @@
     // renumbering.
     buildFullFileLive: buildFullFileLive,
     exportFileNames: function () { return Object.keys(EXPORT_DATA.EXPORT_FILES); },
+    // Required 1-5 now START at the reference answer rather than a blank.
+    // That makes "does a save still win over the default?" a question with
+    // real consequences: if the default ever beat the save, a student who
+    // wrote their own different-but-correct answer would come back to find
+    // it replaced by ours. tests/test_app_load.js drives the actual load
+    // path through this rather than trusting the code to be obviously right.
+    normalizeLoadedState: normalizeLoadedState,
+    migrateSavedCode: migrateSavedCode,
   };
 
   document.addEventListener("DOMContentLoaded", function () {
