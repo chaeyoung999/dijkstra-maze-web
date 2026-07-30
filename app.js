@@ -413,7 +413,36 @@
         s.assetData = { uploadedFiles: parsed.assetData.uploadedFiles.slice(0, 300) };
       }
     } catch (e) { console.warn("Could not restore asset data", e); }
+    migrateLateAddedSettings(s.steps);
     return s;
+  }
+
+  // Settings names added to a step AFTER students had already saved work.
+  // A save from before the change carries that step's older code, which is
+  // now missing a name the grader requires and the real game imports - so a
+  // student who did nothing wrong would come back to a step that suddenly
+  // fails, and to a downloaded project that won't even start.
+  //
+  // Rather than punish them for a change they didn't make, top their code up
+  // with the starter's default line. The value is None, i.e. exactly the
+  // behaviour their game had before the feature existed, so nothing they
+  // built looks or plays differently.
+  var LATE_ADDED_SETTINGS = [
+    {
+      stepId: "9-2",
+      name: "MAZE_BACKGROUND_IMAGE_PATH",
+      line: "MAZE_BACKGROUND_IMAGE_PATH = None  # One big picture behind the whole maze.",
+    },
+  ];
+
+  function migrateLateAddedSettings(steps) {
+    LATE_ADDED_SETTINGS.forEach(function (m) {
+      var d = steps[m.stepId];
+      if (!d || typeof d.code !== "string") return;
+      // Already there (in any spacing) - leave the student's own line alone.
+      if (new RegExp("(^|\\n)[ \\t]*" + m.name + "[ \\t]*=").test(d.code)) return;
+      d.code = d.code.replace(/\s+$/, "") + "\n" + m.line + "\n";
+    });
   }
 
   function loadState() {

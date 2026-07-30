@@ -401,6 +401,31 @@ check("every marker text appears in its file",
   const oldBlank = hooks.normalizeLoadedState({ steps: { "4": { code: "        pass  # Write your code here." } } });
   check("a pre-change save holding the old blank is restored as-is, not silently upgraded",
     oldBlank.steps["4"].code === "        pass  # Write your code here.");
+
+  // (d) MAZE_BACKGROUND_IMAGE_PATH was added to TODO 9-2 after students had
+  // already saved work. Their old two-line code is missing a name the
+  // grader now requires and maze.py imports, so without a migration a save
+  // from before the change would fail grading and produce a project that
+  // won't start - for a change the student had no part in.
+  const OLD_9_2 = 'BOMB_IMAGE_PATH = "assets/images/bomb_2.png"\nFLOOR_TILE_IMAGE_PATH = None';
+  const migrated = hooks.normalizeLoadedState({
+    steps: { "9-2": { code: OLD_9_2, status: "completed" } },
+  });
+  check("a pre-change 9-2 save gains the missing MAZE_BACKGROUND_IMAGE_PATH line",
+    /(^|\n)\s*MAZE_BACKGROUND_IMAGE_PATH\s*=/.test(migrated.steps["9-2"].code),
+    JSON.stringify(migrated.steps["9-2"].code));
+  check("the migration defaults it to None, so the game looks exactly as before",
+    /MAZE_BACKGROUND_IMAGE_PATH\s*=\s*None/.test(migrated.steps["9-2"].code));
+  check("the student's own two lines are left untouched by the migration",
+    migrated.steps["9-2"].code.indexOf(OLD_9_2) === 0);
+  check("and their completed status survives", migrated.steps["9-2"].status === "completed");
+
+  // A save that already has the name (or a real picture in it) must not be
+  // touched - no duplicate line, no reset to None.
+  const MINE_9_2 = 'BOMB_IMAGE_PATH = None\nFLOOR_TILE_IMAGE_PATH = None\nMAZE_BACKGROUND_IMAGE_PATH = "assets/images/mine.png"';
+  const untouched = hooks.normalizeLoadedState({ steps: { "9-2": { code: MINE_9_2 } } });
+  check("a save that already sets the background is left exactly as written",
+    untouched.steps["9-2"].code === MINE_9_2);
 })();
 
 // ---- 4b. Bonus locking: sequential inside a group, free between them --
