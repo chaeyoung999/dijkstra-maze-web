@@ -674,11 +674,13 @@ case("8 Part5/6", "BAD: a broken indent in one placement part (negative control)
 # colors, 6 the two sound paths, 7 explosion length + volume, 8 the music
 # playback code in game.py. args7() keeps every case below readable.
 IMG_7_AB = ('PLAYER_IMAGE_PATH = None\nGOAL_IMAGE_PATH = None\n',
-            'BOMB_IMAGE_PATH = None\nFLOOR_TILE_IMAGE_PATH = None\n')
+            'BOMB_IMAGE_PATH = None\nFLOOR_TILE_IMAGE_PATH = None\n'
+            'MAZE_BACKGROUND_IMAGE_PATH = None\n')
 IMG_7_AB_FILLED = ('PLAYER_IMAGE_PATH = "assets/images/player_ninja.png"\n'
                    'GOAL_IMAGE_PATH = "assets/images/goal_chest.png"\n',
                    'BOMB_IMAGE_PATH = "assets/images/bomb_2.png"\n'
-                   'FLOOR_TILE_IMAGE_PATH = "assets/images/floor_tile_1.png"\n')
+                   'FLOOR_TILE_IMAGE_PATH = "assets/images/floor_tile_1.png"\n'
+                   'MAZE_BACKGROUND_IMAGE_PATH = None\n')
 SCALES_7 = 'PLAYER_IMAGE_SCALE = 1.0\nGOAL_IMAGE_SCALE = 1.0\nBOMB_IMAGE_SCALE = 1.0\n'
 SCALES_7_CUSTOM = 'PLAYER_IMAGE_SCALE = 1.4\nGOAL_IMAGE_SCALE = 0.8\nBOMB_IMAGE_SCALE = 1.1\n'
 COLORS_7_A = 'WALL_COLOR = (30, 41, 59)\nPLAYER_COLOR = (37, 99, 235)\nGOAL_COLOR = (250, 204, 21)\n'
@@ -766,7 +768,9 @@ case("9", "alt: no try/except (warns, still passes)", "harness_lookAndFeel_9", a
 # there is one negative control per settings group.
 BAD_7_MISSING_SCALE = SCALES_7.replace('GOAL_IMAGE_SCALE = 1.0\n', '')
 case("9 Part3/8", "BAD: missing GOAL_IMAGE_SCALE (negative control)", "harness_lookAndFeel_9", args7(CANONICAL_7C, scales=BAD_7_MISSING_SCALE), expect_ok=False)
-BAD_7_MISSING_IMAGE = ('PLAYER_IMAGE_PATH = None\n', 'BOMB_IMAGE_PATH = None\nFLOOR_TILE_IMAGE_PATH = None\n')
+BAD_7_MISSING_IMAGE = ('PLAYER_IMAGE_PATH = None\n',
+                       'BOMB_IMAGE_PATH = None\nFLOOR_TILE_IMAGE_PATH = None\n'
+                       'MAZE_BACKGROUND_IMAGE_PATH = None\n')
 case("9 Part1/8", "BAD: missing GOAL_IMAGE_PATH (negative control)", "harness_lookAndFeel_9", args7(CANONICAL_7C, images=BAD_7_MISSING_IMAGE), expect_ok=False)
 BAD_7_MISSING_COLOR = COLORS_7_B.replace('BOMB_EXPLOSION_COLOR = (239, 68, 68)\n', '')
 case("9 Part5/8", "BAD: missing BOMB_EXPLOSION_COLOR (negative control)", "harness_lookAndFeel_9", args7(CANONICAL_7C, colors_b=BAD_7_MISSING_COLOR), expect_ok=False)

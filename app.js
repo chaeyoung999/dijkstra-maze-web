@@ -2826,7 +2826,7 @@
     // 12, with a hole at 8.
     var settingParts = [
       [1, "TODO 9-1", ["PLAYER_IMAGE_PATH", "GOAL_IMAGE_PATH"], "image"],
-      [2, "TODO 9-2", ["BOMB_IMAGE_PATH", "FLOOR_TILE_IMAGE_PATH"], "image"],
+      [2, "TODO 9-2", ["BOMB_IMAGE_PATH", "FLOOR_TILE_IMAGE_PATH", "MAZE_BACKGROUND_IMAGE_PATH"], "image"],
       [3, "TODO 9-3", ["PLAYER_IMAGE_SCALE", "GOAL_IMAGE_SCALE", "BOMB_IMAGE_SCALE"], "scale"],
       [4, "TODO 9-4", ["WALL_COLOR", "PLAYER_COLOR", "GOAL_COLOR"], "color"],
       [5, "TODO 9-5", ["BOMB_COLOR", "BOMB_EXPLOSION_COLOR"], "color"],
@@ -5852,7 +5852,8 @@
     { key: "PLAYER_IMAGE_PATH", kind: "image", stepId: "9-1", label: "Player sprite" },
     { key: "GOAL_IMAGE_PATH", kind: "image", stepId: "9-1", label: "Goal sprite" },
     { key: "BOMB_IMAGE_PATH", kind: "image", stepId: "9-2", label: "Bomb" },
-    { key: "FLOOR_TILE_IMAGE_PATH", kind: "image", stepId: "9-2", label: "Floor tile" },
+    { key: "FLOOR_TILE_IMAGE_PATH", kind: "image", stepId: "9-2", label: "Floor tile (repeated)" },
+    { key: "MAZE_BACKGROUND_IMAGE_PATH", kind: "image", stepId: "9-2", label: "Maze background (one picture)" },
     { key: "BOMB_SOUND_PATH", kind: "sound", stepId: "9-6", label: "Bomb explosion sound" },
     { key: "BACKGROUND_MUSIC_PATH", kind: "sound", stepId: "9-6", label: "Background music" },
   ];
@@ -6883,6 +6884,7 @@
         goal: vis.paths.GOAL_IMAGE_PATH,
         bomb: vis.paths.BOMB_IMAGE_PATH,
         floor: vis.paths.FLOOR_TILE_IMAGE_PATH,
+        background: vis.paths.MAZE_BACKGROUND_IMAGE_PATH,
       };
       Object.keys(wanted).forEach(function (slot) {
         var path = wanted[slot];
@@ -6925,6 +6927,13 @@
       ctx.clearRect(0, 0, cssW, cssH);
       ctx.fillStyle = "#12100c";
       ctx.fillRect(0, 0, cssW, cssH);
+      // Two different floor options (TODO 9-2), same order as maze.py's
+      // Maze.draw: ONE picture stretched across the whole grid first, then
+      // the repeating tile on top of it. Setting both therefore hides the
+      // background, which is what the step's text tells students.
+      if (playImages.background) {
+        ctx.drawImage(playImages.background, 0, 0, cols * cellSize, rows * cellSize);
+      }
       if (playImages.floor) {
         for (var fr = 0; fr < rows; fr++) {
           for (var fc = 0; fc < cols; fc++) {

@@ -765,21 +765,24 @@ const COURSE_STEPS = [
   {
     id: "9-2", step: 17, kind: "Bonus", required: false, file: "settings.py",
     group: "9", groupTitle: "Pictures, colors and sound",
-    title: "Give the bombs and the floor a picture.",
-    lead: "Exactly the same rule as before - `None`, or a quoted path under `assets/images/`.\n\n**`FLOOR_TILE_IMAGE_PATH`** is the background tile drawn under every open cell, so this single line changes the look of the whole maze at once. Try `\"assets/images/floor_tile_1.png\"`.",
+    title: "Give the bombs and the maze floor a picture.",
+    lead: "Exactly the same rule as before - `None`, or a quoted path under `assets/images/`.\n\nThere are **two different ways** to change the floor, and you can pick either one:\n\n- **`FLOOR_TILE_IMAGE_PATH`** — **one small tile, repeated in every cell**, like bathroom tiles. Good for a pattern. Try `\"assets/images/floor_tile_1.png\"`.\n- **`MAZE_BACKGROUND_IMAGE_PATH`** — **one big picture, stretched once behind the whole maze**. Good for a photo or a drawing of your own. Upload anything you like and pick it here.\n\nIf you set both, the tiles are drawn on top and hide the big picture — so for a full background, leave `FLOOR_TILE_IMAGE_PATH` as `None`.",
     codeReference: [
-      ["BOMB_IMAGE_PATH / FLOOR_TILE_IMAGE_PATH", "(settings.py) Each is either None (use the built-in drawn shape) or a quoted path to a file under assets/images/. FLOOR_TILE_IMAGE_PATH is drawn under every open cell."],
+      ["BOMB_IMAGE_PATH", "(settings.py) None (use the built-in drawn shape) or a quoted path to a file under assets/images/."],
+      ["FLOOR_TILE_IMAGE_PATH", "(settings.py) One small picture, repeated in EVERY cell of the maze."],
+      ["MAZE_BACKGROUND_IMAGE_PATH", "(settings.py) One big picture, stretched ONCE across the whole maze and drawn behind everything else."],
     ],
     contextBefore: [],
     starter: [
       "BOMB_IMAGE_PATH = None",
-      "FLOOR_TILE_IMAGE_PATH = None  # Background floor for open path cells.",
+      "FLOOR_TILE_IMAGE_PATH = None  # One small tile, repeated in every cell.",
+      "MAZE_BACKGROUND_IMAGE_PATH = None  # One big picture behind the whole maze.",
     ],
     contextAfter: [
       "# TODO 9-3 [Bonus]: Resize them.",
     ],
     hints: [
-      "Each value is either `None` or a QUOTED path, e.g. `BOMB_IMAGE_PATH = \"assets/images/bomb_2.png\"`. The asset picker panel on the right fills it in with one click.",
+      "Each value is either `None` or a QUOTED path, e.g. `BOMB_IMAGE_PATH = \"assets/images/bomb_2.png\"`. The asset picker panel on the right fills it in with one click.\n\nFor one big background picture instead of repeating tiles:\n```\nFLOOR_TILE_IMAGE_PATH = None\nMAZE_BACKGROUND_IMAGE_PATH = \"assets/images/my_picture.png\"\n```\nThe tile line has to be `None`, otherwise the tiles cover your picture.",
     ],
     visualizer: "assetPicker",
     grading: {
