@@ -6068,12 +6068,46 @@
     if (!path) return null;
     try { return new Audio(resolveAssetPath(path)); } catch (e) { return null; }
   }
+  // The longest a single sound EFFECT may play. Every bundled effect is
+  // under 0.8s, but a pickup or bomb sound can point at any file a student
+  // uploads - without a cap, picking a whole song made it play over the
+  // rest of the round, once per item collected. Mirrors
+  // SOUND_EFFECT_MAX_MS in game.py so the Play tab and the downloaded game
+  // cut at the same moment. Background music is deliberately NOT capped.
+  var SOUND_EFFECT_MAX_MS = 2500;
+  // Previews in the asset picker get a longer leash: you want to hear
+  // enough of a track to judge it, but not lose the room to a 3-minute one.
+  var PREVIEW_MAX_MS = 6000;
+  var FADE_MS = 150;
+
+  // Stops `a` after maxMs, fading the last FADE_MS so the cut is not an
+  // audible click. Returns immediately; does nothing if the clip is short.
+  function stopAfter(a, maxMs) {
+    var startVolume = a.volume;
+    var fadeStart = Math.max(0, maxMs - FADE_MS);
+    setTimeout(function () {
+      if (a.paused || a.ended) return;
+      var steps = 6, i = 0;
+      var timer = setInterval(function () {
+        i++;
+        try {
+          a.volume = Math.max(0, startVolume * (1 - i / steps));
+        } catch (e) { /* volume is read-only on some mobile browsers */ }
+        if (i >= steps) {
+          clearInterval(timer);
+          try { a.pause(); a.currentTime = 0; } catch (e) {}
+        }
+      }, FADE_MS / steps);
+    }, fadeStart);
+  }
+
   function playAssetPath(path) {
     var a = audioForPath(path);
     if (!a) return;
     try {
       var r = a.play();
       if (r && r.catch) r.catch(function () {});
+      stopAfter(a, PREVIEW_MAX_MS);
     } catch (e) {}
   }
 
@@ -7121,6 +7155,9 @@
         a.volume = 0.5;
         var r = a.play();
         if (r && r.catch) r.catch(function () {});
+        // A long file only gets its first SOUND_EFFECT_MAX_MS, the same as
+        // CappedSound does in the downloaded game.
+        stopAfter(a, SOUND_EFFECT_MAX_MS);
       } catch (e) { /* ignore */ }
     }
     var SPRITE_SOUND = {

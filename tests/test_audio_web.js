@@ -96,6 +96,35 @@ check("background music is stopped when the Play tab goes away",
 check("the custom-item parser keeps each item's own sound",
   /'sound': sound if isinstance\(sound, str\) else None/.test(APP));
 
+// ---- 4. long files are cut short --------------------------------------
+// Bundled effects are all under 0.8s, but a student can point a pickup
+// sound at any upload; a whole song used to play over the rest of the
+// round, once per item.
+check("there is a sound-effect length cap", /SOUND_EFFECT_MAX_MS = 2500/.test(APP));
+check("the cap matches game.py's SOUND_EFFECT_MAX_MS (2500 ms)", (() => {
+  const py = fs.readFileSync(
+    path.join(ROOT, "..", "dijkstra_maze", "student", "game.py"), "utf8");
+  const mm = py.match(/SOUND_EFFECT_MAX_MS\s*=\s*(\d+)/);
+  return !!mm && mm[1] === "2500";
+})());
+check("sound effects are cut at the cap", /stopAfter\(a, SOUND_EFFECT_MAX_MS\)/.test(APP));
+check("asset-picker previews get their own longer cap",
+  /PREVIEW_MAX_MS = 6000/.test(APP) && /stopAfter\(a, PREVIEW_MAX_MS\)/.test(APP));
+check("the cut fades out instead of clicking", /FADE_MS/.test(APP));
+check("background music is NOT capped", (() => {
+  const sync = APP.slice(APP.indexOf("function syncBackgroundMusic"),
+    APP.indexOf("function stopBackgroundMusic"));
+  return !/stopAfter\(/.test(sync);
+})());
+check("the downloaded game caps effects but not music", (() => {
+  const py = fs.readFileSync(
+    path.join(ROOT, "..", "dijkstra_maze", "student", "game.py"), "utf8");
+  const capsEffects = /return CappedSound\(pygame\.mixer\.Sound\(path\)\)/.test(py);
+  const musicUncapped = !/CappedSound/.test(
+    py.slice(py.indexOf("def load_background_music"), py.indexOf("def load_round")));
+  return capsEffects && musicUncapped;
+})());
+
 console.log("");
 if (failures) {
   console.log(`${failures} FAILURE(S)`);
