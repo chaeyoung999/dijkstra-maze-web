@@ -289,12 +289,19 @@
   function defaultStepState(step) {
     return {
       code: step.parts ? step.parts.map(function (p) { return linesOf(p.starter); }) : linesOf(step.starter),
-      // Required steps ship with the reference answer as their starter code
-      // (see the "Ship Required TODOs 1-5 pre-filled" change) - there is
-      // nothing left to solve, so a fresh visitor should see them already
-      // completed (all Bonus unlocked immediately) rather than sitting in
-      // an ungraded "available" state waiting for someone to press Run.
-      status: step.required ? "completed" : "available",
+      // `prefilled`, NOT `required`, decides this - the two concepts came
+      // apart when Required 6 and 7 were added. A prefilled step (Required
+      // 1-5) ships with the reference answer as its starter code, so there
+      // is nothing left to solve and a fresh visitor should see it already
+      // completed rather than sitting in an ungraded "available" state
+      // waiting for someone to press Run.
+      //
+      // Required 6 and 7 are Required for SEQUENCING (they gate Bonus, and
+      // they come after 5) but they are real fill-in-the-blank exercises
+      // with a blank starter. Auto-completing them would hand the student a
+      // pass for work they have not done, and would let them skip straight
+      // past the only two Required exercises the course still has.
+      status: step.prefilled ? "completed" : "available",
       hintsRevealed: 0,
       attempts: 0,
       lastFeedback: null,
@@ -2009,6 +2016,229 @@
     ].join("\n");
   }
 
+  // ---- TODO 6: stepping on a bomb sends the player home ----------------
+  //
+  // The student writes the BODY of `for bomb in self.bombs:`, so the loop
+  // itself has to be part of the generated function - their code contains a
+  // `break`, which is only legal inside a loop. Everything is graded on
+  // resulting STATE (where did the player end up, what state is each bomb in)
+  // rather than on which methods got called, so an implementation that finds
+  // the bomb its own way still passes - the same philosophy as TODO 2.
+  function buildFnSourceBombLoop(code) {
+    // 8 spaces: the student's code sits inside the `for`, which sits inside _fn.
+    var body = reindentPython(code, "        ");
+    return "def _fn(self, now, player_position):\n" +
+           "    for bomb in self.bombs:\n" +
+           body + "\n" +
+           "    return locals()\n";
+  }
+
+  function harness_bombCollision_6(code) {
+    var fnSrc = buildFnSourceBombLoop(code);
+    return [
+      PY_PRELUDE,
+      PY_BONUS_HELPERS,
+      b64Line("FN_SRC", fnSrc),
+      "def _run_inner():",
+      "    result = {'ok': False, 'passed': [], 'failed': [], 'warnings': [], 'error': None, 'traceback': None}",
+      // Stand-ins that behave exactly like the real Bomb/Player/Maze on the
+      // handful of members this step touches. Bomb.trigger in particular
+      // reproduces the real "returns True only the first time" contract,
+      // because that is the whole point of the inner `if`.
+      "    class FakeBomb:",
+      "        def __init__(self, row, col, state='ACTIVE'):",
+      "            self.row = row",
+      "            self.col = col",
+      "            self.state = state",
+      "            self.explosion_start_time = None",
+      "        def get_position(self):",
+      "            return (self.row, self.col)",
+      "        def trigger(self, current_time):",
+      "            if self.state != 'ACTIVE':",
+      "                return False",
+      "            self.state = 'EXPLODING'",
+      "            self.explosion_start_time = current_time",
+      "            return True",
+      "    class FakePlayer:",
+      "        def __init__(self, row, col):",
+      "            self.row = row",
+      "            self.col = col",
+      "            self.resets = 0",
+      "        def get_position(self):",
+      "            return (self.row, self.col)",
+      "        def reset_position(self):",
+      "            self.row = 0",
+      "            self.col = 0",
+      "            self.resets += 1",
+      "    class FakeMaze:",
+      "        def __init__(self):",
+      "            self.cleared = 0",
+      "        def clear_path_display(self):",
+      "            self.cleared += 1",
+      "    class FakeSound:",
+      "        def __init__(self):",
+      "            self.plays = 0",
+      "        def play(self):",
+      "            self.plays += 1",
+      "    class FakeGame:",
+      "        def __init__(self, bombs, player, sound):",
+      "            self.bombs = bombs",
+      "            self.player = player",
+      "            self.maze = FakeMaze()",
+      "            self.bomb_sound = sound",
+      "    ns = {}",
+      "    try:",
+      "        exec(compile(FN_SRC, '<student>', 'exec'), {}, ns)",
+      "    except SyntaxError as e:",
+      // -2, not -1: the generated wrapper adds BOTH `def _fn(...)` and the
+      // `for bomb in self.bombs:` line above the student's first line.
+      "        line = max(1, (e.lineno or 1) - 2)",
+      "        result['error'] = 'Python syntax error on line %s: %s.' % (line, e.msg)",
+      "        return json.dumps(result)",
+      "    _raw_fn = ns['_fn']",
+      "    def _fn(*args):",
+      "        return _run_guarded(_raw_fn, args)",
+      "    try:",
+      // 1. The whole point of the step.
+      "        hit = FakeBomb(3, 4)",
+      "        other = FakeBomb(1, 1)",
+      "        player = FakePlayer(3, 4)",
+      "        game = FakeGame([other, hit], player, FakeSound())",
+      "        _fn(game, 1000, (3, 4))",
+      "        if player.get_position() == (0, 0) and hit.state == 'EXPLODING':",
+      "            result['passed'].append('a live bomb on the player\\'s cell sends the player back to the start and goes off')",
+      "        else:",
+      "            msgs = []",
+      "            if player.get_position() != (0, 0):",
+      "                msgs.append('the player is still at %r instead of back at (0, 0) - call self.player.reset_position()' % (player.get_position(),))",
+      "            if hit.state != 'EXPLODING':",
+      "                msgs.append('the bomb is still %r instead of EXPLODING - call bomb.trigger(now)' % hit.state)",
+      "            result['failed'].append('A live bomb was on the player\\'s cell but %s.' % '; and '.join(msgs))",
+      "        if other.state == 'ACTIVE':",
+      "            result['passed'].append('the other bomb elsewhere on the board was left alone')",
+      "        else:",
+      "            result['failed'].append('A bomb that was NOT on the player\\'s cell was set off too (it is now %r). Check that you compare bomb.get_position() with player_position.' % other.state)",
+      "        if game.maze.cleared == 0:",
+      "            result['warnings'].append('Heads up: the drawn hint route was not cleared. This still counts as complete, but self.maze.clear_path_display() stops a now-wrong route staying on screen after the player is teleported.')",
+      // 2. A bomb the player is not standing on must do nothing.
+      "        away = FakeBomb(7, 7)",
+      "        player2 = FakePlayer(3, 4)",
+      "        game2 = FakeGame([away], player2, FakeSound())",
+      "        _fn(game2, 1000, (3, 4))",
+      "        if player2.get_position() == (3, 4) and away.state == 'ACTIVE':",
+      "            result['passed'].append('a bomb somewhere else does not move the player')",
+      "        else:",
+      "            result['failed'].append('There was no bomb on the player\\'s cell, but the player ended up at %r and the far-away bomb is %r. Both should be untouched.' % (player2.get_position(), away.state))",
+      // 3. The inner `if bomb.trigger(now)` is exactly what this catches.
+      "        for spent_state in ('EXPLODING', 'INACTIVE'):",
+      "            spent = FakeBomb(3, 4, state=spent_state)",
+      "            player3 = FakePlayer(3, 4)",
+      "            game3 = FakeGame([spent], player3, FakeSound())",
+      "            _fn(game3, 2000, (3, 4))",
+      "            if player3.get_position() == (3, 4):",
+      "                result['passed'].append('a bomb that already went off (%s) does not punish the player again' % spent_state)",
+      "            else:",
+      "                result['failed'].append('A bomb in state %s has already been used up, but the player was sent back to the start anyway. Only punish while bomb.state == \"ACTIVE\", and only when bomb.trigger(now) returns True.' % spent_state)",
+      // 4. Degenerate board: no bombs at all is legal (Bonus lets students
+      //    place none), and must not raise.
+      "        player4 = FakePlayer(2, 2)",
+      "        game4 = FakeGame([], player4, FakeSound())",
+      "        _fn(game4, 1000, (2, 2))",
+      "        if player4.get_position() == (2, 2):",
+      "            result['passed'].append('a board with no bombs at all is handled without error')",
+      "        else:",
+      "            result['failed'].append('With no bombs on the board at all, the player should not move, but ended up at %r.' % (player4.get_position(),))",
+      // 5. The real game runs with bomb_sound = None whenever no sound file
+      //    loaded, so an unguarded .play() would crash mid-class.
+      "        hit5 = FakeBomb(3, 4)",
+      "        player5 = FakePlayer(3, 4)",
+      "        game5 = FakeGame([hit5], player5, None)",
+      "        _fn(game5, 1000, (3, 4))",
+      "        if player5.get_position() == (0, 0):",
+      "            result['passed'].append('still works when there is no bomb sound loaded (self.bomb_sound is None)')",
+      "        else:",
+      "            result['failed'].append('With self.bomb_sound set to None the bomb stopped working. Check self.bomb_sound before calling .play() on it.')",
+      "    except BaseException as e:",
+      "        result['error'] = '%s: %s' % (type(e).__name__, e)",
+      "        result['traceback'] = traceback.format_exc()",
+      "    result['ok'] = result['error'] is None and len(result['failed']) == 0",
+      "    return json.dumps(result)",
+      "def _run():",
+      "    return _finish_or_report(_run_inner)",
+      "_run()",
+    ].join("\n");
+  }
+
+  // ---- TODO 7: the round is lost when the clock hits zero --------------
+  //
+  // The smallest Required step: one condition, two assignments. Graded on the
+  // resulting flags only, and the failure MESSAGE is deliberately not checked
+  // for any particular wording - the lead tells students to write their own.
+  function harness_timeLimit_7(code) {
+    var fnSrc = buildFnSource("self", code, "    ");
+    return [
+      PY_PRELUDE,
+      PY_BONUS_HELPERS,
+      b64Line("FN_SRC", fnSrc),
+      "def _run_inner():",
+      "    result = {'ok': False, 'passed': [], 'failed': [], 'warnings': [], 'error': None, 'traceback': None}",
+      "    class FakeGame:",
+      "        def __init__(self, remaining):",
+      "            self._remaining = remaining",
+      "            self.round_failed = False",
+      "            self.failure_reason = ''",
+      "            self.asked = 0",
+      "        def get_remaining_time(self):",
+      "            self.asked += 1",
+      "            return self._remaining",
+      "    ns = {}",
+      "    try:",
+      "        exec(compile(FN_SRC, '<student>', 'exec'), {}, ns)",
+      "    except SyntaxError as e:",
+      "        line = max(1, (e.lineno or 1) - 1)",
+      "        result['error'] = 'Python syntax error on line %s: %s.' % (line, e.msg)",
+      "        return json.dumps(result)",
+      "    _raw_fn = ns['_fn']",
+      "    def _fn(*args):",
+      "        return _run_guarded(_raw_fn, args)",
+      "    try:",
+      // 0 and negative both mean "out of time". Negative matters: this is
+      // exactly the case a `== 0` check silently misses.
+      "        for remaining in (0, -1, -45):",
+      "            game = FakeGame(remaining)",
+      "            _fn(game)",
+      "            if game.round_failed is not True:",
+      "                extra = ' (a `== 0` check misses this - use `<= 0`)' if remaining < 0 else ''",
+      "                result['failed'].append('With %s second(s) left the round should be over, but self.round_failed is %r.%s' % (remaining, game.round_failed, extra))",
+      "            elif not isinstance(game.failure_reason, str) or game.failure_reason.strip() == '':",
+      "                result['failed'].append('With %s second(s) left you correctly set self.round_failed, but self.failure_reason is %r. It needs a short message - that text is what the player reads on the failure screen. Any wording of your own is fine.' % (remaining, game.failure_reason))",
+      "            else:",
+      "                result['passed'].append('%s second(s) left: round_failed is True and the player is told why (%s)' % (remaining, _short_repr(game.failure_reason)))",
+      // Time still on the clock must NOT end the round. Failing a round the
+      // student could still have won is a real error, not advice.
+      "        for remaining in (1, 5, 60):",
+      "            game = FakeGame(remaining)",
+      "            _fn(game)",
+      "            if game.round_failed is False:",
+      "                result['passed'].append('%s second(s) still on the clock: the round keeps going' % remaining)",
+      "            else:",
+      "                result['failed'].append('There were still %s second(s) left, but the round was failed anyway (self.round_failed is %r). Only end the round when the time left is 0 or less.' % (remaining, game.round_failed))",
+      // A student who never asks the clock cannot be reacting to it.
+      "        probe = FakeGame(3)",
+      "        _fn(probe)",
+      "        if probe.asked == 0:",
+      "            result['warnings'].append('Heads up: your code never called self.get_remaining_time(). It happens to pass, but that is the only thing that actually knows how much time is left.')",
+      "    except BaseException as e:",
+      "        result['error'] = '%s: %s' % (type(e).__name__, e)",
+      "        result['traceback'] = traceback.format_exc()",
+      "    result['ok'] = result['error'] is None and len(result['failed']) == 0",
+      "    return json.dumps(result)",
+      "def _run():",
+      "    return _finish_or_report(_run_inner)",
+      "_run()",
+    ].join("\n");
+  }
+
   // D1/D4/F changelog note: this file used to also define
   // harness_score_6/harness_score_7 (treasure/swamp score grading) and
   // harness_monsterFsm_13/harness_monsterChase_14 (monster FSM/chase
@@ -2024,6 +2254,8 @@
     guardClause_3: harness_guardClause_3,
     positionDelta_4: harness_positionDelta_4,
     dijkstra_5: harness_dijkstra_5,
+    bombCollision_6: harness_bombCollision_6,
+    timeLimit_7: harness_timeLimit_7,
     roundDesign_8: harness_roundDesign_8,
     lookAndFeel_9: harness_lookAndFeel_9,
     customItems_10: harness_customItems_10,
@@ -2032,8 +2264,10 @@
 
   // ------------------------------------------------- 11. syntax harnesses
   //
-  // These are the open-ended TODOs (1, 6, 7, 9): there is no single
-  // "correct" value, so passing only requires two things:
+  // TODO 1 is the only step graded this way now (the Bonus groups that used
+  // to be here gained real code parts and moved to BEHAVIOUR_HARNESSES; the
+  // NEW TODO 6 and 7 are behaviour-graded from the start). It is open-ended:
+  // there is no single "correct" value, so passing only requires two things:
   //   1. the code compiles and executes without a Python error, and
   //   2. every name in mustDefine actually got defined (so nothing crashes
   //      later when the real game imports this file).
@@ -7473,6 +7707,29 @@
     "1": [
       'TITLE = "Crystal Vault"',
       'GAME_SUBTITLE = "Grab the crystals and reach the vault before the clock runs out"',
+    ].join("\n"),
+    // Required 6 and 7 need entries because they are the two Required steps
+    // whose starter is a real blank - without these, the showcase would mark
+    // them "completed" while the editor still showed `pass`, which is exactly
+    // the sort of thing a teacher notices mid-demo. Like REFERENCE_CODE these
+    // are deliberately NOT the literal graded snippet but a
+    // different-shaped-but-equivalent version, each verified against the real
+    // harness in tests/test_alt_implementations.py (the "trigger guard only"
+    // and "named variable and `< 1`" cases).
+    "6": [
+      "if bomb.get_position() == player_position:",
+      "    if bomb.trigger(now):",
+      "        self.player.reset_position()",
+      "        self.maze.clear_path_display()",
+      "        if self.bomb_sound:",
+      "            self.bomb_sound.play()",
+      "    break",
+    ].join("\n"),
+    "7": [
+      "seconds_left = self.get_remaining_time()",
+      "if seconds_left < 1:",
+      "    self.round_failed = True",
+      '    self.failure_reason = "Out of time! Try a faster route."',
     ].join("\n"),
     // One entry per Bonus SUB-STEP now. A sub-step with no entry here
     // simply keeps its starter code, which is already working behaviour

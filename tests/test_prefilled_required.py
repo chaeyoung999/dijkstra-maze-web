@@ -3,11 +3,17 @@
 
     open the site, touch nothing, press "Run my code" -> it passes.
 
-Required 1-7 no longer ship as fill-in-the-blank exercises. The editor opens
+Required 1-5 no longer ship as fill-in-the-blank exercises. The editor opens
 with the reference answer already typed in, for the student to read and
 experiment with. If grading did NOT pass on that untouched default, every
 student's very first interaction with the site would be a red failure on
 code we wrote ourselves - the single worst possible outcome of this change.
+
+Required 6 and 7 are deliberately NOT covered here: they were added because
+1-5 stopped being exercises, so they are real blanks and are SUPPOSED to fail
+until the student writes something. Their harnesses are exercised by
+test_alt_implementations.py instead, canonical answers and negative controls
+alike. test_app_load.js pins the fact that they stay blank.
 
 So this does not reason about it. It takes the code app.js ACTUALLY puts in
 the editor on a fresh load (via app.js's own freshState(), dumped by

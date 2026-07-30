@@ -271,6 +271,11 @@ FUNCS = [
     "buildFnSourceTwoParts", "buildFnSourceParts", "b64Line",
     "harness_movement_2", "harness_guardClause_3", "harness_positionDelta_4",
     "harness_dijkstra_5",
+    # The two NEW Required steps. bombCollision_6 needs its own body builder
+    # (buildFnSourceBombLoop) because the student's snippet is the body of a
+    # `for` loop and contains a `break`, so the loop has to be generated too.
+    "buildFnSourceBombLoop",
+    "harness_bombCollision_6", "harness_timeLimit_7",
     # The four multi-part Bonus harnesses: each mixes settings-block parts
     # with real method-body parts (see app.js section 10).
     "harness_roundDesign_8", "harness_lookAndFeel_9", "harness_customItems_10",

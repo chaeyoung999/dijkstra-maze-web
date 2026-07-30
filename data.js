@@ -27,7 +27,10 @@
 "use strict";
 
 /** Required TODOs, in the order students must complete (or skip) them. */
-const REQUIRED_ORDER = ["1", "2", "3", "4", "5"];
+// 1-5 now ship PRE-FILLED with the reference answer (read/run/experiment).
+// 6 and 7 are the real fill-in-the-blank exercises, added when 1-5 stopped
+// being ones. Bonus groups were renumbered +2 to free these two numbers.
+const REQUIRED_ORDER = ["1", "2", "3", "4", "5", "6", "7"];
 
 /**
  * Bonus sub-steps, flat and in sidebar order.
@@ -86,7 +89,7 @@ const KNOWN_ASSET_FILES = {
 const COURSE_STEPS = [
   // ------------------------------------------------------------------ TODO 1
   {
-    id: "1", step: 1, kind: "Required", required: true, file: "settings.py",
+    id: "1", step: 1, kind: "Required", required: true, prefilled: true, file: "settings.py",
     title: "Name your game.",
     lead: "Every game needs an identity. Two variables in this file control what players see before they even move:\n\n- **`TITLE`** — shown in the window and on the title screen.\n- **`GAME_SUBTITLE`** — a one-line description shown under the title.\n\nBoth are just Python strings — replace the text between the quotes with your own game's name and one-line description. This is a design task, not an algorithm: there's no single correct answer, just make it describe **your** game. (Writing the game's actual *rules* is a separate Bonus step at the very end — TODO 11 — once your game is finished.)",
     codeReference: [
@@ -115,7 +118,7 @@ const COURSE_STEPS = [
 
   // ------------------------------------------------------------------ TODO 2
   {
-    id: "2", step: 2, kind: "Required", required: true, file: "game.py",
+    id: "2", step: 2, kind: "Required", required: true, prefilled: true, file: "game.py",
     title: "Connect the arrow keys and the controller to maze movement.",
     lead: "**This one is already filled in for you.** Read it line by line, then press *Run my code* to see it work — and feel free to change it, or break it on purpose, to understand it better. *Reset this step* always brings this version back.\n\nRight now your maze ignores the keyboard entirely. Each frame, `update_player()` checks which key is currently held down and needs to move the player one cell in that direction. Inside the branch for each key, call **`self.player.try_move(direction, self.maze)`** — `direction` is one of the strings `\"left\"`/`\"right\"`/`\"top\"`/`\"bottom\"` (note: `\"top\"`/`\"bottom\"`, not `\"up\"`/`\"down\"`) — and store what it returns in **`moved`**. Use `if` for the first key check and `elif` for the rest (not four separate `if`s), so only one direction can win when two keys are pressed together.\n\nOne press moves exactly **one cell** — this is a grid, not free movement.\n\n**Controls**: the arrow keys, or the classroom controller's **E / F / C / D** (left / right / up / down). Both sets do exactly the same thing.",
     codeReference: [
@@ -163,7 +166,7 @@ const COURSE_STEPS = [
 
   // ------------------------------------------------------------------ TODO 3
   {
-    id: "3", step: 3, kind: "Required", required: true, file: "player.py",
+    id: "3", step: 3, kind: "Required", required: true, prefilled: true, file: "player.py",
     title: "Stop movement when there is no cell or a wall blocks the direction.",
     lead: "**This one is already filled in for you.** Read it line by line, then press *Run my code* to see it work — and feel free to change it, or break it on purpose, to understand it better. *Reset this step* always brings this version back.\n\n`try_move()` first looks up the cell the player is standing on (**`current`**), then needs to bail out before moving in two situations: there's no cell in that direction at all (**`current is None`** — happens at the edge of the maze) or a wall blocks the way (**`current.walls[direction]`** is `True`). Combine both checks with `or` in one `if`, and `return False` immediately when either is true — this is a guard clause: handle the bad cases first so the rest of `try_move` can assume the move is legal.",
     codeReference: [
@@ -198,7 +201,7 @@ const COURSE_STEPS = [
 
   // ------------------------------------------------------------------ TODO 4
   {
-    id: "4", step: 4, kind: "Required", required: true, file: "player.py",
+    id: "4", step: 4, kind: "Required", required: true, prefilled: true, file: "player.py",
     title: "Update the player's row and column.",
     lead: "**This one is already filled in for you.** Read it line by line, then press *Run my code* to see it work — and feel free to change it, or break it on purpose, to understand it better. *Reset this step* always brings this version back.\n\nOnce `try_move()` knows the move is legal, **`dr`** and **`dc`** (already computed just above from the direction dictionary) tell you exactly how far to shift the player: `dr` is the row change, `dc` is the column change. Add each to the matching attribute on `self` using **`+=`** (`self.row += dr`, `self.col += dc`) so the position updates in place rather than being replaced.",
     codeReference: [
@@ -240,7 +243,7 @@ const COURSE_STEPS = [
 
   // ------------------------------------------------------------------ TODO 5
   {
-    id: "5", step: 5, kind: "Required", required: true, file: "pathfinding.py",
+    id: "5", step: 5, kind: "Required", required: true, prefilled: true, file: "pathfinding.py",
     title: "Calculate the cost to reach this neighbor, and record the better route.",
     lead: "**This one is already filled in for you.** Read it line by line, then press *Run my code* to see it work — and feel free to change it, or break it on purpose, to understand it better. *Reset this step* always brings this version back.\n\nThis function powers the player's Hint button: it finds the shortest route from the player to the goal, treating active bombs as very expensive so the route avoids them. Dijkstra's relaxation step here is really two separate ideas glued together: computing a candidate cost, then deciding whether to actually keep it. Each part below gets its own explanation, split the same way the Bonus TODOs are split into small sequential parts.",
     codeReference: [
@@ -345,9 +348,97 @@ const COURSE_STEPS = [
     },
   },
 
+  // ------------------------------------------------------------------ TODO 6
+  //
+  // NEW Required step (this session, teacher request). Unlike TODO 1-5, which
+  // now ship PRE-FILLED, 6 and 7 are real fill-in-the-blank exercises - the
+  // difficulty Required used to have. Both come from logic that was fully
+  // given before and claimed by no TODO anywhere, so nothing was taken away
+  // from Bonus to make room.
+  //
+  // The marker covers the WHOLE body of the `for bomb in self.bombs:` loop.
+  // That is bigger than TODO 3, and deliberately so: the region is one
+  // coherent unit (find the live bomb under the player -> set it off -> send
+  // the player home -> stop looking). Carving out something smaller would
+  // have meant changing the reference implementation, which is not allowed.
+  {
+    id: "6", step: 6, kind: "Required", required: true, file: "game.py",
+    title: "Send the player back to the start when they step on a bomb.",
+    lead: "Bombs are the only thing in this maze that can punish you. `check_bombs()` runs every single frame, and the loop above hands you **one bomb at a time** — your job is the body of that loop.\n\nTwo things must BOTH be true before anything happens: the bomb is still live (**`bomb.state == \"ACTIVE\"`**) and it is standing on the player's own cell (**`bomb.get_position() == player_position`**). Join them with `and` in one `if`.\n\nInside, **`bomb.trigger(now)`** does two jobs at once: it sets the bomb exploding, and it returns `True` **only the first time**. Wrapping the punishment in `if bomb.trigger(now):` is what stops one bomb hitting the player over and over on every following frame. When it does return `True`, send the player home with **`self.player.reset_position()`** and wipe the stale hint route with **`self.maze.clear_path_display()`**.\n\nTwo details worth knowing: **`self.bomb_sound` can be `None`** when no sound file loaded, so check it before calling `.play()`; and **`break`** at the end of the `if` means one bomb per frame is enough — no need to keep scanning.",
+    codeReference: [
+      ["bomb", "The one bomb this pass of the loop is looking at. The loop itself is given; you write what happens for this bomb."],
+      ["bomb.state", 'A string: "ACTIVE" while the bomb is still armed, then "EXPLODING", then "INACTIVE". Only an ACTIVE bomb can hurt anyone.'],
+      ["bomb.get_position()", "The bomb's (row, col). Compare it with player_position, computed just above the loop."],
+      ["bomb.trigger(now)", "Sets the bomb exploding and returns True - but only the first time. On an already-triggered bomb it changes nothing and returns False. This is what makes one bomb count once."],
+      ["self.player.reset_position()", "Puts the player back at the maze start (row 0, col 0). This is the actual punishment."],
+      ["self.maze.clear_path_display()", "Clears the drawn hint route, which is now wrong because the player just teleported."],
+      ["self.bomb_sound", "A pygame Sound, or None when no file loaded - so always check it before calling .play()."],
+    ],
+    contextBefore: [
+      "    def check_bombs(self):",
+      "        now = pygame.time.get_ticks()",
+      "        player_position = self.player.get_position()",
+      "",
+      "        for bomb in self.bombs:",
+    ],
+    contextAfter: [
+      "    def check_goal(self):",
+      "        # (given: decides when the round has been won)",
+    ],
+    starter: [
+      "            pass  # Write your code here.",
+    ],
+    hints: [
+      'if bomb.state == "ACTIVE" and bomb.get_position() == player_position:\n    if bomb.trigger(now):\n        self.player.reset_position()\n        self.maze.clear_path_display()\n        if self.bomb_sound:\n            self.bomb_sound.play()\n    break\n\nNote the indentation: `break` lines up with the INNER `if` (inside the outer one), so it runs whether or not this bomb was still live.',
+    ],
+    visualizer: "bombReset",
+    grading: {
+      mode: "behaviour",
+      harness: "bombCollision_6",
+      casesDescription: "Runs your loop body against stand-in bombs and asserts the resulting state, never a particular function call. Cases: a live bomb on the player's cell (the player must end up back at the start and that bomb must be exploding, while other bombs are left alone); a live bomb somewhere else (the player must NOT be moved); an already-exploded bomb on the player's cell (must NOT punish again); and no bombs at all. Also checks it survives self.bomb_sound being None, and that an infinite loop is stopped rather than hanging the page. Clearing the hint route is reported as a warning, not a failure.",
+    },
+  },
+
+  // ------------------------------------------------------------------ TODO 7
+  //
+  // The second NEW Required step. Same reasoning as TODO 6: this was given,
+  // working code that no TODO claimed. Smallest of the Required steps - one
+  // condition and two assignments - so it lands right after the bomb one.
+  {
+    id: "7", step: 7, kind: "Required", required: true, file: "game.py",
+    title: "End the round when the clock runs out.",
+    lead: "Every round is against a timer, and this is the code that actually enforces it. `check_time_limit()` runs every frame; the guard above it has already returned early if the clock hasn't started yet, so by the time your code runs there is a real countdown to check.\n\n**`self.get_remaining_time()`** gives the seconds left. It is clamped at zero and never goes negative, so the honest test for \"out of time\" is **`<= 0`**, not `== 0` — with `== 0` a single skipped frame could step straight past the moment and the round would never end.\n\nWhen the time is gone, set two things: **`self.round_failed = True`** (the flag the rest of the game watches to stop play and show the failure screen) and **`self.failure_reason`**, a short string the player actually reads. The wording is yours — that text is what appears on screen.",
+    codeReference: [
+      ["self.get_remaining_time()", "Seconds left in this round, already including any bonus time picked up. Clamped at 0, so it never returns a negative number."],
+      ["self.round_failed", "A boolean, starts False. Setting it True is what ends the round as a loss."],
+      ["self.failure_reason", "The message shown to the player on the failure screen. Any short string of your own works."],
+    ],
+    contextBefore: [
+      "    def check_time_limit(self):",
+      "        if self.start_time is None:",
+      "            return",
+    ],
+    contextAfter: [
+      "    def get_remaining_time(self):",
+      '        limit = self.config["time_limit_seconds"] + self.bonus_time_seconds',
+    ],
+    starter: [
+      "        pass  # Write your code here.",
+    ],
+    hints: [
+      'if self.get_remaining_time() <= 0:\n    self.round_failed = True\n    self.failure_reason = "ROUND FAILED: Time limit exceeded."\n\nUse `<= 0` rather than `== 0`, and put your own wording in the message - it is the line the player reads.',
+    ],
+    visualizer: "roundTimer",
+    grading: {
+      mode: "behaviour",
+      harness: "timeLimit_7",
+      casesDescription: "Calls your code with a stand-in game whose clock reads 0, a negative value, and several positive values, asserting the resulting round_failed. Out of time must set round_failed True and leave a non-empty string in failure_reason (any wording of your own). Time remaining must leave round_failed False - failing a round early is treated as a real error, not a warning. Also checks it does not crash and that an infinite loop is stopped rather than hanging the page.",
+    },
+  },
+
   // ------------------------------------------------------------------ TODO 8
   //
-  // SPLIT (this session): what used to be 3 big parts is now 6 small ones,
+  // SPLIT (an earlier session): what used to be 3 big parts is now 6 small ones,
   // per direct teacher request - students were finishing Required in ~30
   // minutes and finding Bonus too hard to start. Nothing new was added;
   // the same settings and the same placement code are simply handed over

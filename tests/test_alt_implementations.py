@@ -156,6 +156,210 @@ case("5 Part1/2", "alt: accumulator variable", "harness_dijkstra_5", (ALT_5A_ACC
 case("5 Part2/2", "canonical (if/or, 3 updates)", "harness_dijkstra_5", (CANONICAL_5A, CANONICAL_5B))
 case("5 Part2/2", "alt: named boolean condition variable", "harness_dijkstra_5", (CANONICAL_5A, ALT_5B_NAMED))
 
+# ---------------------------------------------------------------- TODO 6
+# check_bombs' loop body: find a live bomb on the player's cell, set it off
+# once, send the player home. These are REAL fill-in-the-blank exercises (6
+# and 7 were added when Required 1-5 became pre-filled), so unlike Bonus the
+# grading is strict - the negative controls below must actually fail.
+CANONICAL_6 = (
+    'if bomb.state == "ACTIVE" and bomb.get_position() == player_position:\n'
+    '    if bomb.trigger(now):\n'
+    '        self.player.reset_position()\n'
+    '        self.maze.clear_path_display()\n'
+    '        if self.bomb_sound:\n'
+    '            self.bomb_sound.play()\n'
+    '    break\n'
+)
+# Alt A: a continue-style guard instead of one big if, and no break at all
+# (harmless - the remaining bombs simply are not on the player's cell).
+ALT_6_CONTINUE = (
+    'if bomb.state != "ACTIVE":\n'
+    '    continue\n'
+    'if bomb.get_position() != player_position:\n'
+    '    continue\n'
+    'if bomb.trigger(now):\n'
+    '    self.player.reset_position()\n'
+    '    self.maze.clear_path_display()\n'
+)
+# Alt B: unpacks the position itself and compares row/col separately, and
+# uses a try/except instead of a truthiness check for the sound.
+ALT_6_UNPACKED = (
+    'bomb_row, bomb_col = bomb.get_position()\n'
+    'player_row, player_col = player_position\n'
+    'same_cell = bomb_row == player_row and bomb_col == player_col\n'
+    'if same_cell and bomb.state == "ACTIVE" and bomb.trigger(now):\n'
+    '    self.player.reset_position()\n'
+    '    self.maze.clear_path_display()\n'
+    '    try:\n'
+    '        self.bomb_sound.play()\n'
+    '    except AttributeError:\n'
+    '        pass\n'
+)
+# Alt C: sets the player coordinates directly rather than calling
+# reset_position() - bypasses the suggested method entirely, still correct.
+ALT_6_INLINE_RESET = (
+    'if bomb.state == "ACTIVE" and bomb.get_position() == player_position:\n'
+    '    if bomb.trigger(now):\n'
+    '        self.player.row = 0\n'
+    '        self.player.col = 0\n'
+    '        self.maze.clear_path_display()\n'
+    '    break\n'
+)
+# Correct, but never clears the hint route: passes with a warning, because a
+# stale route on screen is bad advice, not a broken game.
+ALT_6_NO_CLEAR = (
+    'if bomb.state == "ACTIVE" and bomb.get_position() == player_position:\n'
+    '    if bomb.trigger(now):\n'
+    '        self.player.reset_position()\n'
+    '    break\n'
+)
+# Alt D: drops the `if` around trigger(). Written as a negative control
+# first - and running it proved the expectation wrong, so it is documented
+# here rather than quietly deleted.
+#
+# It is genuinely CORRECT. bomb.trigger() only returns False when the state is
+# not "ACTIVE", and the outer condition has already excluded that, so the
+# inner `if` can never be the thing that stops a second punishment - the state
+# check is. (In the real game the bomb is EXPLODING by the next frame, so the
+# outer condition stops matching anyway.) The reference implementation keeps
+# the inner `if` as belt-and-braces, not because it is load-bearing here.
+#
+# What the harness therefore requires is: at least ONE of the two guards. An
+# implementation with neither DOES punish an already-spent bomb again, and
+# BAD_6_NO_GUARD_AT_ALL below is the case that proves it is caught.
+ALT_6_NO_TRIGGER_GUARD = (
+    'if bomb.state == "ACTIVE" and bomb.get_position() == player_position:\n'
+    '    bomb.trigger(now)\n'
+    '    self.player.reset_position()\n'
+    '    self.maze.clear_path_display()\n'
+    '    break\n'
+)
+# Alt E: the mirror image - no state check, but the trigger guard does the
+# work instead. Also correct, and the reason the harness must not insist on
+# either guard specifically.
+ALT_6_TRIGGER_GUARD_ONLY = (
+    'if bomb.get_position() == player_position:\n'
+    '    if bomb.trigger(now):\n'
+    '        self.player.reset_position()\n'
+    '        self.maze.clear_path_display()\n'
+    '    break\n'
+)
+# BAD: NEITHER guard. An already-exploded bomb sitting on the player's cell
+# sends them back to the start on every single frame - the symptom is "I can't
+# move at all", which hides the cause completely.
+BAD_6_NO_GUARD_AT_ALL = (
+    'if bomb.get_position() == player_position:\n'
+    '    bomb.trigger(now)\n'
+    '    self.player.reset_position()\n'
+    '    self.maze.clear_path_display()\n'
+    '    break\n'
+)
+# BAD: never checks the position, so ANY live bomb anywhere punishes.
+BAD_6_NO_POSITION_CHECK = (
+    'if bomb.state == "ACTIVE":\n'
+    '    if bomb.trigger(now):\n'
+    '        self.player.reset_position()\n'
+    '    break\n'
+)
+# BAD: detects the bomb but never moves the player - nothing happens.
+BAD_6_NO_RESET = (
+    'if bomb.state == "ACTIVE" and bomb.get_position() == player_position:\n'
+    '    bomb.trigger(now)\n'
+    '    break\n'
+)
+# BAD: unguarded .play() on self.bomb_sound, which is None when no sound file
+# loaded - crashes the real game mid-round.
+BAD_6_UNGUARDED_SOUND = (
+    'if bomb.state == "ACTIVE" and bomb.get_position() == player_position:\n'
+    '    if bomb.trigger(now):\n'
+    '        self.player.reset_position()\n'
+    '        self.bomb_sound.play()\n'
+    '    break\n'
+)
+BAD_6_INFINITE = (
+    'while True:\n'
+    '    pass\n'
+)
+STARTER_6 = 'pass  # Write your code here.\n'
+
+case("6", "canonical (and-condition, trigger guard, break)", "harness_bombCollision_6", (CANONICAL_6,))
+case("6", "alt: continue-style guards, no break", "harness_bombCollision_6", (ALT_6_CONTINUE,))
+case("6", "alt: unpacked row/col compare + try/except sound", "harness_bombCollision_6", (ALT_6_UNPACKED,))
+case("6", "alt: sets player.row/col directly (no reset_position)", "harness_bombCollision_6", (ALT_6_INLINE_RESET,))
+case("6", "alt: forgets clear_path_display (warns, still passes)", "harness_bombCollision_6", (ALT_6_NO_CLEAR,),
+     expect_warning="hint route was not cleared")
+case("6", "alt: no trigger guard (state check already covers it)", "harness_bombCollision_6", (ALT_6_NO_TRIGGER_GUARD,))
+# This exact shape is what app.js's SHOWCASE_CODE["6"] ships, so this case is
+# what lets that comment claim it is "verified against the real harness".
+case("6", "alt: trigger guard only, no state check (= SHOWCASE_CODE)", "harness_bombCollision_6", (ALT_6_TRIGGER_GUARD_ONLY,))
+case("6", "BAD: neither guard, so a spent bomb punishes every frame", "harness_bombCollision_6", (BAD_6_NO_GUARD_AT_ALL,), expect_ok=False)
+case("6", "BAD: never compares the bomb position (negative control)", "harness_bombCollision_6", (BAD_6_NO_POSITION_CHECK,), expect_ok=False)
+case("6", "BAD: detects the bomb but never moves the player", "harness_bombCollision_6", (BAD_6_NO_RESET,), expect_ok=False)
+case("6", "BAD: unguarded bomb_sound.play() crashes with no sound file", "harness_bombCollision_6", (BAD_6_UNGUARDED_SOUND,), expect_ok=False)
+case("6", "BAD: infinite loop (must be stopped, not hang)", "harness_bombCollision_6", (BAD_6_INFINITE,), expect_ok=False)
+case("6", "BAD: untouched starter (negative control)", "harness_bombCollision_6", (STARTER_6,), expect_ok=False)
+
+# ---------------------------------------------------------------- TODO 7
+# check_time_limit's body: fail the round once the clock reaches zero. The
+# failure MESSAGE is the student's own wording, so nothing here checks its
+# text - only that it is a non-empty string.
+CANONICAL_7R = (
+    'if self.get_remaining_time() <= 0:\n'
+    '    self.round_failed = True\n'
+    '    self.failure_reason = "ROUND FAILED: Time limit exceeded."\n'
+)
+# Alt A: stores the time first, and writes the student's own message.
+ALT_7R_NAMED = (
+    'seconds_left = self.get_remaining_time()\n'
+    'if seconds_left < 1:\n'
+    '    self.round_failed = True\n'
+    '    self.failure_reason = "Out of time! Try a faster route."\n'
+)
+# Alt B: `not` on a positive test rather than a <= comparison.
+ALT_7R_NOT_POSITIVE = (
+    'if not self.get_remaining_time() > 0:\n'
+    '    self.round_failed = True\n'
+    '    self.failure_reason = "\\uc2dc\\uac04 \\ucd08\\uacfc!"\n'
+)
+# BAD: `== 0` misses a negative clock, the exact bug the lead warns about.
+BAD_7R_EQUALS_ZERO = (
+    'if self.get_remaining_time() == 0:\n'
+    '    self.round_failed = True\n'
+    '    self.failure_reason = "Time up."\n'
+)
+# BAD: fails the round unconditionally - the student can never win.
+BAD_7R_ALWAYS_FAILS = (
+    'self.round_failed = True\n'
+    'self.failure_reason = "Time up."\n'
+)
+# BAD: inverted comparison - fails while there IS time, passes when there is none.
+BAD_7R_INVERTED = (
+    'if self.get_remaining_time() > 0:\n'
+    '    self.round_failed = True\n'
+    '    self.failure_reason = "Time up."\n'
+)
+# BAD: sets the flag but leaves no message, so the failure screen says nothing.
+BAD_7R_NO_REASON = (
+    'if self.get_remaining_time() <= 0:\n'
+    '    self.round_failed = True\n'
+)
+BAD_7R_INFINITE = (
+    'while True:\n'
+    '    pass\n'
+)
+STARTER_7 = 'pass  # Write your code here.\n'
+
+case("7", "canonical (<= 0, flag + reason)", "harness_timeLimit_7", (CANONICAL_7R,))
+# Same shape app.js's SHOWCASE_CODE["7"] ships - see the note on case 6.
+case("7", "alt: named variable and `< 1`, own wording (= SHOWCASE_CODE)", "harness_timeLimit_7", (ALT_7R_NAMED,))
+case("7", "alt: `not ... > 0`, Korean message", "harness_timeLimit_7", (ALT_7R_NOT_POSITIVE,))
+case("7", "BAD: `== 0` misses a negative clock", "harness_timeLimit_7", (BAD_7R_EQUALS_ZERO,), expect_ok=False)
+case("7", "BAD: fails the round unconditionally", "harness_timeLimit_7", (BAD_7R_ALWAYS_FAILS,), expect_ok=False)
+case("7", "BAD: inverted comparison (fails while time remains)", "harness_timeLimit_7", (BAD_7R_INVERTED,), expect_ok=False)
+case("7", "BAD: no failure_reason, so the player is told nothing", "harness_timeLimit_7", (BAD_7R_NO_REASON,), expect_ok=False)
+case("7", "BAD: infinite loop (must be stopped, not hang)", "harness_timeLimit_7", (BAD_7R_INFINITE,), expect_ok=False)
+case("7", "BAD: untouched starter (negative control)", "harness_timeLimit_7", (STARTER_7,), expect_ok=False)
+
 # ---------------------------------------------------------------- TODO 10 Part 2/2
 # apply_custom_item_effect(self, effect, amount): must branch on "add_time"
 # (self.bonus_time_seconds += amount) and "add_hint" (self.hints_remaining

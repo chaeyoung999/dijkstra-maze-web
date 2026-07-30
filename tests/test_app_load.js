@@ -246,7 +246,18 @@ check("every marker text appears in its file",
   const hooks = sandbox.window.__courseTestHooks;
   const COMPLETE = path.join(ROOT, "..", "dijkstra_maze", "complete");
   const STUDENT = path.join(ROOT, "..", "dijkstra_maze", "student");
-  const PREFILLED = ["2", "3", "4", "5"];
+  // Driven off data.js's own `prefilled` flag rather than a list typed here,
+  // so the flag and the actual starter content have to agree. That flag is
+  // load-bearing: defaultStepState() uses it to decide whether a step opens
+  // already "completed", so a step wrongly flagged would hand out a free pass.
+  const flagged = steps.filter((s) => s.prefilled).map((s) => s.id);
+  check("exactly Required 1-5 are flagged prefilled", flagged.join(",") === "1,2,3,4,5", `(${flagged.join(", ")})`);
+  check("every prefilled step is a Required step",
+    steps.filter((s) => s.prefilled).every((s) => s.required === true && s.kind === "Required"));
+  // TODO 1 is prefilled but excluded below: its starter is a working EXAMPLE
+  // the student is meant to replace with their own game name, not a solution
+  // copied out of complete/*.py, and its lead deliberately says so.
+  const PREFILLED = flagged.filter((id) => id !== "1");
 
   // (a) starter === complete/*.py's marker region, read straight off disk.
   // Nothing hand-copied: if data.js and complete/ ever drift, this fails.
@@ -297,6 +308,27 @@ check("every marker text appears in its file",
     const e = src.findIndex((l) => l.trim() === endText.trim());
     return b === -1 || e <= b ? null : src.slice(b + 1, e).join("\n");
   }
+  // The mirror image of the pre-fill: Required 6 and 7 were added precisely
+  // BECAUSE 1-5 stopped being exercises, so they must stay real blanks. If a
+  // future session ever "helpfully" pre-fills these too, Required has no
+  // exercise left in it at all - which is the whole point of their existence.
+  ["6", "7"].forEach((id) => {
+    const step = steps.find((s) => s.id === id);
+    check(`TODO ${id} exists and is Required`, !!step && step.required === true && step.kind === "Required");
+    if (!step) return;
+    const starterText = (Array.isArray(step.starter) ? step.starter.join("\n") : String(step.starter));
+    check(`TODO ${id} is still a real fill-in-the-blank exercise`,
+      /Write your code here/.test(starterText));
+    check(`TODO ${id}'s starter is NOT the answer`,
+      EXPORT.EXPORT_MARKERS.filter((m) => m[0] === id).every((m) => starterText !== answerRegion(m[1], m[4], m[5])));
+    check(`TODO ${id}'s lead does not claim to be pre-filled`, !/already filled in/i.test(step.lead));
+    check(`TODO ${id} is behaviour-graded with exactly one hint`,
+      step.grading.mode === "behaviour" && !!step.grading.harness && step.hints.length === 1);
+    // The one that matters most: if these were ever flagged prefilled they
+    // would open already "completed" and the student would never do them.
+    check(`TODO ${id} is NOT flagged prefilled (so it does not auto-complete)`, !step.prefilled);
+  });
+
   // The Bonus sub-steps that really are blanks a student must fill in. If
   // the answer set ever leaks into one of these, Bonus silently stops being
   // an exercise - the exact mistake this whole section exists to catch.
@@ -388,26 +420,55 @@ check("every marker text appears in its file",
     return s;
   }
 
-  // Required now ships pre-filled with the reference answer and defaults to
-  // "completed" (see defaultStepState) - so a genuinely fresh, untouched
-  // state already has every Required step done, and Bonus is unlocked from
-  // the very first load. This is the intended behavior, not a regression.
+  // Required 1-5 ship pre-filled with the reference answer and default to
+  // "completed" (see defaultStepState) - there is nothing left to solve.
+  // Required 6 and 7 are the real fill-in-the-blank exercises, so they
+  // default to "available" and the student genuinely has to pass them.
+  //
+  // Consequence, and it is the intended one: Bonus is LOCKED on a fresh load,
+  // because Required is not finished until 6 and 7 are done. If Bonus opened
+  // immediately, a student could skip past the only two Required exercises
+  // the course still has - which is the whole reason 6 and 7 exist.
   const fresh = hooks.freshState();
   hooks.setState(fresh);
-  check("a fresh (default) state has every Required step already completed",
-    DATA.REQUIRED_ORDER.every((id) => fresh.steps[id].status === "completed"));
-  check("Bonus is unlocked from a fresh load, since Required defaults to done",
+  check("a fresh state has the PRE-FILLED Required steps already completed",
+    ["1", "2", "3", "4", "5"].every((id) => fresh.steps[id].status === "completed"));
+  check("a fresh state leaves the two real Required exercises to do",
+    fresh.steps["6"].status === "available" && fresh.steps["7"].status === "available");
+  check("Required 6 is open on a fresh load, 7 waits for 6 (sequential)",
+    hooks.computeStatus("6") === "available" && hooks.computeStatus("7") === "locked");
+  check("Bonus stays locked on a fresh load until Required 6 and 7 are done",
+    DATA.BONUS_ORDER.every((id) => hooks.computeStatus(id) === "locked"));
+
+  // ...and opens as soon as they are.
+  const reqDone = hooks.freshState();
+  reqDone.steps["6"].status = "completed";
+  reqDone.steps["7"].status = "completed";
+  hooks.setState(reqDone);
+  check("finishing Required 6 and 7 unlocks every Bonus group's first step",
+    DATA.BONUS_GROUPS.map((g) => g.ids[0]).every((id) => hooks.computeStatus(id) === "available"));
+
+  // Skipping counts, exactly like everywhere else in this course.
+  const reqSkipped = hooks.freshState();
+  reqSkipped.steps["6"].status = "skipped";
+  reqSkipped.steps["7"].status = "skipped";
+  hooks.setState(reqSkipped);
+  check("skipping Required 6 and 7 also unlocks Bonus",
     DATA.BONUS_GROUPS.map((g) => g.ids[0]).every((id) => hooks.computeStatus(id) === "available"));
 
   // The underlying LOCK RULE itself (Bonus requires Required done-or-skipped)
-  // must still hold if a Required step is ever put back into a non-done
-  // state (e.g. a future "reset this step" action) - only the default
-  // changed, not the rule.
-  const requiredReset = hooks.freshState();
-  requiredReset.steps[DATA.REQUIRED_ORDER[0]].status = "available";
-  hooks.setState(requiredReset);
-  check("Bonus re-locks if a Required step is put back to not-done",
-    DATA.BONUS_ORDER.every((id) => hooks.computeStatus(id) === "locked"));
+  // must still hold if a Required step is ever put back into a non-done state
+  // (e.g. the "Reset this step" action). Started from an all-Required-done
+  // state on purpose: resetting a step in a fresh state would prove nothing,
+  // since a fresh state already has Bonus locked via 6 and 7.
+  DATA.REQUIRED_ORDER.forEach((resetId) => {
+    const requiredReset = hooks.freshState();
+    DATA.REQUIRED_ORDER.forEach((id) => { requiredReset.steps[id].status = "completed"; });
+    requiredReset.steps[resetId].status = "available";
+    hooks.setState(requiredReset);
+    check(`Bonus re-locks when Required ${resetId} is put back to not-done`,
+      DATA.BONUS_ORDER.every((id) => hooks.computeStatus(id) === "locked"));
+  });
 
   stateWith({});
   const firsts = DATA.BONUS_GROUPS.map((g) => g.ids[0]);
@@ -423,7 +484,7 @@ check("every marker text appears in its file",
   stateWith({ "8-1": "completed" });
   check("completing 8-1 opens 8-2 and nothing further",
     hooks.computeStatus("8-2") === "available" && hooks.computeStatus("8-3") === "locked");
-  check("progress in group 6 does not unlock anything in group 7",
+  check("progress in group 8 does not unlock anything in group 9",
     hooks.computeStatus("9-2") === "locked" && hooks.computeStatus("9-1") === "available");
 
   // Skipping counts exactly like completing, same as Required.
