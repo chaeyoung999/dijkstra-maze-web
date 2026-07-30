@@ -156,17 +156,17 @@ case("5 Part1/2", "alt: accumulator variable", "harness_dijkstra_5", (ALT_5A_ACC
 case("5 Part2/2", "canonical (if/or, 3 updates)", "harness_dijkstra_5", (CANONICAL_5A, CANONICAL_5B))
 case("5 Part2/2", "alt: named boolean condition variable", "harness_dijkstra_5", (CANONICAL_5A, ALT_5B_NAMED))
 
-# ---------------------------------------------------------------- TODO 8 Part 2/2
+# ---------------------------------------------------------------- TODO 10 Part 2/2
 # apply_custom_item_effect(self, effect, amount): must branch on "add_time"
 # (self.bonus_time_seconds += amount) and "add_hint" (self.hints_remaining
 # += amount); any other effect string must be a safe no-op, never a crash
-# (the whole point of TODO 8 Part 1's "invent your own effect name"
+# (the whole point of TODO 10 Part 1's "invent your own effect name"
 # promise). Part 1's code1 argument is intentionally a minimal but valid
 # CUSTOM_ITEMS list in every case below - these cases are only exercising
 # Part 2 grading.
 ITEM1_MINIMAL = 'CUSTOM_ITEMS = [{"name": "Custom Item", "color": (180, 180, 180), "image": None, "sound": None, "effect": "add_time", "amount": 0}]'
 
-# TODO 8 is six parts now: 1 CUSTOM_ITEMS, 2 the add_time branch, 3 the
+# TODO 10 is six parts now: 1 CUSTOM_ITEMS, 2 the add_time branch, 3 the
 # add_hint branch, 4/5/6 the three statement groups of the pickup. The
 # harness joins 2+3 into apply_custom_item_effect's body and 4+5+6 into
 # check_items' body, so args8() can either hand over the real per-part split
@@ -180,7 +180,7 @@ CANONICAL_8B = (
 )
 CANON_8_ADD_TIME = 'if effect == "add_time":\n    self.bonus_time_seconds += amount\n'
 CANON_8_ADD_HINT = 'if effect == "add_hint":\n    self.hints_remaining += amount\n'
-# TODO 8 Part 3/3 (the pickup itself). Every Part 1/Part 2 case below pairs
+# TODO 10 Part 3/3 (the pickup itself). Every Part 1/Part 2 case below pairs
 # with this known-good body so a Part 2 result is never masked by a Part 3
 # problem; the Part 3 variants get their own cases further down.
 CANONICAL_8C = (
@@ -208,7 +208,7 @@ CANON_8_SOUND = (
 
 
 def args8(items, effect, pickup, effect_split=None, pickup_split=None):
-    """Builds TODO 8's six part arguments."""
+    """Builds TODO 10's six part arguments."""
     eff = tuple(effect_split) if effect_split is not None else (effect, '')
     pick = tuple(pickup_split) if pickup_split is not None else (pickup, '', '')
     return (items,) + eff + pick
@@ -243,21 +243,21 @@ ALT_8B_SEPARATE_IFS = (
 # Parts 4/5/6 (5 and 6 nested inside the `if` Part 4 opens). This is the case
 # that proves buildFnSourceParts preserves the relative indentation - joining
 # the parts must NOT flatten 5/6 out of the if-block.
-case("8", "canonical (starter split: one effect per part, pickup across 4/5/6)", "harness_customItems_8",
+case("10", "canonical (starter split: one effect per part, pickup across 4/5/6)", "harness_customItems_10",
      args8(ITEM1_MINIMAL, None, None,
            effect_split=(CANON_8_ADD_TIME, CANON_8_ADD_HINT),
            pickup_split=(CANON_8_SPOT, CANON_8_APPLY, CANON_8_SOUND)))
-case("8 Part3/6", "BAD: add_hint part left empty (negative control)", "harness_customItems_8",
+case("10 Part3/6", "BAD: add_hint part left empty (negative control)", "harness_customItems_10",
      args8(ITEM1_MINIMAL, None, None, effect_split=(CANON_8_ADD_TIME, ''),
            pickup_split=(CANON_8_SPOT, CANON_8_APPLY, CANON_8_SOUND)), expect_ok=False)
-case("8 Part5/6", "BAD: effect part left empty, so the pickup never applies it (negative control)", "harness_customItems_8",
+case("10 Part5/6", "BAD: effect part left empty, so the pickup never applies it (negative control)", "harness_customItems_10",
      args8(ITEM1_MINIMAL, None, None,
            effect_split=(CANON_8_ADD_TIME, CANON_8_ADD_HINT),
            pickup_split=(CANON_8_SPOT, '', CANON_8_SOUND)), expect_ok=False)
-case("8 Part2/2", "canonical (if/elif, add_time then add_hint)", "harness_customItems_8", args8(ITEM1_MINIMAL, CANONICAL_8B, CANONICAL_8C))
-case("8 Part2/2", "alt: reversed branch order", "harness_customItems_8", args8(ITEM1_MINIMAL, ALT_8B_REVERSED, CANONICAL_8C))
-case("8 Part2/2", "alt: dict-dispatch table instead of if/elif", "harness_customItems_8", args8(ITEM1_MINIMAL, ALT_8B_DICT_DISPATCH, CANONICAL_8C))
-case("8 Part2/2", "alt: two separate if statements (no elif)", "harness_customItems_8", args8(ITEM1_MINIMAL, ALT_8B_SEPARATE_IFS, CANONICAL_8C))
+case("10 Part2/2", "canonical (if/elif, add_time then add_hint)", "harness_customItems_10", args8(ITEM1_MINIMAL, CANONICAL_8B, CANONICAL_8C))
+case("10 Part2/2", "alt: reversed branch order", "harness_customItems_10", args8(ITEM1_MINIMAL, ALT_8B_REVERSED, CANONICAL_8C))
+case("10 Part2/2", "alt: dict-dispatch table instead of if/elif", "harness_customItems_10", args8(ITEM1_MINIMAL, ALT_8B_DICT_DISPATCH, CANONICAL_8C))
+case("10 Part2/2", "alt: two separate if statements (no elif)", "harness_customItems_10", args8(ITEM1_MINIMAL, ALT_8B_SEPARATE_IFS, CANONICAL_8C))
 
 # ---------------------------------------------- negative controls (must FAIL)
 # Proves the harnesses aren't just trivially permissive - a genuinely wrong
@@ -286,7 +286,7 @@ BAD_8B_SWAPPED = (
     'elif effect == "add_hint":\n'
     '    self.bonus_time_seconds += amount\n'  # wrong attribute
 )
-case("8 Part2/2", "BAD: add_time/add_hint effects swapped (negative control)", "harness_customItems_8", args8(ITEM1_MINIMAL, BAD_8B_SWAPPED, CANONICAL_8C), expect_ok=False)
+case("10 Part2/2", "BAD: add_time/add_hint effects swapped (negative control)", "harness_customItems_10", args8(ITEM1_MINIMAL, BAD_8B_SWAPPED, CANONICAL_8C), expect_ok=False)
 
 BAD_8B_CRASHES_ON_UNKNOWN = (
     'if effect == "add_time":\n'
@@ -296,13 +296,13 @@ BAD_8B_CRASHES_ON_UNKNOWN = (
     'else:\n'
     '    raise ValueError("unknown effect: " + effect)\n'  # must be a safe no-op instead
 )
-case("8 Part2/2", "BAD: raises on an unrecognized effect instead of a safe no-op (negative control)", "harness_customItems_8", args8(ITEM1_MINIMAL, BAD_8B_CRASHES_ON_UNKNOWN, CANONICAL_8C), expect_ok=False)
+case("10 Part2/2", "BAD: raises on an unrecognized effect instead of a safe no-op (negative control)", "harness_customItems_10", args8(ITEM1_MINIMAL, BAD_8B_CRASHES_ON_UNKNOWN, CANONICAL_8C), expect_ok=False)
 
 BAD_8B_ONLY_ADD_TIME = 'if effect == "add_time":\n    self.bonus_time_seconds += amount\n'  # forgets add_hint entirely
-case("8 Part2/2", "BAD: forgets the add_hint branch entirely (negative control)", "harness_customItems_8", args8(ITEM1_MINIMAL, BAD_8B_ONLY_ADD_TIME, CANONICAL_8C), expect_ok=False)
+case("10 Part2/2", "BAD: forgets the add_hint branch entirely (negative control)", "harness_customItems_10", args8(ITEM1_MINIMAL, BAD_8B_ONLY_ADD_TIME, CANONICAL_8C), expect_ok=False)
 
 
-# ================================================================ TODO 6
+# ================================================================ TODO 8
 # Part 1/3 ROUND_CONFIGS, Part 2/3 pacing, Part 3/3 the placement code.
 ROUNDS_3 = (
     'ROUND_CONFIGS = [\n'
@@ -329,7 +329,7 @@ ROUNDS_1 = (
     '     "bomb_count": 1, "custom_item_count": 1, "time_limit_seconds": 40},\n'
     ']\n'
 )
-# Since the Bonus split, TODO 6's pacing is TWO parts: the walking speed on
+# Since the Bonus split, TODO 8's pacing is TWO parts: the walking speed on
 # its own (Part 2/6) and the two hint settings (Part 3/6).
 #
 # NOTE (this session): the old PACING_6_BROKEN_FRICTION / PACING_6_UNPLAYABLE
@@ -382,7 +382,7 @@ CANON_6_BOMBS = (
 CANONICAL_6C = CANON_6_POS + CANON_6_ITEMS + '\n' + CANON_6_BOMBS
 
 
-# The two sub-steps added after the split (6-7 maze-build animation, 6-8
+# The two sub-steps added after the split (8-7 maze-build animation, 8-8
 # hint route weights) default to their starters, so an existing case only
 # has to name what it is actually varying.
 DFS_6 = 'SHOW_DFS_GENERATION = True\nDFS_STEPS_PER_FRAME = 8\n'
@@ -390,9 +390,9 @@ WEIGHTS_6 = 'STUDENT_NORMAL_WEIGHT = 0\nSTUDENT_BOMB_WEIGHT = 1000\n'
 
 
 def args6(rounds, delay, hints, place, split=None, dfs=None, weights=None):
-    """Builds TODO 6's eight sub-step arguments. `split` supplies the three
+    """Builds TODO 8's eight sub-step arguments. `split` supplies the three
     placement sub-steps individually; otherwise the whole placement body
-    goes in 6-4 and 6-5/6-6 are left empty."""
+    goes in 8-4 and 8-5/8-6 are left empty."""
     tail = (
         dfs if dfs is not None else DFS_6,
         weights if weights is not None else WEIGHTS_6,
@@ -440,32 +440,32 @@ ALT_6C_WHILE = (
     '    self.items.append(CustomItem(row, col, self.config["cell_size"], CUSTOM_ITEMS[0]))\n'
     '    forbidden.add((row, col))\n'
 )
-case("6", "canonical (starter split across Parts 4/5/6)", "harness_roundDesign_6", args6(ROUNDS_3, DELAY_6, HINTS_6, None, split=(CANON_6_POS, CANON_6_ITEMS, CANON_6_BOMBS)))
-case("6", "canonical (whole placement written in Part 4/6)", "harness_roundDesign_6", args6(ROUNDS_3, DELAY_6, HINTS_6, CANONICAL_6C))
-case("6", "alt: 5 rounds instead of 3", "harness_roundDesign_6", args6(ROUNDS_5, DELAY_6, HINTS_6, CANONICAL_6C))
-case("6", "alt: a single round", "harness_roundDesign_6", args6(ROUNDS_1, DELAY_6, HINTS_6, CANONICAL_6C))
-case("6", "alt: hints off, faster steps", "harness_roundDesign_6", args6(ROUNDS_3, DELAY_6_FAST, HINTS_6_OFF, CANONICAL_6C))
-case("6", "alt: absurd move delay (warns, still passes)", "harness_roundDesign_6", args6(ROUNDS_3, DELAY_6_ABSURD, HINTS_6, CANONICAL_6C), expect_warning="PLAYER_MOVE_DELAY_MS")
-case("6", "alt: absurd MAX_HINT_COUNT (warns, still passes)", "harness_roundDesign_6", args6(ROUNDS_3, DELAY_6, HINTS_6_ABSURD, CANONICAL_6C), expect_warning="MAX_HINT_COUNT")
-case("6", "alt: own placement rules (no bombs near start, items in turn)", "harness_roundDesign_6", args6(ROUNDS_3, DELAY_6, HINTS_6, ALT_6C_RULES))
-case("6", "alt: places nothing at all (empty lists)", "harness_roundDesign_6", args6(ROUNDS_3, DELAY_6, HINTS_6, ALT_6C_EMPTY))
-case("6", "alt: while loop placement (budget guard must not trip)", "harness_roundDesign_6", args6(ROUNDS_3, DELAY_6, HINTS_6, ALT_6C_WHILE))
+case("8", "canonical (starter split across Parts 4/5/6)", "harness_roundDesign_8", args6(ROUNDS_3, DELAY_6, HINTS_6, None, split=(CANON_6_POS, CANON_6_ITEMS, CANON_6_BOMBS)))
+case("8", "canonical (whole placement written in Part 4/6)", "harness_roundDesign_8", args6(ROUNDS_3, DELAY_6, HINTS_6, CANONICAL_6C))
+case("8", "alt: 5 rounds instead of 3", "harness_roundDesign_8", args6(ROUNDS_5, DELAY_6, HINTS_6, CANONICAL_6C))
+case("8", "alt: a single round", "harness_roundDesign_8", args6(ROUNDS_1, DELAY_6, HINTS_6, CANONICAL_6C))
+case("8", "alt: hints off, faster steps", "harness_roundDesign_8", args6(ROUNDS_3, DELAY_6_FAST, HINTS_6_OFF, CANONICAL_6C))
+case("8", "alt: absurd move delay (warns, still passes)", "harness_roundDesign_8", args6(ROUNDS_3, DELAY_6_ABSURD, HINTS_6, CANONICAL_6C), expect_warning="PLAYER_MOVE_DELAY_MS")
+case("8", "alt: absurd MAX_HINT_COUNT (warns, still passes)", "harness_roundDesign_8", args6(ROUNDS_3, DELAY_6, HINTS_6_ABSURD, CANONICAL_6C), expect_warning="MAX_HINT_COUNT")
+case("8", "alt: own placement rules (no bombs near start, items in turn)", "harness_roundDesign_8", args6(ROUNDS_3, DELAY_6, HINTS_6, ALT_6C_RULES))
+case("8", "alt: places nothing at all (empty lists)", "harness_roundDesign_8", args6(ROUNDS_3, DELAY_6, HINTS_6, ALT_6C_EMPTY))
+case("8", "alt: while loop placement (budget guard must not trip)", "harness_roundDesign_8", args6(ROUNDS_3, DELAY_6, HINTS_6, ALT_6C_WHILE))
 
 BAD_6C_NOT_A_LIST = 'self.items = None\nself.bombs = None\n'
-case("6 Part4-6", "BAD: leaves self.items/self.bombs as None (negative control)", "harness_roundDesign_6", args6(ROUNDS_3, DELAY_6, HINTS_6, BAD_6C_NOT_A_LIST), expect_ok=False)
+case("8 Part4-6", "BAD: leaves self.items/self.bombs as None (negative control)", "harness_roundDesign_8", args6(ROUNDS_3, DELAY_6, HINTS_6, BAD_6C_NOT_A_LIST), expect_ok=False)
 BAD_6C_INFINITE = 'self.items = []\nself.bombs = []\nwhile True:\n    pass\n'
-case("6 Part4-6", "BAD: infinite loop (must be stopped, not hang)", "harness_roundDesign_6", args6(ROUNDS_3, DELAY_6, HINTS_6, BAD_6C_INFINITE), expect_ok=False)
+case("8 Part4-6", "BAD: infinite loop (must be stopped, not hang)", "harness_roundDesign_8", args6(ROUNDS_3, DELAY_6, HINTS_6, BAD_6C_INFINITE), expect_ok=False)
 # Each settings part is now checked for its OWN names, so a missing name is
 # attributed to the exact part that owns it.
-case("6 Part2/6", "BAD: missing PLAYER_MOVE_DELAY_MS (negative control)", "harness_roundDesign_6", args6(ROUNDS_3, '', HINTS_6, CANONICAL_6C), expect_ok=False)
-case("6 Part3/6", "BAD: missing ALLOW_PATH_HINT/MAX_HINT_COUNT (negative control)", "harness_roundDesign_6", args6(ROUNDS_3, DELAY_6, '', CANONICAL_6C), expect_ok=False)
+case("8 Part2/6", "BAD: missing PLAYER_MOVE_DELAY_MS (negative control)", "harness_roundDesign_8", args6(ROUNDS_3, '', HINTS_6, CANONICAL_6C), expect_ok=False)
+case("8 Part3/6", "BAD: missing ALLOW_PATH_HINT/MAX_HINT_COUNT (negative control)", "harness_roundDesign_8", args6(ROUNDS_3, DELAY_6, '', CANONICAL_6C), expect_ok=False)
 # Splitting the placement across parts must not let an indent slip through.
 BAD_6_INDENT = '  self.items = []\n'
-case("6 Part5/6", "BAD: a broken indent in one placement part (negative control)", "harness_roundDesign_6", args6(ROUNDS_3, DELAY_6, HINTS_6, None, split=(CANON_6_POS, BAD_6_INDENT + CANON_6_ITEMS, CANON_6_BOMBS)), expect_ok=False)
+case("8 Part5/6", "BAD: a broken indent in one placement part (negative control)", "harness_roundDesign_8", args6(ROUNDS_3, DELAY_6, HINTS_6, None, split=(CANON_6_POS, BAD_6_INDENT + CANON_6_ITEMS, CANON_6_BOMBS)), expect_ok=False)
 
 
-# ================================================================ TODO 7
-# TODO 7 is eight parts now: 1 player+goal images, 2 bomb+floor images,
+# ================================================================ TODO 9
+# TODO 9 is eight parts now: 1 player+goal images, 2 bomb+floor images,
 # 3 the three size multipliers, 4 wall/player/goal colors, 5 bomb/explosion
 # colors, 6 the two sound paths, 7 explosion length + volume, 8 the music
 # playback code in game.py. args7() keeps every case below readable.
@@ -486,8 +486,8 @@ TUNING_7 = 'BOMB_EXPLOSION_DURATION_MS = 500\nBACKGROUND_MUSIC_VOLUME = 0.25\n'
 TUNING_7_SILENT = 'BOMB_EXPLOSION_DURATION_MS = 500\nBACKGROUND_MUSIC_VOLUME = 0.0\n'
 
 
-# The four sub-steps added after the split (7-9 explosion picture, 7-10 …
-# 7-12 the three palettes), at their starter values.
+# The four sub-steps added after the split (9-9 explosion picture, 9-10 …
+# 9-12 the three palettes), at their starter values.
 EXPLOSION_7 = 'BOMB_EXPLOSION_IMAGE_PATH = "assets/images/explode_2.png"\n'
 MAZE_COLORS_7 = (
     'VISITED_COLOR = (186, 230, 253)\n'
@@ -510,9 +510,9 @@ STATUS_COLORS_7 = (
 def args7(music, images=None, scales=None, sounds=None, tuning=None,
           colors_a=None, colors_b=None, explosion=None, maze_colors=None,
           panel_colors=None, status_colors=None):
-    """Builds TODO 7's twelve sub-step arguments, defaulting every settings
+    """Builds TODO 9's twelve sub-step arguments, defaulting every settings
     sub-step to its starter so a case only has to name what it varies.
-    Order matters: it is 7-1 … 7-12, with the music playback code at 7-8."""
+    Order matters: it is 9-1 … 9-12, with the music playback code at 9-8."""
     imgs = images if images is not None else IMG_7_AB
     return (
         imgs[0], imgs[1],
@@ -543,11 +543,11 @@ ALT_7C_PLAY_ONCE = CANONICAL_7C.replace('play(-1)', 'play(0)')
 ALT_7C_FADE_IN = CANONICAL_7C.replace('play(-1)', 'play(-1, fade_ms=3000)')
 # Silence on purpose: never starting the music is a valid design choice.
 ALT_7C_SILENT = 'return\n'
-case("7", "canonical (loop forever)", "harness_lookAndFeel_7", args7(CANONICAL_7C))
-case("7", "alt: real images and non-default sizes", "harness_lookAndFeel_7", args7(CANONICAL_7C, images=IMG_7_AB_FILLED, scales=SCALES_7_CUSTOM))
-case("7", "alt: play the music exactly once", "harness_lookAndFeel_7", args7(ALT_7C_PLAY_ONCE))
-case("7", "alt: fade the music in", "harness_lookAndFeel_7", args7(ALT_7C_FADE_IN))
-case("7", "alt: no music at all", "harness_lookAndFeel_7", args7(ALT_7C_SILENT, sounds=SOUNDS_7_SILENT, tuning=TUNING_7_SILENT))
+case("9", "canonical (loop forever)", "harness_lookAndFeel_9", args7(CANONICAL_7C))
+case("9", "alt: real images and non-default sizes", "harness_lookAndFeel_9", args7(CANONICAL_7C, images=IMG_7_AB_FILLED, scales=SCALES_7_CUSTOM))
+case("9", "alt: play the music exactly once", "harness_lookAndFeel_9", args7(ALT_7C_PLAY_ONCE))
+case("9", "alt: fade the music in", "harness_lookAndFeel_9", args7(ALT_7C_FADE_IN))
+case("9", "alt: no music at all", "harness_lookAndFeel_9", args7(ALT_7C_SILENT, sounds=SOUNDS_7_SILENT, tuning=TUNING_7_SILENT))
 # No try/except is only a WARNING (open-ended grading), so this must PASS.
 ALT_7C_NO_TRY = (
     'if BACKGROUND_MUSIC_PATH is None:\n'
@@ -556,23 +556,23 @@ ALT_7C_NO_TRY = (
     'pygame.mixer.music.load(BACKGROUND_MUSIC_PATH)\n'
     'pygame.mixer.music.play(-1)\n'
 )
-case("7", "alt: no try/except (warns, still passes)", "harness_lookAndFeel_7", args7(ALT_7C_NO_TRY))
+case("9", "alt: no try/except (warns, still passes)", "harness_lookAndFeel_9", args7(ALT_7C_NO_TRY))
 
 # A missing name must now be blamed on the specific part that owns it, so
 # there is one negative control per settings group.
 BAD_7_MISSING_SCALE = SCALES_7.replace('GOAL_IMAGE_SCALE = 1.0\n', '')
-case("7 Part3/8", "BAD: missing GOAL_IMAGE_SCALE (negative control)", "harness_lookAndFeel_7", args7(CANONICAL_7C, scales=BAD_7_MISSING_SCALE), expect_ok=False)
+case("9 Part3/8", "BAD: missing GOAL_IMAGE_SCALE (negative control)", "harness_lookAndFeel_9", args7(CANONICAL_7C, scales=BAD_7_MISSING_SCALE), expect_ok=False)
 BAD_7_MISSING_IMAGE = ('PLAYER_IMAGE_PATH = None\n', 'BOMB_IMAGE_PATH = None\nFLOOR_TILE_IMAGE_PATH = None\n')
-case("7 Part1/8", "BAD: missing GOAL_IMAGE_PATH (negative control)", "harness_lookAndFeel_7", args7(CANONICAL_7C, images=BAD_7_MISSING_IMAGE), expect_ok=False)
+case("9 Part1/8", "BAD: missing GOAL_IMAGE_PATH (negative control)", "harness_lookAndFeel_9", args7(CANONICAL_7C, images=BAD_7_MISSING_IMAGE), expect_ok=False)
 BAD_7_MISSING_COLOR = COLORS_7_B.replace('BOMB_EXPLOSION_COLOR = (239, 68, 68)\n', '')
-case("7 Part5/8", "BAD: missing BOMB_EXPLOSION_COLOR (negative control)", "harness_lookAndFeel_7", args7(CANONICAL_7C, colors_b=BAD_7_MISSING_COLOR), expect_ok=False)
+case("9 Part5/8", "BAD: missing BOMB_EXPLOSION_COLOR (negative control)", "harness_lookAndFeel_9", args7(CANONICAL_7C, colors_b=BAD_7_MISSING_COLOR), expect_ok=False)
 BAD_7_MISSING_TUNING = 'BOMB_EXPLOSION_DURATION_MS = 500\n'
-case("7 Part7/8", "BAD: missing BACKGROUND_MUSIC_VOLUME (negative control)", "harness_lookAndFeel_7", args7(CANONICAL_7C, tuning=BAD_7_MISSING_TUNING), expect_ok=False)
+case("9 Part7/8", "BAD: missing BACKGROUND_MUSIC_VOLUME (negative control)", "harness_lookAndFeel_9", args7(CANONICAL_7C, tuning=BAD_7_MISSING_TUNING), expect_ok=False)
 BAD_7C_RAISES = 'raise RuntimeError("boom")\n'
-case("7 Part8/8", "BAD: always raises (negative control)", "harness_lookAndFeel_7", args7(BAD_7C_RAISES), expect_ok=False)
+case("9 Part8/8", "BAD: always raises (negative control)", "harness_lookAndFeel_9", args7(BAD_7C_RAISES), expect_ok=False)
 
 
-# ============================================== TODO 8 Part 3/3 (the pickup)
+# ============================================== TODO 10 Part 3/3 (the pickup)
 ALT_8C_SOUND_BY_EFFECT = (
     'for item in self.items:\n'
     '    if item.active and item.get_position() == player_position:\n'
@@ -611,26 +611,26 @@ ALT_8C_SELF_PLAYER = (
     '        if sound:\n'
     '            sound.play()\n'
 )
-case("8 Part3/3", "alt: a different sound per effect", "harness_customItems_8", args8(ITEM1_MINIMAL, CANONICAL_8B, ALT_8C_SOUND_BY_EFFECT))
-case("8 Part3/3", "alt: index loop with continue guards", "harness_customItems_8", args8(ITEM1_MINIMAL, CANONICAL_8B, ALT_8C_INDEX_LOOP))
-case("8 Part3/3", "alt: reads self.player.get_position() itself", "harness_customItems_8", args8(ITEM1_MINIMAL, CANONICAL_8B, ALT_8C_SELF_PLAYER))
+case("10 Part3/3", "alt: a different sound per effect", "harness_customItems_10", args8(ITEM1_MINIMAL, CANONICAL_8B, ALT_8C_SOUND_BY_EFFECT))
+case("10 Part3/3", "alt: index loop with continue guards", "harness_customItems_10", args8(ITEM1_MINIMAL, CANONICAL_8B, ALT_8C_INDEX_LOOP))
+case("10 Part3/3", "alt: reads self.player.get_position() itself", "harness_customItems_10", args8(ITEM1_MINIMAL, CANONICAL_8B, ALT_8C_SELF_PLAYER))
 
 BAD_8C_NO_DEACTIVATE = (
     'for item in self.items:\n'
     '    if item.active and item.get_position() == player_position:\n'
     '        self.apply_custom_item_effect(item.item_def)\n'
 )
-case("8 Part3/3", "BAD: never sets item.active = False (negative control)", "harness_customItems_8", args8(ITEM1_MINIMAL, CANONICAL_8B, BAD_8C_NO_DEACTIVATE), expect_ok=False)
+case("10 Part3/3", "BAD: never sets item.active = False (negative control)", "harness_customItems_10", args8(ITEM1_MINIMAL, CANONICAL_8B, BAD_8C_NO_DEACTIVATE), expect_ok=False)
 BAD_8C_NO_EFFECT = (
     'for item in self.items:\n'
     '    if item.active and item.get_position() == player_position:\n'
     '        item.active = False\n'
 )
-case("8 Part3/3", "BAD: collects but never applies the effect (negative control)", "harness_customItems_8", args8(ITEM1_MINIMAL, CANONICAL_8B, BAD_8C_NO_EFFECT), expect_ok=False)
+case("10 Part3/3", "BAD: collects but never applies the effect (negative control)", "harness_customItems_10", args8(ITEM1_MINIMAL, CANONICAL_8B, BAD_8C_NO_EFFECT), expect_ok=False)
 
 
-# ================================================================ TODO 9
-# TODO 9 is four parts now: 1 MISSION_RULES, 2 HOW_TO_PLAY_RULES, 3 the
+# ================================================================ TODO 11
+# TODO 11 is four parts now: 1 MISSION_RULES, 2 HOW_TO_PLAY_RULES, 3 the
 # "not won yet" guard, 4 what winning does. The two rule lists are checked
 # one per part; Parts 3 and 4 are compiled separately then joined and run.
 MISSION_9 = 'MISSION_RULES = [\n    "Collect every crystal, then reach the goal.",\n]\n'
@@ -645,7 +645,7 @@ RULES_9A = (MISSION_9, HOWTO_9)
 
 
 def args9(rules, goal, split=None):
-    """Builds TODO 9's four part arguments. `rules` is a (Part 1, Part 2)
+    """Builds TODO 11's four part arguments. `rules` is a (Part 1, Part 2)
     pair; `goal` is the whole win condition, which goes in Part 3 with Part 4
     left empty unless `split` supplies the real two-part layout."""
     r = tuple(rules) if isinstance(rules, tuple) else (rules, '')
@@ -686,18 +686,18 @@ CANON_9_WIN = (
     'else:\n'
     '    self.round_transition_time = pygame.time.get_ticks()\n'
 )
-case("9", "canonical (starter split across Parts 3/4)", "harness_gameRules_9", args9(RULES_9A, None, split=(CANON_9_GUARD, CANON_9_WIN)))
-case("9", "canonical (whole win condition in Part 3/4)", "harness_gameRules_9", args9(RULES_9A, CANONICAL_9B))
-case("9", "alt: every item must be collected first", "harness_gameRules_9", args9(RULES_9A, ALT_9B_ALL_ITEMS))
-case("9", "alt: extra guard in Part 3, starter win in Part 4", "harness_gameRules_9", args9(RULES_9A, None, split=(CANON_9_GUARD + 'if not all(not item.active for item in self.items):\n    return\n', CANON_9_WIN)))
-case("9", "alt: positive condition instead of early return", "harness_gameRules_9", args9(RULES_9A, ALT_9B_POSITIVE))
+case("11", "canonical (starter split across Parts 3/4)", "harness_gameRules_11", args9(RULES_9A, None, split=(CANON_9_GUARD, CANON_9_WIN)))
+case("11", "canonical (whole win condition in Part 3/4)", "harness_gameRules_11", args9(RULES_9A, CANONICAL_9B))
+case("11", "alt: every item must be collected first", "harness_gameRules_11", args9(RULES_9A, ALT_9B_ALL_ITEMS))
+case("11", "alt: extra guard in Part 3, starter win in Part 4", "harness_gameRules_11", args9(RULES_9A, None, split=(CANON_9_GUARD + 'if not all(not item.active for item in self.items):\n    return\n', CANON_9_WIN)))
+case("11", "alt: positive condition instead of early return", "harness_gameRules_11", args9(RULES_9A, ALT_9B_POSITIVE))
 
 BAD_9B_ALWAYS_CLEARS = 'self.game_clear = True\n'
-case("9 Part3-4", "BAD: clears the round from anywhere (negative control)", "harness_gameRules_9", args9(RULES_9A, BAD_9B_ALWAYS_CLEARS), expect_ok=False)
-case("9 Part2/4", "BAD: missing HOW_TO_PLAY_RULES (negative control)", "harness_gameRules_9", args9((MISSION_9, ''), CANONICAL_9B), expect_ok=False)
-case("9 Part1/4", "BAD: missing MISSION_RULES (negative control)", "harness_gameRules_9", args9(('', HOWTO_9), CANONICAL_9B), expect_ok=False)
+case("11 Part3-4", "BAD: clears the round from anywhere (negative control)", "harness_gameRules_11", args9(RULES_9A, BAD_9B_ALWAYS_CLEARS), expect_ok=False)
+case("11 Part2/4", "BAD: missing HOW_TO_PLAY_RULES (negative control)", "harness_gameRules_11", args9((MISSION_9, ''), CANONICAL_9B), expect_ok=False)
+case("11 Part1/4", "BAD: missing MISSION_RULES (negative control)", "harness_gameRules_11", args9(('', HOWTO_9), CANONICAL_9B), expect_ok=False)
 BAD_9B_RAISES = 'raise ValueError("nope")\n'
-case("9 Part2/2", "BAD: raises (negative control)", "harness_gameRules_9", args9(RULES_9A, BAD_9B_RAISES), expect_ok=False)
+case("11 Part2/2", "BAD: raises (negative control)", "harness_gameRules_11", args9(RULES_9A, BAD_9B_RAISES), expect_ok=False)
 
 
 # ------------------------------------------------- focused Bonus grading
@@ -709,102 +709,102 @@ case("9 Part2/2", "BAD: raises (negative control)", "harness_gameRules_9", args9
 # that sub-step's checks decide pass/fail.
 #
 # The cases below are the ones that would silently break if `focus` were
-# ever dropped: a student sitting on 8-2 has NOT written 8-3 yet, so 8-3
+# ever dropped: a student sitting on 10-2 has NOT written 10-3 yet, so 10-3
 # still holds its bare `pass` starter. Grading the group as a whole would
 # fail them for work they have not been asked to do yet. Same story for
-# 6-1 vs the placement code, and for 9-1 vs 9-2.
-# The real 8-2/8-3 starter, at the same base indent the other fixtures in
+# 8-1 vs the placement code, and for 11-1 vs 11-2.
+# The real 10-2/10-3 starter, at the same base indent the other fixtures in
 # this file use (buildFnSourceParts reindents the JOINED group once, so the
 # two halves have to agree with each other - which they do in data.js).
 STARTER_PASS = 'pass  # Write your code here.\n'
 
-# 8-2 done, 8-3 still the untouched `pass` starter -> 8-2 must PASS.
-case("8-2 focused", "add_time done while add_hint is still the starter", "harness_customItems_8",
+# 10-2 done, 10-3 still the untouched `pass` starter -> 10-2 must PASS.
+case("10-2 focused", "add_time done while add_hint is still the starter", "harness_customItems_10",
      args8(ITEM1_MINIMAL, None, None,
            effect_split=(CANON_8_ADD_TIME, STARTER_PASS),
            pickup_split=(CANON_8_SPOT, CANON_8_APPLY, CANON_8_SOUND)) + ("2",))
-# ...and the same group, focused on 8-3, must FAIL - the sub-step being
+# ...and the same group, focused on 10-3, must FAIL - the sub-step being
 # graded really is unwritten.
-case("8-3 focused", "BAD: add_hint still the starter (negative control)", "harness_customItems_8",
+case("10-3 focused", "BAD: add_hint still the starter (negative control)", "harness_customItems_10",
      args8(ITEM1_MINIMAL, None, None,
            effect_split=(CANON_8_ADD_TIME, STARTER_PASS),
            pickup_split=(CANON_8_SPOT, CANON_8_APPLY, CANON_8_SOUND)) + ("3",), expect_ok=False)
-# The reverse: 8-3 written, 8-2 untouched -> focusing 8-3 passes.
-case("8-3 focused", "add_hint done while add_time is still the starter", "harness_customItems_8",
+# The reverse: 10-3 written, 10-2 untouched -> focusing 10-3 passes.
+case("10-3 focused", "add_hint done while add_time is still the starter", "harness_customItems_10",
      args8(ITEM1_MINIMAL, None, None,
            effect_split=(STARTER_PASS, CANON_8_ADD_HINT),
            pickup_split=(CANON_8_SPOT, CANON_8_APPLY, CANON_8_SOUND)) + ("3",))
 # A settings sub-step must not be failed by a LATER sibling being missing.
-case("6-1 focused", "rounds done while the hint settings are still missing", "harness_roundDesign_6",
+case("8-1 focused", "rounds done while the hint settings are still missing", "harness_roundDesign_8",
      args6(ROUNDS_3, DELAY_6, '', CANONICAL_6C) + ("1",))
-case("6-3 focused", "BAD: the focused hint settings really are missing", "harness_roundDesign_6",
+case("8-3 focused", "BAD: the focused hint settings really are missing", "harness_roundDesign_8",
      args6(ROUNDS_3, DELAY_6, '', CANONICAL_6C) + ("3",), expect_ok=False)
-# TODO 7's eight sub-steps are fully independent settings blocks.
-case("7-1 focused", "images done while a later color block is missing", "harness_lookAndFeel_7",
+# TODO 9's eight sub-steps are fully independent settings blocks.
+case("9-1 focused", "images done while a later color block is missing", "harness_lookAndFeel_9",
      args7(CANONICAL_7C, colors_b=BAD_7_MISSING_COLOR) + ("1",))
-case("7-5 focused", "BAD: the focused color block really is missing", "harness_lookAndFeel_7",
+case("9-5 focused", "BAD: the focused color block really is missing", "harness_lookAndFeel_9",
      args7(CANONICAL_7C, colors_b=BAD_7_MISSING_COLOR) + ("5",), expect_ok=False)
-# TODO 9's two text sub-steps are independent of each other.
-case("9-1 focused", "mission written while how-to-play is still missing", "harness_gameRules_9",
+# TODO 11's two text sub-steps are independent of each other.
+case("11-1 focused", "mission written while how-to-play is still missing", "harness_gameRules_11",
      args9((MISSION_9, ''), CANONICAL_9B) + ("1",))
-case("9-2 focused", "BAD: the focused how-to-play list really is missing", "harness_gameRules_9",
+case("11-2 focused", "BAD: the focused how-to-play list really is missing", "harness_gameRules_11",
      args9((MISSION_9, ''), CANONICAL_9B) + ("2",), expect_ok=False)
 
 
 # ------------------------------------------- the six new filler sub-steps
 #
-# 6-7, 6-8 and 7-9 … 7-12 surface settings that were previously hardcoded.
+# 8-7, 8-8 and 9-9 … 9-12 surface settings that were previously hardcoded.
 # Same open-ended contract as every other Bonus settings step: it has to
 # run and define its names; everything else is advice.
-case("6-7 focused", "maze-build animation on, default speed", "harness_roundDesign_6",
+case("8-7 focused", "maze-build animation on, default speed", "harness_roundDesign_8",
      args6(ROUNDS_3, DELAY_6, HINTS_6, CANONICAL_6C) + ("7",))
-case("6-7 focused", "alt: animation off entirely", "harness_roundDesign_6",
+case("8-7 focused", "alt: animation off entirely", "harness_roundDesign_8",
      args6(ROUNDS_3, DELAY_6, HINTS_6, CANONICAL_6C,
            dfs='SHOW_DFS_GENERATION = False\nDFS_STEPS_PER_FRAME = 1\n') + ("7",))
-case("6-7 focused", "alt: a speed that would stall the build (warns, still passes)", "harness_roundDesign_6",
+case("8-7 focused", "alt: a speed that would stall the build (warns, still passes)", "harness_roundDesign_8",
      args6(ROUNDS_3, DELAY_6, HINTS_6, CANONICAL_6C,
            dfs='SHOW_DFS_GENERATION = True\nDFS_STEPS_PER_FRAME = 0\n') + ("7",),
      expect_warning="DFS_STEPS_PER_FRAME")
-case("6-7 focused", "BAD: missing DFS_STEPS_PER_FRAME (negative control)", "harness_roundDesign_6",
+case("8-7 focused", "BAD: missing DFS_STEPS_PER_FRAME (negative control)", "harness_roundDesign_8",
      args6(ROUNDS_3, DELAY_6, HINTS_6, CANONICAL_6C,
            dfs='SHOW_DFS_GENERATION = True\n') + ("7",), expect_ok=False)
 
-case("6-8 focused", "hint route strongly avoids bombs", "harness_roundDesign_6",
+case("8-8 focused", "hint route strongly avoids bombs", "harness_roundDesign_8",
      args6(ROUNDS_3, DELAY_6, HINTS_6, CANONICAL_6C) + ("8",))
-case("6-8 focused", "alt: negative weights are legal", "harness_roundDesign_6",
+case("8-8 focused", "alt: negative weights are legal", "harness_roundDesign_8",
      args6(ROUNDS_3, DELAY_6, HINTS_6, CANONICAL_6C,
            weights='STUDENT_NORMAL_WEIGHT = -5\nSTUDENT_BOMB_WEIGHT = 40\n') + ("8",))
-case("6-8 focused", "alt: bombs cost no more than floor (warns, still passes)", "harness_roundDesign_6",
+case("8-8 focused", "alt: bombs cost no more than floor (warns, still passes)", "harness_roundDesign_8",
      args6(ROUNDS_3, DELAY_6, HINTS_6, CANONICAL_6C,
            weights='STUDENT_NORMAL_WEIGHT = 5\nSTUDENT_BOMB_WEIGHT = 5\n') + ("8",),
      expect_warning="walk you straight over bombs")
-case("6-8 focused", "BAD: missing STUDENT_BOMB_WEIGHT (negative control)", "harness_roundDesign_6",
+case("8-8 focused", "BAD: missing STUDENT_BOMB_WEIGHT (negative control)", "harness_roundDesign_8",
      args6(ROUNDS_3, DELAY_6, HINTS_6, CANONICAL_6C,
            weights='STUDENT_NORMAL_WEIGHT = 0\n') + ("8",), expect_ok=False)
 
-case("7-9 focused", "explosion picture at its default", "harness_lookAndFeel_7",
+case("9-9 focused", "explosion picture at its default", "harness_lookAndFeel_9",
      args7(CANONICAL_7C) + ("9",))
-case("7-9 focused", "alt: no explosion picture at all", "harness_lookAndFeel_7",
+case("9-9 focused", "alt: no explosion picture at all", "harness_lookAndFeel_9",
      args7(CANONICAL_7C, explosion='BOMB_EXPLOSION_IMAGE_PATH = None\n') + ("9",))
-case("7-9 focused", "BAD: missing BOMB_EXPLOSION_IMAGE_PATH (negative control)", "harness_lookAndFeel_7",
+case("9-9 focused", "BAD: missing BOMB_EXPLOSION_IMAGE_PATH (negative control)", "harness_lookAndFeel_9",
      args7(CANONICAL_7C, explosion='') + ("9",), expect_ok=False)
 
-case("7-10 focused", "maze animation colors", "harness_lookAndFeel_7",
+case("9-10 focused", "maze animation colors", "harness_lookAndFeel_9",
      args7(CANONICAL_7C) + ("10",))
-case("7-10 focused", "BAD: missing PATH_COLOR (negative control)", "harness_lookAndFeel_7",
+case("9-10 focused", "BAD: missing PATH_COLOR (negative control)", "harness_lookAndFeel_9",
      args7(CANONICAL_7C,
            maze_colors='VISITED_COLOR = (1, 2, 3)\nCURRENT_CELL_COLOR = (4, 5, 6)\n') + ("10",),
      expect_ok=False)
-case("7-11 focused", "screen and panel colors", "harness_lookAndFeel_7",
+case("9-11 focused", "screen and panel colors", "harness_lookAndFeel_9",
      args7(CANONICAL_7C,
            panel_colors='BACKGROUND_COLOR = (12, 18, 32)\nPANEL_COLOR = (24, 34, 56)\nPANEL_BORDER = (60, 78, 112)\n') + ("11",))
-case("7-12 focused", "status colors", "harness_lookAndFeel_7",
+case("9-12 focused", "status colors", "harness_lookAndFeel_9",
      args7(CANONICAL_7C) + ("12",))
-case("7-12 focused", "alt: a color out of range (warns, still passes)", "harness_lookAndFeel_7",
+case("9-12 focused", "alt: a color out of range (warns, still passes)", "harness_lookAndFeel_9",
      args7(CANONICAL_7C,
            status_colors='ACCENT = (79, 70, 229)\nSUCCESS = (0, 999, 0)\nWARNING = (245, 158, 11)\nDANGER = (220, 38, 38)\n') + ("12",),
      expect_warning="SUCCESS")
-case("7-12 focused", "BAD: missing DANGER (negative control)", "harness_lookAndFeel_7",
+case("9-12 focused", "BAD: missing DANGER (negative control)", "harness_lookAndFeel_9",
      args7(CANONICAL_7C,
            status_colors='ACCENT = (1, 2, 3)\nSUCCESS = (4, 5, 6)\nWARNING = (7, 8, 9)\n') + ("12",),
      expect_ok=False)

@@ -130,7 +130,7 @@ GOOD = {
         '    parent[neighbor] = current\n'
         '    heapq.heappush(queue, (new_cost, neighbor))\n',
     ],
-    "harness_roundDesign_6": [
+    "harness_roundDesign_8": [
         'ROUND_CONFIGS = [\n'
         '    {"rows": 9, "cols": 11, "cell_size": 30, "extra_open_walls": 4,\n'
         '     "bomb_count": 2, "custom_item_count": 2, "time_limit_seconds": 60},\n'
@@ -139,7 +139,7 @@ GOOD = {
         'PLAYER_MOVE_THRESHOLD = 1.5\nALLOW_PATH_HINT = True\nMAX_HINT_COUNT = 2\n',
         'self.items = []\nself.bombs = []\n',
     ],
-    "harness_lookAndFeel_7": [
+    "harness_lookAndFeel_9": [
         'PLAYER_IMAGE_PATH = None\nGOAL_IMAGE_PATH = None\nBOMB_IMAGE_PATH = None\n'
         'FLOOR_TILE_IMAGE_PATH = None\nPLAYER_IMAGE_SCALE = 1.0\nGOAL_IMAGE_SCALE = 1.0\n'
         'BOMB_IMAGE_SCALE = 1.0\nWALL_COLOR = (30, 41, 59)\nPLAYER_COLOR = (37, 99, 235)\n'
@@ -149,7 +149,7 @@ GOOD = {
         'BOMB_EXPLOSION_DURATION_MS = 500\nBACKGROUND_MUSIC_VOLUME = 0.25\n',
         'return\n',
     ],
-    "harness_customItems_8": [
+    "harness_customItems_10": [
         'CUSTOM_ITEMS = [{"name": "x", "color": (1, 2, 3), "effect": "add_time", "amount": 5}]\n',
         'if effect == "add_time":\n    self.bonus_time_seconds += amount\n'
         'elif effect == "add_hint":\n    self.hints_remaining += amount\n',
@@ -158,7 +158,7 @@ GOOD = {
         '        item.active = False\n'
         '        self.apply_custom_item_effect(item.item_def)\n',
     ],
-    "harness_gameRules_9": [
+    "harness_gameRules_11": [
         'MISSION_RULES = ["Reach the goal."]\nHOW_TO_PLAY_RULES = ["Move."]\n',
         'if self.player.get_position() != self.goal.get_position():\n'
         '    return\n'

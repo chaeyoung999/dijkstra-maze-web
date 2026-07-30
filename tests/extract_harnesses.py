@@ -273,8 +273,8 @@ FUNCS = [
     "harness_dijkstra_5",
     # The four multi-part Bonus harnesses: each mixes settings-block parts
     # with real method-body parts (see app.js section 10).
-    "harness_roundDesign_6", "harness_lookAndFeel_7", "harness_customItems_8",
-    "harness_gameRules_9",
+    "harness_roundDesign_8", "harness_lookAndFeel_9", "harness_customItems_10",
+    "harness_gameRules_11",
     # Not a grading harness: the Play tab / step visualiser preview, which
     # runs the student's own movement code for real. Covered by
     # test_trace_harnesses.py.
@@ -288,7 +288,7 @@ VARS = [
     "ROUND_CONFIG_KEY_ORDER", "MAX_DESIGNABLE_ROUNDS",
 ]
 
-# harness_customItems_8 references the module-level KNOWN_ASSETS var (used
+# harness_customItems_10 references the module-level KNOWN_ASSETS var (used
 # for its lenient optional image/sound path checks) - extracted straight
 # from data.js's KNOWN_ASSET_FILES so the regression suite exercises the
 # exact real asset list, not a hand-typed stand-in.

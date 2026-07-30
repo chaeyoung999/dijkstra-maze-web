@@ -16,7 +16,7 @@
 //   # --- TODO 3: WRITE YOUR CODE BELOW ---   /   # --- END OF TODO 3 ---
 // Bonus sub-steps use a hyphenated id (they are standalone steps now, not
 // parts of a bigger one):
-//   # --- TODO 6-2: WRITE YOUR CODE BELOW ---  /  # --- END OF TODO 6-2 ---
+//   # --- TODO 8-2: WRITE YOUR CODE BELOW ---  /  # --- END OF TODO 8-2 ---
 // The (Part n/m) form survives only for TODO 5, the one Required step that
 // is still genuinely two coupled halves of a single expression.
 "use strict";

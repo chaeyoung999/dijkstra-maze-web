@@ -281,7 +281,7 @@ function canvasOf(world) {
 function boardSize(canvas) {
   return { w: parseFloat(canvas.style.width), h: parseFloat(canvas.style.height) };
 }
-// A painted TODO 6 round is the only way to drive arbitrary board
+// A painted TODO 8 round is the only way to drive arbitrary board
 // dimensions from outside the engine, so every size case below uses one.
 function paintedProgress(rows, cols) {
   const grid = [];
@@ -290,11 +290,11 @@ function paintedProgress(rows, cols) {
     for (let c = 0; c < cols; c++) row.push("FLOOR");
     grid.push(row);
   }
-  // The map editor unlocks once EVERY sub-step of the TODO 6 group is
+  // The map editor unlocks once EVERY sub-step of the TODO 8 group is
   // completed (it used to be the single step "6", before each part became
   // its own step), so the fixture has to complete the whole group.
   const steps = {};
-  DATA.BONUS_GROUPS.filter((g) => g.id === "6")[0].ids.forEach((id) => {
+  DATA.BONUS_GROUPS.filter((g) => g.id === "8")[0].ids.forEach((id) => {
     steps[id] = { status: "completed" };
   });
   return {

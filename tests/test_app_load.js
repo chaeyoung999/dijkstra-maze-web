@@ -261,28 +261,28 @@ check("every marker text appears in its file",
     `(${firsts.join(", ")})`);
   check("no group's LATER sub-steps are reachable yet",
     DATA.BONUS_GROUPS.every((g) => g.ids.slice(1).every((id) => hooks.computeStatus(id) === "locked")));
-  check("the rules group is NOT a capstone - 9-1 is open with the rest",
-    hooks.computeStatus("9-1") === "available");
+  check("the rules group is NOT a capstone - 11-1 is open with the rest",
+    hooks.computeStatus("11-1") === "available");
 
   // Completing one sub-step opens exactly the next one in ITS group.
-  stateWith({ "6-1": "completed" });
-  check("completing 6-1 opens 6-2 and nothing further",
-    hooks.computeStatus("6-2") === "available" && hooks.computeStatus("6-3") === "locked");
+  stateWith({ "8-1": "completed" });
+  check("completing 8-1 opens 8-2 and nothing further",
+    hooks.computeStatus("8-2") === "available" && hooks.computeStatus("8-3") === "locked");
   check("progress in group 6 does not unlock anything in group 7",
-    hooks.computeStatus("7-2") === "locked" && hooks.computeStatus("7-1") === "available");
+    hooks.computeStatus("9-2") === "locked" && hooks.computeStatus("9-1") === "available");
 
   // Skipping counts exactly like completing, same as Required.
-  stateWith({ "8-1": "skipped" });
-  check("skipping 8-1 also opens 8-2", hooks.computeStatus("8-2") === "available");
+  stateWith({ "10-1": "skipped" });
+  check("skipping 10-1 also opens 10-2", hooks.computeStatus("10-2") === "available");
 
   // A finished group hands the student on to the next group.
   const done9 = {};
-  DATA.BONUS_GROUPS.filter((g) => g.id === "6")[0].ids.forEach((id) => { done9[id] = "completed"; });
+  DATA.BONUS_GROUPS.filter((g) => g.id === "8")[0].ids.forEach((id) => { done9[id] = "completed"; });
   stateWith(done9);
-  check("bonusGroupComplete('6') is true once every 6-x is completed", hooks.bonusGroupComplete("6") === true);
-  check("bonusGroupComplete('7') is false while 7-x is untouched", hooks.bonusGroupComplete("7") === false);
+  check("bonusGroupComplete('8') is true once every 8-x is completed", hooks.bonusGroupComplete("8") === true);
+  check("bonusGroupComplete('9') is false while 9-x is untouched", hooks.bonusGroupComplete("9") === false);
   check("finishing the last sub-step of a group points at the next group's first step",
-    hooks.nextStepAfter("6-6") === "7-1", `(${hooks.nextStepAfter("6-6")})`);
+    hooks.nextStepAfter("8-6") === "9-1", `(${hooks.nextStepAfter("8-6")})`);
 })();
 
 // ---- 5. the showcase demo boots --------------------------------------

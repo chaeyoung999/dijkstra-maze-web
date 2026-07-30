@@ -37,13 +37,13 @@
   STEPS.forEach(function (s) { STEP_BY_ID[s.id] = s; });
 
   // Bonus sub-step lookup. Every Bonus step is a standalone step with a
-  // hyphenated id ("6-1" … "9-4"); its `group` says which of the four
+  // hyphenated id ("8-1" … "11-4"); its `group` says which of the four
   // original TODOs it came out of. Sub-steps in a group are still one
   // logical unit for GRADING (some of them are consecutive statement
   // groups of a single Python method, so the group's code has to be
   // spliced back together before it can run) - see gradingCodesFor().
-  var BONUS_GROUP_IDS = {};      // "6" -> ["6-1", … "6-6"]
-  var BONUS_GROUP_BY_ID = {};    // "6-3" -> the group record
+  var BONUS_GROUP_IDS = {};      // "6" -> ["8-1", … "8-6"]
+  var BONUS_GROUP_BY_ID = {};    // "8-3" -> the group record
   BONUS_GROUPS.forEach(function (g) {
     BONUS_GROUP_IDS[g.id] = g.ids.slice();
     g.ids.forEach(function (id) { BONUS_GROUP_BY_ID[id] = g; });
@@ -62,7 +62,7 @@
     } catch (e) { return ""; }
   }
   // "every sub-step of this group is completed" - what the Play tab's
-  // capability gates used to express as a single isDone("6").
+  // capability gates used to express as a single isDone("8").
   function bonusGroupComplete(groupId) {
     var ids = BONUS_GROUP_IDS[groupId] || [];
     for (var i = 0; i < ids.length; i++) {
@@ -71,8 +71,8 @@
     return ids.length > 0;
   }
 
-  // Per-part file support (Bonus multi-file steps, e.g. TODO 8: Part 1/6 in
-  // settings.py, Parts 2/6-6/6 in game.py): a part's own `file` wins when
+  // Per-part file support (Bonus multi-file groups, e.g. the TODO 10 group:
+  // 10-1 in settings.py, 10-2 … 10-6 in game.py): a part's own `file` wins when
   // present, otherwise it falls back to the step-level `file` - so
   // single-file steps (and every Required step) never need to repeat the
   // same filename on every part. stepFiles() returns the DISTINCT files a
@@ -265,13 +265,13 @@
 
   // Generalisation of buildFnSourceTwoParts for the Bonus split: several
   // consecutive parts that are sequential statements at the SAME scope in
-  // the real file (TODO 6's Parts 4-6, TODO 8's Parts 2-3, TODO 9's Parts
+  // the real file (TODO 8's Parts 4-6, TODO 10's Parts 2-3, TODO 11's Parts
   // 3-4) get reindented and concatenated in order inside one function, so
   // the joined body is exactly what the student's real game.py would run.
   // IMPORTANT: the parts are concatenated BEFORE reindenting, not after.
   // reindentPython() dedents whatever it is given to its own smallest indent,
   // so reindenting each part separately would flatten a part that is meant to
-  // sit INSIDE a block the previous part opened (TODO 8's Parts 5/6 live
+  // sit INSIDE a block the previous part opened (TODO 10's Parts 5/6 live
   // inside the `if` that Part 4 opens). Joining first makes the whole group
   // share one minimum indent, which preserves the relative nesting exactly.
   function buildFnSourceParts(params, codes, targetIndent) {
@@ -297,7 +297,7 @@
   }
 
   // mapEditorData: { activeRound, rounds: [paintedRound|null ...] }. A
-  // painted round replaces DFS generation for that round once TODO 6 is
+  // painted round replaces DFS generation for that round once TODO 8 is
   // completed. The list length follows the student's OWN ROUND_CONFIGS
   // (they may add or remove rounds), grown on demand by ensureRoundSlots().
   // assetData: { uploadedFiles: [{name, kind, addedAt}] } - metadata only;
@@ -356,8 +356,8 @@
         if (!saved) return;
         var d = s.steps[step.id];
         // A step's shape can change between releases: a single-part step
-        // gains parts (TODO 9), or a two-part step becomes three (TODO
-        // 6/7/8). Restoring saved.code blindly would either misbehave
+        // gains parts (TODO 11), or a two-part step becomes three (TODO 8
+        // or TODO 9 or TODO 10). Restoring saved.code blindly would either misbehave
         // (indexing a string with [0] returns a character, not a part) or
         // leave stepData.code[2] undefined and crash the editor. Salvage
         // whatever still lines up and fill the rest from the new starters,
@@ -443,16 +443,16 @@
       }
       return "available";
     }
-    // Bonus. All four GROUPS (6-x, 7-x, 8-x, 9-x) unlock together the
+    // Bonus. All four GROUPS (8-x, 9-x, 10-x, 11-x) unlock together the
     // moment Required is fully completed/skipped, and stay workable in any
-    // order relative to each other - including 9-x ("write your game's
+    // order relative to each other - including 11-x ("write your game's
     // rules"), which used to be a one-off "capstone" locked until every
     // other Bonus step was done first. That capstone lock was removed per
     // direct teacher request and must stay removed.
     //
     // WITHIN a group the sub-steps are sequential, the same way Required
-    // is: 6-1 has to be completed or skipped before 6-2 opens. That order
-    // encodes real dependencies (6-4 asks for the item positions that 6-5
+    // is: 8-1 has to be completed or skipped before 8-2 opens. That order
+    // encodes real dependencies (8-4 asks for the item positions that 8-5
     // turns into items), so it is not just presentation.
     if (!allRequiredDone()) return "locked";
     var group = bonusGroupOf(id);
@@ -1216,9 +1216,9 @@
         "aria-current": isCurrent ? "true" : null,
         onclick: unlocked ? function () { goToStep(id); } : null,
       }, [
-        // Bonus badges count WITHIN their group (1..6 for 6-x), not
-        // 6..29 across the whole course - the badge sits right next to
-        // "TODO 6-3", so a global step number there just reads as a typo.
+        // Bonus badges count WITHIN their group (1..8 for 8-x), not
+        // 8..37 across the whole course - the badge sits right next to
+        // "TODO 8-3", so a global step number there just reads as a typo.
         el("span", { class: "sidebar-badge", "aria-hidden": "true", html: badgeSvg(displayStatus, step.group ? step.grading.part : step.step) }),
         el("span", { class: "sidebar-label" }, [
           el("span", { class: "sidebar-label-title", text: "TODO " + id + ". " + step.title }),
@@ -1392,9 +1392,9 @@
     // banners were removed here (steps 1-8) - they duplicated the
     // sidebar's own permanent group headers/notes (see renderSidebarGroup),
     // which are visible at all times regardless of which step is open.
-    // TODO 9 used to have its own extra "capstone" banner here (locked
+    // TODO 11 used to have its own extra "capstone" banner here (locked
     // until every other Bonus was done) - that lock was removed entirely
-    // per direct teacher request, so TODO 9 is a normal Bonus step now with
+    // per direct teacher request, so TODO 11 is a normal Bonus step now with
     // no special banner either.
 
     var refDetails = el("details", { class: "code-reference" }, [
@@ -1413,7 +1413,7 @@
     if (step.parts) {
       // TODO 5 is now the ONLY step that still renders as several editors
       // on one page. Every Bonus step used to do this too - clicking
-      // "TODO 6" opened six stacked editors at once, which is exactly the
+      // "TODO 8" opened six stacked editors at once, which is exactly the
       // "too many files show up, kids find it hard" complaint - and each
       // of those parts is a separate sidebar step now. TODO 5 keeps the
       // stacked form because its two parts are genuinely one expression
@@ -1485,7 +1485,7 @@
     // (step.file) with this step's own live code (and every other TODO's
     // live code in that same file) spliced into place - see
     // openFullFileViewer/buildFullFileLive near the project-export code.
-    // Multi-file Bonus steps (e.g. TODO 8: settings.py + game.py) get one
+    // Multi-file Bonus steps (e.g. TODO 10: settings.py + game.py) get one
     // button PER distinct file, each labeled with that filename so it's
     // unambiguous which one it opens; single-file steps keep the plain
     // "View full file" label.
@@ -1586,10 +1586,10 @@
     // A Bonus sub-step is graded by its GROUP's harness, focused on this
     // one sub-step. The group's code still has to be handed over whole,
     // because several sub-steps are consecutive statement groups of one
-    // Python method (6-4/6-5/6-6 are one create_game_objects body) and
+    // Python method (8-4/8-5/8-6 are one create_game_objects body) and
     // only make sense spliced back together. `focus` then decides which
-    // checks actually run and get reported, so a student sitting on 8-2
-    // is never failed by 8-3 still holding its `pass` starter.
+    // checks actually run and get reported, so a student sitting on 10-2
+    // is never failed by 10-3 still holding its `pass` starter.
     if (step.grading.group) {
       var groupIds = BONUS_GROUP_IDS[step.grading.group] || [];
       var codes = groupIds.map(function (gid) {
@@ -1898,7 +1898,7 @@
 
   // Required Dijkstra relaxation, split into two independently-graded parts
   // (TODO 5 Part 1/2 and Part 2/2 - the same coupling-aware split pattern
-  // TODO 7 uses for images/sounds, except these two parts genuinely depend
+  // TODO 9 uses for images/sounds, except these two parts genuinely depend
   // on each other: Part 2's code uses new_cost, which Part 1 computes).
   // Each part gets its OWN isolated test: Part 1 is graded purely on
   // whether it computes new_cost correctly from (cost, step_cost); Part 2
@@ -2019,10 +2019,10 @@
     guardClause_3: harness_guardClause_3,
     positionDelta_4: harness_positionDelta_4,
     dijkstra_5: harness_dijkstra_5,
-    roundDesign_6: harness_roundDesign_6,
-    lookAndFeel_7: harness_lookAndFeel_7,
-    customItems_8: harness_customItems_8,
-    gameRules_9: harness_gameRules_9,
+    roundDesign_8: harness_roundDesign_8,
+    lookAndFeel_9: harness_lookAndFeel_9,
+    customItems_10: harness_customItems_10,
+    gameRules_11: harness_gameRules_11,
   };
 
   // ------------------------------------------------- 11. syntax harnesses
@@ -2087,7 +2087,7 @@
 
   // ---- shared helpers for the multi-part Bonus harnesses ---------------
   //
-  // TODO 6, 7, 8 and 9 each mix "settings block" parts (module-level
+  // TODO 8 and TODO 9 and TODO 10 and TODO 11 each mix "settings block" parts (module-level
   // constants in settings.py) with "method body" parts (real code in
   // game.py), so they are all BEHAVIOUR harnesses that need the same few
   // things: run a settings block safely, run a student method body safely,
@@ -2296,7 +2296,7 @@
     "        self.time = _FakeTime()",
   ].join("\n");
 
-  // ---- TODO 6: rounds + pacing + placement -----------------------------
+  // ---- TODO 8: rounds + pacing + placement -----------------------------
   //
   // Parts 1 and 2 are the old open-ended settings checks, with one real
   // change: ROUND_CONFIGS is no longer pinned to exactly 3 rounds, because
@@ -2308,15 +2308,15 @@
   // compiled individually (so an indent slip is blamed on the right part)
   // and then joined and RUN as the single body the real game would execute.
   // `focus` (the trailing argument) is the ONE sub-step being graded:
-  // "1" grades TODO 6-1 and nothing else. Passing null/undefined grades
+  // "1" grades TODO 8-1 and nothing else. Passing null/undefined grades
   // the whole group at once, which is what the regression tests do.
   //
   // Focusing matters because the six sub-steps are independent steps in
-  // the sidebar but NOT independent code: 6-4/6-5/6-6 are three
+  // the sidebar but NOT independent code: 8-4/8-5/8-6 are three
   // consecutive statement groups of one create_game_objects() body, so
   // the group's code is always spliced back together before it runs -
   // only the reporting and the pass/fail decision are narrowed.
-  function harness_roundDesign_6(code1, code2, code3, code4, code5, code6, code7, code8, focus) {
+  function harness_roundDesign_8(code1, code2, code3, code4, code5, code6, code7, code8, focus) {
     var F = (focus === undefined || focus === null || focus === "") ? null : String(focus);
     function want(n) { return F === null || F === String(n); }
     var out = [];
@@ -2382,20 +2382,20 @@
       "    result = _new_result()",
       "    _rnd.seed(20260729)",
     ]);
-    // ---------------- TODO 6-1: ROUND_CONFIGS
+    // ---------------- TODO 8-1: ROUND_CONFIGS
     if (want(1)) push([
-      "    ns1 = _exec_settings(result, CODE1, 'TODO 6-1')",
+      "    ns1 = _exec_settings(result, CODE1, 'TODO 8-1')",
       "    if ns1 is None:",
       "        return _finish(result)",
       "    if 'ROUND_CONFIGS' not in ns1:",
-      "        result['failed'].append('TODO 6-1: Missing definition: ROUND_CONFIGS. Keep the variable name exactly as given.')",
+      "        result['failed'].append('TODO 8-1: Missing definition: ROUND_CONFIGS. Keep the variable name exactly as given.')",
       "    else:",
       "        rc = ns1['ROUND_CONFIGS']",
       "        if not isinstance(rc, list) or len(rc) == 0:",
       "            result['warnings'].append('Heads up: ROUND_CONFIGS is usually a non-empty list of round dictionaries — this still counts as complete, but the game needs at least one round to play.')",
-      "            result['passed'].append('TODO 6-1: ROUND_CONFIGS is defined.')",
+      "            result['passed'].append('TODO 8-1: ROUND_CONFIGS is defined.')",
       "        else:",
-      "            result['passed'].append('TODO 6-1: ROUND_CONFIGS is defined with %d round(s).' % len(rc))",
+      "            result['passed'].append('TODO 8-1: ROUND_CONFIGS is defined with %d round(s).' % len(rc))",
       "            if len(rc) > MAX_ROUNDS_UI:",
       "                result['warnings'].append('You designed %d rounds. The downloaded pygame game plays all of them, but the map editor and Play tab here only show the first %d.' % (len(rc), MAX_ROUNDS_UI))",
       "            ref_keys = set(ROUND_KEYS)",
@@ -2426,44 +2426,44 @@
       "                    result['warnings'].append('Heads up: %s asks for more bombs+items (%d) than it has free cells (%d) — the extras simply will not be placed.' % (label, rd['bomb_count'] + rd['custom_item_count'], max(0, cells - 2)))",
       "                result['passed'].append('%s: %s' % (label, _short_repr(rd)))",
     ]);
-    // ---------------- TODO 6-2: pacing
+    // ---------------- TODO 8-2: pacing
     if (want(2)) push([
-      "    ns2 = _exec_settings(result, CODE2, 'TODO 6-2')",
+      "    ns2 = _exec_settings(result, CODE2, 'TODO 8-2')",
       "    if ns2 is None:",
       "        return _finish(result)",
       "    if 'PLAYER_MOVE_DELAY_MS' not in ns2:",
-      "        result['failed'].append('TODO 6-2: Missing definition: PLAYER_MOVE_DELAY_MS. Keep the variable name exactly as given.')",
+      "        result['failed'].append('TODO 8-2: Missing definition: PLAYER_MOVE_DELAY_MS. Keep the variable name exactly as given.')",
       "    else:",
-      "        result['passed'].append('TODO 6-2: one step every %s ms.' % _short_repr(ns2['PLAYER_MOVE_DELAY_MS']))",
+      "        result['passed'].append('TODO 8-2: one step every %s ms.' % _short_repr(ns2['PLAYER_MOVE_DELAY_MS']))",
       "        _check_number(result, 'PLAYER_MOVE_DELAY_MS', ns2['PLAYER_MOVE_DELAY_MS'], int, low=0, high=2000)",
     ]);
-    // ---------------- TODO 6-3: the hint settings
+    // ---------------- TODO 8-3: the hint settings
     if (want(3)) push([
-      "    ns3 = _exec_settings(result, CODE3, 'TODO 6-3')",
+      "    ns3 = _exec_settings(result, CODE3, 'TODO 8-3')",
       "    if ns3 is None:",
       "        return _finish(result)",
       "    hint_names = ['ALLOW_PATH_HINT', 'MAX_HINT_COUNT']",
       "    missing_hint = [n for n in hint_names if n not in ns3]",
       "    if missing_hint:",
-      "        result['failed'].append('TODO 6-3: Missing definition(s): %s.' % ', '.join(missing_hint))",
+      "        result['failed'].append('TODO 8-3: Missing definition(s): %s.' % ', '.join(missing_hint))",
       "    else:",
-      "        result['passed'].append('TODO 6-3: hints %s, up to %s per round.' % (",
+      "        result['passed'].append('TODO 8-3: hints %s, up to %s per round.' % (",
       "            _short_repr(ns3['ALLOW_PATH_HINT']), _short_repr(ns3['MAX_HINT_COUNT'])))",
       "        if not isinstance(ns3['ALLOW_PATH_HINT'], bool):",
       "            result['warnings'].append('Heads up: ALLOW_PATH_HINT is usually True or False — this still counts as complete, but double-check the Hint button behaves as you expect.')",
       "        _check_number(result, 'MAX_HINT_COUNT', ns3['MAX_HINT_COUNT'], int, low=0, high=99)",
     ]);
-    // ---------------- TODO 6-7: the maze-building animation
+    // ---------------- TODO 8-7: the maze-building animation
     if (want(7)) push([
-      "    ns7 = _exec_settings(result, CODE7, 'TODO 6-7')",
+      "    ns7 = _exec_settings(result, CODE7, 'TODO 8-7')",
       "    if ns7 is None:",
       "        return _finish(result)",
       "    dfs_names = ['SHOW_DFS_GENERATION', 'DFS_STEPS_PER_FRAME']",
       "    missing_dfs = [n for n in dfs_names if n not in ns7]",
       "    if missing_dfs:",
-      "        result['failed'].append('TODO 6-7: Missing definition(s): %s.' % ', '.join(missing_dfs))",
+      "        result['failed'].append('TODO 8-7: Missing definition(s): %s.' % ', '.join(missing_dfs))",
       "    else:",
-      "        result['passed'].append('TODO 6-7: maze-building animation %s, %s cell(s) per frame.' % (",
+      "        result['passed'].append('TODO 8-7: maze-building animation %s, %s cell(s) per frame.' % (",
       "            'on' if ns7['SHOW_DFS_GENERATION'] else 'off', _short_repr(ns7['DFS_STEPS_PER_FRAME'])))",
       "        if not isinstance(ns7['SHOW_DFS_GENERATION'], bool):",
       "            result['warnings'].append('Heads up: SHOW_DFS_GENERATION is usually True or False — this still counts as complete, but double-check the animation behaves as you expect.')",
@@ -2471,19 +2471,19 @@
       // never start - a warning, not a failure, per the open-ended policy.
       "        _check_number(result, 'DFS_STEPS_PER_FRAME', ns7['DFS_STEPS_PER_FRAME'], int, low=1, high=200)",
     ]);
-    // ---------------- TODO 6-8: the Hint route's bomb weights
+    // ---------------- TODO 8-8: the Hint route's bomb weights
     if (want(8)) push([
-      "    ns8 = _exec_settings(result, CODE8, 'TODO 6-8')",
+      "    ns8 = _exec_settings(result, CODE8, 'TODO 8-8')",
       "    if ns8 is None:",
       "        return _finish(result)",
       "    weight_names = ['STUDENT_NORMAL_WEIGHT', 'STUDENT_BOMB_WEIGHT']",
       "    missing_w = [n for n in weight_names if n not in ns8]",
       "    if missing_w:",
-      "        result['failed'].append('TODO 6-8: Missing definition(s): %s.' % ', '.join(missing_w))",
+      "        result['failed'].append('TODO 8-8: Missing definition(s): %s.' % ', '.join(missing_w))",
       "    else:",
       "        nw = ns8['STUDENT_NORMAL_WEIGHT']",
       "        bw = ns8['STUDENT_BOMB_WEIGHT']",
-      "        result['passed'].append('TODO 6-8: a normal cell costs %s, a bomb cell costs %s.' % (_short_repr(nw), _short_repr(bw)))",
+      "        result['passed'].append('TODO 8-8: a normal cell costs %s, a bomb cell costs %s.' % (_short_repr(nw), _short_repr(bw)))",
       // Any numbers are legal (an offset is added before Dijkstra runs), so
       // everything below is advice about what the hint will DO, not a rule.
       "        bad_w = [n for n in weight_names if isinstance(ns8[n], bool) or not isinstance(ns8[n], int)]",
@@ -2492,21 +2492,21 @@
       "        elif bw <= nw:",
       "            result['warnings'].append('Heads up: a bomb cell costs no more than a normal one, so the Hint route will walk you straight over bombs. That is allowed - just make sure you meant it.')",
     ]);
-    // ---------------- TODO 6-4 / 6-5 / 6-6: the placement body
+    // ---------------- TODO 8-4 / 8-5 / 8-6: the placement body
     //
     // One create_game_objects() body split across three sidebar steps, so
     // it is always run whole. Only the per-step compile check is narrowed
     // to whichever sub-step is being graded.
     if (want(4) || want(5) || want(6)) push([
       "    for _lbl, _src in (" + [
-        want(4) ? "('TODO 6-4', FN4_SRC)," : "",
-        want(5) ? "('TODO 6-5', FN5_SRC)," : "",
-        want(6) ? "('TODO 6-6', FN6_SRC)," : "",
+        want(4) ? "('TODO 8-4', FN4_SRC)," : "",
+        want(5) ? "('TODO 8-5', FN5_SRC)," : "",
+        want(6) ? "('TODO 8-6', FN6_SRC)," : "",
       ].join(" ") + "):",
       "        if _compile_body(result, _src, _lbl) is None:",
       "            return _finish(result)",
       "        result['passed'].append('%s: compiles.' % _lbl)",
-      "    fn3 = _compile_body(result, FN_PLACE_SRC, 'TODO 6-4/6-5/6-6')",
+      "    fn3 = _compile_body(result, FN_PLACE_SRC, 'TODO 8-4/8-5/8-6')",
       "    if fn3 is None:",
       "        return _finish(result)",
       "    cases = [",
@@ -2568,13 +2568,13 @@
     return out.join("\n");
   }
 
-  // ---- TODO 7-x: images + sizes + colors + sound + music playback ------
+  // ---- TODO 9-x: images + sizes + colors + sound + music playback ------
   //
-  // Eight standalone sub-steps. 7-1 … 7-7 are each a two- or three-line
-  // settings block, checked in a single table-driven loop; 7-8 (game.py)
+  // Eight standalone sub-steps. 9-1 … 9-7 are each a two- or three-line
+  // settings block, checked in a single table-driven loop; 9-8 (game.py)
   // is the only real code. `focus` narrows this to the one sub-step being
-  // graded - see harness_roundDesign_6 for why the rest still runs.
-  function harness_lookAndFeel_7(code1, code2, code3, code4, code5, code6, code7, code8, code9, code10, code11, code12, focus) {
+  // graded - see harness_roundDesign_8 for why the rest still runs.
+  function harness_lookAndFeel_9(code1, code2, code3, code4, code5, code6, code7, code8, code9, code10, code11, code12, focus) {
     var F = (focus === undefined || focus === null || focus === "") ? null : String(focus);
     function want(n) { return F === null || F === String(n); }
     var out = [];
@@ -2583,22 +2583,23 @@
     // [part number, label, names, kind]. The part number is carried
     // explicitly rather than inferred from the row index, because part 8
     // (the music playback code) is NOT a settings block and so has no row
-    // here - the settings parts are 1-7 and 9-12, with a hole at 8.
+    // here - the settings parts are numbered 1 through 7 and 9 through
+    // 12, with a hole at 8.
     var settingParts = [
-      [1, "TODO 7-1", ["PLAYER_IMAGE_PATH", "GOAL_IMAGE_PATH"], "image"],
-      [2, "TODO 7-2", ["BOMB_IMAGE_PATH", "FLOOR_TILE_IMAGE_PATH"], "image"],
-      [3, "TODO 7-3", ["PLAYER_IMAGE_SCALE", "GOAL_IMAGE_SCALE", "BOMB_IMAGE_SCALE"], "scale"],
-      [4, "TODO 7-4", ["WALL_COLOR", "PLAYER_COLOR", "GOAL_COLOR"], "color"],
-      [5, "TODO 7-5", ["BOMB_COLOR", "BOMB_EXPLOSION_COLOR"], "color"],
-      [6, "TODO 7-6", ["BOMB_SOUND_PATH", "BACKGROUND_MUSIC_PATH"], "sound"],
-      [7, "TODO 7-7", ["BOMB_EXPLOSION_DURATION_MS", "BACKGROUND_MUSIC_VOLUME"], "tuning"],
-      // 7-9 … 7-12 surface settings that used to be hardcoded: the
+      [1, "TODO 9-1", ["PLAYER_IMAGE_PATH", "GOAL_IMAGE_PATH"], "image"],
+      [2, "TODO 9-2", ["BOMB_IMAGE_PATH", "FLOOR_TILE_IMAGE_PATH"], "image"],
+      [3, "TODO 9-3", ["PLAYER_IMAGE_SCALE", "GOAL_IMAGE_SCALE", "BOMB_IMAGE_SCALE"], "scale"],
+      [4, "TODO 9-4", ["WALL_COLOR", "PLAYER_COLOR", "GOAL_COLOR"], "color"],
+      [5, "TODO 9-5", ["BOMB_COLOR", "BOMB_EXPLOSION_COLOR"], "color"],
+      [6, "TODO 9-6", ["BOMB_SOUND_PATH", "BACKGROUND_MUSIC_PATH"], "sound"],
+      [7, "TODO 9-7", ["BOMB_EXPLOSION_DURATION_MS", "BACKGROUND_MUSIC_VOLUME"], "tuning"],
+      // 9-9 … 9-12 surface settings that used to be hardcoded: the
       // explosion picture, and the palettes the maze animation, the
       // screen and the info panel are drawn with. Same open-ended checks.
-      [9, "TODO 7-9", ["BOMB_EXPLOSION_IMAGE_PATH"], "image"],
-      [10, "TODO 7-10", ["VISITED_COLOR", "CURRENT_CELL_COLOR", "PATH_COLOR"], "color"],
-      [11, "TODO 7-11", ["BACKGROUND_COLOR", "PANEL_COLOR", "PANEL_BORDER"], "color"],
-      [12, "TODO 7-12", ["ACCENT", "SUCCESS", "WARNING", "DANGER"], "color"],
+      [9, "TODO 9-9", ["BOMB_EXPLOSION_IMAGE_PATH"], "image"],
+      [10, "TODO 9-10", ["VISITED_COLOR", "CURRENT_CELL_COLOR", "PATH_COLOR"], "color"],
+      [11, "TODO 9-11", ["BACKGROUND_COLOR", "PANEL_COLOR", "PANEL_BORDER"], "color"],
+      [12, "TODO 9-12", ["ACCENT", "SUCCESS", "WARNING", "DANGER"], "color"],
     ];
     push([
       PY_PRELUDE,
@@ -2618,8 +2619,8 @@
       b64Line("FN3_SRC", fn8),
       "KNOWN_IMAGES = " + JSON.stringify(KNOWN_ASSETS.images).replace(/"/g, "'"),
       "KNOWN_SOUNDS = " + JSON.stringify(KNOWN_ASSETS.sounds).replace(/"/g, "'"),
-      // Every settings block is still EXECUTED (TODO 7-8 needs 7-6's music
-      // path and 7-7's volume to run against), but only the focused one is
+      // Every settings block is still EXECUTED (TODO 9-8 needs 9-6's music
+      // path and 9-7's volume to run against), but only the focused one is
       // reported on and only its problems can fail the step. The trailing
       // flag is that focus.
       "SETTING_PARTS = [",
@@ -2631,7 +2632,7 @@
       "    pass",
       "def _run_inner():",
       "    result = _new_result()",
-      // ---------------- TODO 7-1 … 7-7: the settings blocks, one at a time
+      // ---------------- TODO 9-1 … 9-7: the settings blocks, one at a time
       "    seen = {}",
       "    for label, code, names, kind, focused in SETTING_PARTS:",
       "        ns = _exec_settings(result if focused else _new_result(), code, label)",
@@ -2661,9 +2662,9 @@
       "            _check_number(result, 'BACKGROUND_MUSIC_VOLUME', ns['BACKGROUND_MUSIC_VOLUME'], (int, float), low=0, high=1)",
       "    ns2 = seen",
     ]);
-    // ---------------- TODO 7-8: music playback
+    // ---------------- TODO 9-8: music playback
     if (want(8)) push([
-      "    fn3 = _compile_body(result, FN3_SRC, 'TODO 7-8')",
+      "    fn3 = _compile_body(result, FN3_SRC, 'TODO 9-8')",
       "    if fn3 is None:",
       "        return _finish(result)",
       "    music_path = ns2.get('BACKGROUND_MUSIC_PATH') if isinstance(ns2, dict) else None",
@@ -2674,7 +2675,7 @@
       "        volume = 0.25",
       "    log = []",
       "    fake = _FakePygame(log)",
-      "    ok, msg = _call_body(fn3, (_StubGame(), fake, music_path, volume), 'TODO 7-8 (with a music file set)')",
+      "    ok, msg = _call_body(fn3, (_StubGame(), fake, music_path, volume), 'TODO 9-8 (with a music file set)')",
       "    if not ok:",
       "        result['failed'].append(msg)",
       "    else:",
@@ -2683,31 +2684,31 @@
       "            args = plays[0][1]",
       "            loops = args[0] if args else None",
       "            if loops == -1:",
-      "                result['passed'].append('TODO 7-8: the music starts and loops forever (play(-1)).')",
+      "                result['passed'].append('TODO 9-8: the music starts and loops forever (play(-1)).')",
       "            elif loops == 0:",
-      "                result['passed'].append('TODO 7-8: the music starts and plays through exactly once (play(0)).')",
+      "                result['passed'].append('TODO 9-8: the music starts and plays through exactly once (play(0)).')",
       "            else:",
-      "                result['passed'].append('TODO 7-8: the music starts with play(%s).' % _short_repr(loops))",
+      "                result['passed'].append('TODO 9-8: the music starts with play(%s).' % _short_repr(loops))",
       "            if plays[0][2]:",
-      "                result['passed'].append('TODO 7-8: extra playback options used: %s.' % ', '.join(k for k, v in plays[0][2]))",
+      "                result['passed'].append('TODO 9-8: extra playback options used: %s.' % ', '.join(k for k, v in plays[0][2]))",
       "        else:",
       "            result['warnings'].append('Heads up: your code ran fine, but it never called pygame.mixer.music.play(...), so no music will be heard. That is a valid choice if you meant it.')",
       "        if not [e for e in log if e[0] == 'music_volume']:",
       "            result['warnings'].append('Heads up: BACKGROUND_MUSIC_VOLUME is never applied (no set_volume call), so the music will play at full volume.')",
       // no music file at all
       "    log2 = []",
-      "    ok2, msg2 = _call_body(fn3, (_StubGame(), _FakePygame(log2), None, volume), 'TODO 7-8 (with BACKGROUND_MUSIC_PATH = None)')",
+      "    ok2, msg2 = _call_body(fn3, (_StubGame(), _FakePygame(log2), None, volume), 'TODO 9-8 (with BACKGROUND_MUSIC_PATH = None)')",
       "    if not ok2:",
       "        result['failed'].append(msg2 + ' — with no music file chosen, this code still has to finish quietly instead of erroring.')",
       "    else:",
-      "        result['passed'].append('TODO 7-8: with no music file chosen, your code finishes quietly.')",
+      "        result['passed'].append('TODO 9-8: with no music file chosen, your code finishes quietly.')",
       // a broken/missing file: warning only, per the open-ended grading policy
       "    log3 = []",
-      "    ok3, msg3 = _call_body(fn3, (_StubGame(), _FakePygame(log3, fail_on_load=True), music_path, volume), 'TODO 7-8 (music file missing)')",
+      "    ok3, msg3 = _call_body(fn3, (_StubGame(), _FakePygame(log3, fail_on_load=True), music_path, volume), 'TODO 9-8 (music file missing)')",
       "    if not ok3:",
       "        result['warnings'].append('Heads up: if the music file is missing or broken, your code raises instead of handling it (%s). This still counts as complete, but keeping the try / except (pygame.error, FileNotFoundError, TypeError) lines means a classmate can open your project without your sound files and still play it.' % msg3)",
       "    else:",
-      "        result['passed'].append('TODO 7-8: a missing or broken music file is handled without crashing the game.')",
+      "        result['passed'].append('TODO 9-8: a missing or broken music file is handled without crashing the game.')",
     ]);
     push([
       "    return _finish(result)",
@@ -2718,7 +2719,7 @@
     return out.join("\n");
   }
 
-  // TODO 8 now spans two files (Part 1/6 in settings.py: the CUSTOM_ITEMS
+  // TODO 10 now spans two files (Part 1/6 in settings.py: the CUSTOM_ITEMS
   // data; Parts 2/3 and 3/3 in game.py: apply_custom_item_effect's
   // branching and the pickup itself, both real behaviour-graded TODOs
   // instead of given code) - graded together as
@@ -2729,15 +2730,15 @@
   // self.hints_remaining after calling the student's code with a few
   // (effect, amount) pairs - including an unrecognized effect, which must
   // be a safe no-op (never a crash), preserving the exact flexibility
-  // promise TODO 8 Part 1 makes about inventing new effect names.
-  function harness_customItems_8(code1, code2, code3, code4, code5, code6, focus) {
+  // promise TODO 10 Part 1 makes about inventing new effect names.
+  function harness_customItems_10(code1, code2, code3, code4, code5, code6, focus) {
     var F = (focus === undefined || focus === null || focus === "") ? null : String(focus);
     function want(n) { return F === null || F === String(n); }
     var out = [];
     function push(arr) { for (var i = 0; i < arr.length; i++) out.push(arr[i]); }
     // "image"/"sound"/"size" are intentionally NOT in ITEM_KEYS: they are
     // optional-with-a-default, exactly like every other asset path in this
-    // project (TODO 7) - an item simply omitting them is equivalent to
+    // project (TODO 9) - an item simply omitting them is equivalent to
     // explicitly writing None (or 1.0 for size), so it must never warn or
     // block just for being absent. Only checked (as a lenient warning)
     // when present.
@@ -2801,12 +2802,12 @@
       "def _run_inner():",
       "    result = {'ok': False, 'passed': [], 'failed': [], 'warnings': [], 'error': None, 'traceback': None}",
     ]);
-    // ---------------- TODO 8-1: the CUSTOM_ITEMS data
+    // ---------------- TODO 10-1: the CUSTOM_ITEMS data
     if (want(1)) push([
       "    try:",
       "        compile(CODE1, '<student-part1>', 'exec')",
       "    except SyntaxError as e:",
-      "        result['error'] = 'TODO 8-1: Python syntax error on line %s: %s.' % (e.lineno, e.msg)",
+      "        result['error'] = 'TODO 10-1: Python syntax error on line %s: %s.' % (e.lineno, e.msg)",
       "        return json.dumps(result)",
       "    try:",
       "        ns1 = {}",
@@ -2815,14 +2816,14 @@
       // a frozen browser tab.
       "        _run_guarded(lambda: exec(compile(CODE1, '<student-part1>', 'exec'), {}, ns1), ())",
       "        if 'CUSTOM_ITEMS' not in ns1:",
-      "            result['failed'].append('TODO 8-1: Missing definition: CUSTOM_ITEMS.')",
+      "            result['failed'].append('TODO 10-1: Missing definition: CUSTOM_ITEMS.')",
       "        else:",
       "            items_list = ns1['CUSTOM_ITEMS']",
       "            if not isinstance(items_list, list) or len(items_list) == 0:",
       "                result['warnings'].append('Heads up: CUSTOM_ITEMS is usually a non-empty list of item dictionaries — this still counts as complete, but double-check it in the Play tab.')",
-      "                result['passed'].append('TODO 8-1: CUSTOM_ITEMS is defined.')",
+      "                result['passed'].append('TODO 10-1: CUSTOM_ITEMS is defined.')",
       "            else:",
-      "                result['passed'].append('TODO 8-1: CUSTOM_ITEMS is defined with %d item(s).' % len(items_list))",
+      "                result['passed'].append('TODO 10-1: CUSTOM_ITEMS is defined with %d item(s).' % len(items_list))",
       "                for i, item_def in enumerate(items_list):",
       "                    label = 'item %d' % (i + 1)",
       "                    if not isinstance(item_def, dict):",
@@ -2865,23 +2866,23 @@
       "                    _check_asset_field('sound', 'assets/sounds/', SOUND_EXT, KNOWN_SOUNDS)",
       "                    result['passed'].append('%s: %s' % (label, _short_repr(item_def)))",
       "    except BaseException as e:",
-      "        result['error'] = 'TODO 8-1: %s: %s' % (type(e).__name__, e)",
+      "        result['error'] = 'TODO 10-1: %s: %s' % (type(e).__name__, e)",
       "        result['traceback'] = traceback.format_exc()",
       "        return json.dumps(result)",
     ]);
-    // ---------------- TODO 8-2 / 8-3: the two effect branches
+    // ---------------- TODO 10-2 / 10-3: the two effect branches
     //
     // One apply_custom_item_effect() body split across two sidebar steps,
     // so it is always compiled and run whole - but only the focused
     // sub-step's cases are asserted. That matters here more than anywhere
-    // else in the course: both starters are a bare `pass`, so grading 8-2
-    // against 8-3's untouched starter would otherwise be an instant fail.
+    // else in the course: both starters are a bare `pass`, so grading 10-2
+    // against 10-3's untouched starter would otherwise be an instant fail.
     if (want(2) || want(3)) push([
       "    try:",
       "        exec(compile(FN2_SRC, '<student-part2>', 'exec'), {}, {})",
       "    except SyntaxError as e:",
       "        line = max(1, (e.lineno or 1) - 1)",
-      "        result['error'] = 'TODO 8-2 / 8-3: Python syntax error on line %s: %s.' % (line, e.msg)",
+      "        result['error'] = 'TODO 10-2 / 10-3: Python syntax error on line %s: %s.' % (line, e.msg)",
       "        return json.dumps(result)",
       "    try:",
       "        class SelfObj:",
@@ -2891,11 +2892,11 @@
       // The first element is which PART each case really belongs to, so a
       // student who has done Part 2 but not Part 3 is told exactly that.
       "        cases = [",
-      want(2) ? "            ('TODO 8-2', 'add_time adds seconds', 'add_time', 15, (0, 2), (15, 2))," : "",
-      want(2) ? "            ('TODO 8-2', 'add_time stacks on existing bonus time', 'add_time', 10, (30, 1), (40, 1))," : "",
-      want(3) ? "            ('TODO 8-3', 'add_hint adds a hint use', 'add_hint', 1, (0, 2), (0, 3))," : "",
-      want(3) ? "            ('TODO 8-3', 'add_hint with a larger amount', 'add_hint', 2, (5, 0), (5, 2))," : "",
-      "            ('TODO 8-2 / 8-3', 'an unrecognized effect is a safe no-op', 'shrink_maze', 999, (3, 1), (3, 1)),",
+      want(2) ? "            ('TODO 10-2', 'add_time adds seconds', 'add_time', 15, (0, 2), (15, 2))," : "",
+      want(2) ? "            ('TODO 10-2', 'add_time stacks on existing bonus time', 'add_time', 10, (30, 1), (40, 1))," : "",
+      want(3) ? "            ('TODO 10-3', 'add_hint adds a hint use', 'add_hint', 1, (0, 2), (0, 3))," : "",
+      want(3) ? "            ('TODO 10-3', 'add_hint with a larger amount', 'add_hint', 2, (5, 0), (5, 2))," : "",
+      "            ('TODO 10-2 / 10-3', 'an unrecognized effect is a safe no-op', 'shrink_maze', 999, (3, 1), (3, 1)),",
       "        ]",
       "        for part, label, effect, amount, start, expect in cases:",
       "            ns2 = {}",
@@ -2914,17 +2915,17 @@
       "            else:",
       "                result['failed'].append('%s (%s): expected (bonus_time_seconds, hints_remaining) == %r, got %r.' % (part, label, expect, (self_.bonus_time_seconds, self_.hints_remaining)))",
       "    except BaseException as e:",
-      "        result['error'] = 'TODO 8-2 / 8-3: %s: %s' % (type(e).__name__, e)",
+      "        result['error'] = 'TODO 10-2 / 10-3: %s: %s' % (type(e).__name__, e)",
       "        result['traceback'] = traceback.format_exc()",
       "        return json.dumps(result)",
     ]);
-    // ---------------- TODO 8-4 / 8-5 / 8-6: the pickup itself
+    // ---------------- TODO 10-4 / 10-5 / 10-6: the pickup itself
     //
     // One check_items() body split across three sidebar steps. Every
-    // starter here is already working code (unlike 8-2/8-3), so the whole
+    // starter here is already working code (unlike 10-2/10-3), so the whole
     // pickup is checked whichever of the three is being graded.
     if (want(4) || want(5) || want(6)) push([
-      "    fn3 = _compile_body(result, FN3_SRC, 'TODO 8-4/8-5/8-6')",
+      "    fn3 = _compile_body(result, FN3_SRC, 'TODO 10-4/10-5/10-6')",
       "    if fn3 is None:",
       "        return _finish(result)",
       "    def _mk_items(specs):",
@@ -2964,7 +2965,7 @@
       "            pickup_clean = False",
       "            continue",
       "        if target.item_def not in game.applied:",
-      "            result['failed'].append('Pickup (%s): the item was marked collected, but self.apply_custom_item_effect(item.item_def) was never called - so your TODO 8-2 / 8-3 effect never runs.' % label)",
+      "            result['failed'].append('Pickup (%s): the item was marked collected, but self.apply_custom_item_effect(item.item_def) was never called - so your TODO 10-2 / 10-3 effect never runs.' % label)",
       "            pickup_clean = False",
       "            continue",
       "        others = [i for i, it in enumerate(game.items) if i != expect_idx and specs[i][2] and not it.active]",
@@ -2988,7 +2989,7 @@
     return out.join("\n");
   }
 
-  // ---- TODO 9: the rules, written twice -------------------------------
+  // ---- TODO 11: the rules, written twice -------------------------------
   //
   // Parts 1/4 and 2/4 are the rules as English (settings.py), Parts 3/4 and 4/4 are the same
   // rules as the win condition (game.py). The grading policy here is
@@ -2997,12 +2998,12 @@
   // ever a note. The two things that ARE failures are the ones that make a
   // game unplayable: raising, and clearing the round while the player is
   // nowhere near the goal.
-  function harness_gameRules_9(code1, code2, code3, code4, focus) {
+  function harness_gameRules_11(code1, code2, code3, code4, focus) {
     var F = (focus === undefined || focus === null || focus === "") ? null : String(focus);
     function want(n) { return F === null || F === String(n); }
     var out = [];
     function push(arr) { for (var i = 0; i < arr.length; i++) out.push(arr[i]); }
-    // 9-3 and 9-4 are two consecutive statement groups of check_goal, so
+    // 11-3 and 11-4 are two consecutive statement groups of check_goal, so
     // they are compiled separately (attribution) and then joined and run as
     // the one body the real game executes.
     var fn3 = buildFnSource("self, pygame, ROUND_CONFIGS", code3, "    ");
@@ -3046,24 +3047,24 @@
       "def _run_inner():",
       "    result = _new_result()",
     ]);
-    // ---------------- TODO 9-1 / 9-2: the rules as text
+    // ---------------- TODO 11-1 / 11-2: the rules as text
     //
     // Two independent settings lists, one per sub-step, so only the
     // focused one is executed and reported.
     if (want(1)) push([
-      "    ns1 = _exec_settings(result, CODE1, 'TODO 9-1')",
+      "    ns1 = _exec_settings(result, CODE1, 'TODO 11-1')",
       "    if ns1 is None:",
       "        return _finish(result)",
     ]);
     if (want(2)) push([
-      "    ns2 = _exec_settings(result, CODE2, 'TODO 9-2')",
+      "    ns2 = _exec_settings(result, CODE2, 'TODO 11-2')",
       "    if ns2 is None:",
       "        return _finish(result)",
     ]);
     if (want(1) || want(2)) push([
       "    for label, rn, ns in (" + [
-        want(1) ? "('TODO 9-1', 'MISSION_RULES', ns1)," : "",
-        want(2) ? "('TODO 9-2', 'HOW_TO_PLAY_RULES', ns2)," : "",
+        want(1) ? "('TODO 11-1', 'MISSION_RULES', ns1)," : "",
+        want(2) ? "('TODO 11-2', 'HOW_TO_PLAY_RULES', ns2)," : "",
       ].join(" ") + "):",
       "        if rn not in ns:",
       "            result['failed'].append('%s: Missing definition: %s. Keep the variable name exactly as given.' % (label, rn))",
@@ -3075,20 +3076,20 @@
       "        elif not all(isinstance(x, str) for x in val):",
       "            result['warnings'].append('Heads up: every entry in %s is usually a quoted string.' % rn)",
     ]);
-    // ---------------- TODO 9-3 / 9-4: the same rules as code
+    // ---------------- TODO 11-3 / 11-4: the same rules as code
     //
     // One check_goal() body split across two sidebar steps, always run
     // whole; both starters are already working code, so either sub-step
     // is checked against the complete win condition.
     if (want(3) || want(4)) push([
       "    for _lbl, _src in (" + [
-        want(3) ? "('TODO 9-3', FN3_SRC)," : "",
-        want(4) ? "('TODO 9-4', FN4_SRC)," : "",
+        want(3) ? "('TODO 11-3', FN3_SRC)," : "",
+        want(4) ? "('TODO 11-4', FN4_SRC)," : "",
       ].join(" ") + "):",
       "        if _compile_body(result, _src, _lbl) is None:",
       "            return _finish(result)",
       "        result['passed'].append('%s: compiles.' % _lbl)",
-      "    fn2 = _compile_body(result, FN2_SRC, 'TODO 9-3/9-4')",
+      "    fn2 = _compile_body(result, FN2_SRC, 'TODO 11-3/11-4')",
       "    if fn2 is None:",
       "        return _finish(result)",
       "    GOAL = (8, 8)",
@@ -3153,9 +3154,9 @@
     return out.join("\n");
   }
 
-  // TODO 6, 7 and 9 used to be graded here as pure "syntax" steps. They all
+  // TODO 8 and TODO 9 and TODO 11 used to be graded here as pure "syntax" steps. They all
   // gained a real code part in game.py, so they moved to BEHAVIOUR_HARNESSES
-  // (harness_roundDesign_6 / harness_lookAndFeel_7 / harness_gameRules_9),
+  // (harness_roundDesign_8 / harness_lookAndFeel_9 / harness_gameRules_11),
   // which still run the same open-ended settings checks for their
   // settings.py parts. TODO 1 is the only step left that is settings-only.
   var SYNTAX_HARNESSES = {
@@ -3216,7 +3217,7 @@
     if (state.assetData && state.assetData.uploadedFiles && state.assetData.uploadedFiles.length) {
       showConfirm(
         "Remember your uploaded files",
-        "progress.json saved your code, painted maps, and the list of " + state.assetData.uploadedFiles.length + " file(s) you added in TODO 7 — but NOT the image/sound files themselves. Those live on your disk (or your connected project folder). Keep them safe, or you'll need to re-upload them next time.",
+        "progress.json saved your code, painted maps, and the list of " + state.assetData.uploadedFiles.length + " file(s) you added in TODO 9 — but NOT the image/sound files themselves. Those live on your disk (or your connected project folder). Keep them safe, or you'll need to re-upload them next time.",
         { confirmLabel: "Got it", cancelLabel: "Close" }
       );
     }
@@ -3695,10 +3696,10 @@
   // the game is pure maze-solving now (goal + timer + bomb-reset), so
   // there is no running score to animate and nothing left to place along
   // the shortest path except bombs, which spawn randomly (see game.py's
-  // create_game_objects - given, not a TODO). TODO 8's Bonus preview is
+  // create_game_objects - given, not a TODO). TODO 10's Bonus preview is
   // the much simpler traceHarness_customItems below.
 
-  // Lightweight preview for the CUSTOM_ITEMS Bonus (TODO 8): parses the
+  // Lightweight preview for the CUSTOM_ITEMS Bonus (TODO 10): parses the
   // student's list and returns it as-is (name/color/effect/amount) for
   // the customItemLab visualizer to render as a simple card list - no
   // simulation needed since there's no cumulative score to animate any
@@ -3942,10 +3943,10 @@
 
     function refresh(state) {
       if (!refs) return;
-      // TODO 1 is one step, one string. The TODO 9 group is two separate
-      // sub-steps (9-1 mission, 9-2 how-to-play) that share one preview,
+      // TODO 1 is one step, one string. The TODO 11 group is two separate
+      // sub-steps (11-1 mission, 11-2 how-to-play) that share one preview,
       // so feed the whole group's settings code in - otherwise opening
-      // 9-1 would blank out the how-to-play half of the card.
+      // 11-1 would blank out the how-to-play half of the card.
       var group = bonusGroupOf(state.step.id);
       var code = group
         ? group.ids.map(bonusCode).join("\n")
@@ -4265,7 +4266,7 @@
 
   // D4 replacement for the old ScoreBoardViz (which animated a running
   // score across treasure/swamp/custom_item/custom_terrain tiles - none of
-  // that exists any more). TODO 8's Bonus is now just "design your own
+  // that exists any more). TODO 10's Bonus is now just "design your own
   // collectible(s)", so the preview is equally simple: parse CUSTOM_ITEMS
   // and show each entry as a card (swatch, name, and a plain-English
   // description of its effect) - no simulation, nothing to step through.
@@ -4302,9 +4303,9 @@
     }
 
     function runFresh() {
-      // TODO 8 is six parts now (Part 1/6 settings.py data, Parts 2/6-6/6
-      // game.py effect code) - this preview only needs Part 1's data.
-      var code = bonusCode("8-1");
+      // The TODO 10 group is six sub-steps now (10-1 is the settings.py data,
+      // 10-2 … 10-6 are the game.py effect code) - this preview only needs 10-1.
+      var code = bonusCode("10-1");
       if (refs) refs.verdict.info("Running your code…");
       ensurePyodide().then(function (py) {
         return py.runPythonAsync(traceHarness_customItems(code));
@@ -4577,7 +4578,7 @@
   var MAP_WINDOW_PIXEL_W = 976, MAP_WINDOW_PIXEL_H = 542;
   var MAP_MIN_COMFY_CELL = 16;
   var ROUND_CONFIG_KEY_ORDER = ["rows", "cols", "cell_size", "extra_open_walls", "bomb_count", "custom_item_count", "time_limit_seconds"];
-  // Students may add or remove rounds freely (TODO 6 Part 1/6). These caps
+  // Students may add or remove rounds freely (TODO 8 Part 1/6). These caps
   // exist only so the map editor stays usable and one stray paste can't
   // make the browser draw a 500x500 board or 300 round tabs - the real
   // pygame game has no such limit, and the grader only ever warns.
@@ -4849,7 +4850,7 @@
   // Play tab looped over a hardcoded 3-entry list. Students are now told
   // they may add or remove rounds, so every one of those reads the
   // student's OWN list instead, falling back to the shipped defaults while
-  // TODO 6 is untouched or unparseable. Capped only to keep the map editor
+  // TODO 8 is untouched or unparseable. Capped only to keep the map editor
   // usable (and one runaway paste from generating hundreds of tabs).
   var PLAY_ROUND_DEFAULTS = [
     { rows: 11, cols: 15, cellSize: 30, extraOpenWalls: 5, bombCount: 2, customItemCount: 2, timeLimitSeconds: 70 },
@@ -4885,11 +4886,11 @@
     };
   }
 
-  // The TODO 6 group is six standalone sub-steps: 6-1 = ROUND_CONFIGS,
-  // 6-2 = PLAYER_MOVE_DELAY_MS, 6-3 = ALLOW_PATH_HINT + MAX_HINT_COUNT,
-  // 6-4/6-5/6-6 = the placement code in game.py. Anything reading "the
+  // The TODO 8 group is six standalone sub-steps: 8-1 = ROUND_CONFIGS,
+  // 8-2 = PLAYER_MOVE_DELAY_MS, 8-3 = ALLOW_PATH_HINT + MAX_HINT_COUNT,
+  // 8-4/8-5/8-6 = the placement code in game.py. Anything reading "the
   // student's rounds" goes through here, so a save made before the split
-  // (one array under the old id "6") can never leak through as a string
+  // (one array under the old id "8") can never leak through as a string
   // indexed by mistake.
   function step6PartCode(index) { return bonusCode("6-" + (index + 1)); }
   function step6RoundConfigsCode() { return step6PartCode(0); }
@@ -4913,7 +4914,7 @@
     return list[i] || list[list.length - 1] || PLAY_ROUND_DEFAULTS[0];
   }
 
-  // TODO 6 Parts 2/6 and 3/6's pacing numbers, read live the same way, so
+  // TODO 8 Parts 2/6 and 3/6's pacing numbers, read live the same way, so
   // the Play tab actually feels like the game the student is designing.
   function parseNumberSetting(code, name, lo, hi, fallback) {
     try {
@@ -4985,12 +4986,12 @@
     var boundTextarea = null, onInputHandler = null, debouncedTextSync = null;
     var windowMouseupAttached = false;
     // Cross-file dependency (Task 3's "harder, multi-file" philosophy
-    // applied to TODO 6): the map editor reads the student's OWN CUSTOM_ITEMS
-    // (TODO 8 Part 1/6, settings.py) so a specific item from their own list
+    // applied to TODO 8): the map editor reads the student's OWN CUSTOM_ITEMS
+    // (TODO 10 Part 1/6, settings.py) so a specific item from their own list
     // can be placed on the map, not just a generic "an item goes here"
     // marker. itemDefsCache is a plain preview cache (never authoritative -
     // PlayEngine re-derives the real thing the same way at Play-tab time),
-    // refreshed whenever this panel becomes visible so edits to TODO 8 show
+    // refreshed whenever this panel becomes visible so edits to TODO 10 show
     // up here without a manual reload.
     var itemDefsCache = null;
     var selectedItemIndex = 0;
@@ -5001,7 +5002,7 @@
 
     function loadItemDefs() {
       ensurePyodide().then(function (py) {
-        return py.runPythonAsync(traceHarness_customItems(bonusCode("8-1")));
+        return py.runPythonAsync(traceHarness_customItems(bonusCode("10-1")));
       }).then(function (json) {
         var data = JSON.parse(json);
         itemDefsCache = (data.ok && data.items && data.items.length) ? data.items : null;
@@ -5014,7 +5015,7 @@
     var TILE_META = {
       WALL: { label: "Wall", color: "#3a3327", desc: "Blocks movement." },
       NORMAL: { label: "Floor (eraser)", color: "#12100c", desc: "Open, no effect." },
-      CUSTOM_ITEM: { label: "Item", color: "#22c55e", desc: "Spawns a specific item from your own TODO 8 CUSTOM_ITEMS list here." },
+      CUSTOM_ITEM: { label: "Item", color: "#22c55e", desc: "Spawns a specific item from your own TODO 10 CUSTOM_ITEMS list here." },
       BOMB: { label: "Bomb", color: "#e0685f", desc: "Touching it resets the player to the start position." },
       GOAL: { label: "Goal", color: "#f0c04a", desc: "Round exit (exactly one)." },
       START: { label: "Start", color: "#4fa3e3", desc: "Player start (exactly one)." },
@@ -5128,10 +5129,10 @@
           label = "Item: " + def.name;
           color = "rgb(" + def.color.join(",") + ")";
           title = itemDefsCache.length > 1
-            ? "Paints \"" + def.name + "\" — click again while selected to cycle to your next item (" + itemDefsCache.length + " defined in TODO 8)"
+            ? "Paints \"" + def.name + "\" — click again while selected to cycle to your next item (" + itemDefsCache.length + " defined in TODO 10)"
             : "Paints \"" + def.name + "\" here.";
         } else if (t === "CUSTOM_ITEM") {
-          title = "Finish TODO 8 (Part 1/6) to define your own item(s) here — using a generic placeholder for now.";
+          title = "Finish TODO 10 (Part 1/6) to define your own item(s) here — using a generic placeholder for now.";
         }
         var swatch = el("button", {
           class: "map-palette-item" + (tool === t && !eraseMode ? " is-active" : ""),
@@ -5161,7 +5162,7 @@
       var d = ad.round;
       if (!d || !refs) return;
       var ta = document.querySelector("#mainPanel .code-textarea");
-      // TODO 6 is a multi-part step, so its saved code is an ARRAY - part 0
+      // TODO 8 is a multi-part step, so its saved code is an ARRAY - part 0
       // is the ROUND_CONFIGS block this editor owns (and the first
       // .code-textarea on the page is that same part's editor).
       var code = ta ? ta.value : step6RoundConfigsCode();
@@ -5193,17 +5194,17 @@
     }
 
     function writeStep6Code(newCode) {
-      // ROUND_CONFIGS lives in TODO 6-1 and nowhere else. Only type into
-      // the live editor when 6-1 is the step actually on screen - every
+      // ROUND_CONFIGS lives in TODO 8-1 and nowhere else. Only type into
+      // the live editor when 8-1 is the step actually on screen - every
       // Bonus step renders one textarea now, so a blind querySelector
       // would happily overwrite whichever OTHER sub-step the student is
       // looking at while they paint a map.
-      var ta = state.currentStepId === "6-1" ? document.querySelector("#mainPanel .code-textarea") : null;
+      var ta = state.currentStepId === "8-1" ? document.querySelector("#mainPanel .code-textarea") : null;
       if (ta) {
         ta.value = newCode;
         ta.dispatchEvent(new Event("input"));
       } else {
-        var sd = state.steps["6-1"];
+        var sd = state.steps["8-1"];
         if (!sd) return;
         sd.code = newCode;
         persist();
@@ -5362,7 +5363,7 @@
       mount: function (container) {
         container.innerHTML = "";
         // One tab per round the student's OWN ROUND_CONFIGS declares, not a
-        // fixed three - adding a 4th dictionary in TODO 6 Part 1/6 makes a
+        // fixed three - adding a 4th dictionary in TODO 8 Part 1/6 makes a
         // "Round 4" tab appear here as soon as it parses, so the map editor
         // never silently ignores rounds they invented.
         var tabs = el("div", { class: "viz-controlbar" });
@@ -5401,7 +5402,7 @@
         container.appendChild(parseNotice);
         var conflictBox = el("div", { class: "viz-verdict verdict-info", hidden: "hidden" });
         container.appendChild(conflictBox);
-        container.appendChild(el("p", { class: "small muted mt-8", text: "Once TODO 6 is complete, this round uses your painted map in the Play tab instead of a randomly-generated one — including exactly which of your own TODO 8 items you placed and where." }));
+        container.appendChild(el("p", { class: "small muted mt-8", text: "Once TODO 8 is complete, this round uses your painted map in the Play tab instead of a randomly-generated one — including exactly which of your own TODO 10 items you placed and where." }));
 
         refs = {
           container: container, boardWrap: boardWrap, palette: palette,
@@ -5464,26 +5465,26 @@
   //     is denied, or the page is opened via file://.
 
   // stepId says which Bonus sub-step actually owns each path setting:
-  // 7-1 = player+goal images, 7-2 = bomb+floor images, 7-6 = the two
+  // 9-1 = player+goal images, 9-2 = bomb+floor images, 9-6 = the two
   // sound paths. ASSET_PATH_STEPS is the same list, deduplicated - every
   // sub-step that can legally contain one of these names.
   var ASSET_SLOTS = [
-    { key: "PLAYER_IMAGE_PATH", kind: "image", stepId: "7-1", label: "Player sprite" },
-    { key: "GOAL_IMAGE_PATH", kind: "image", stepId: "7-1", label: "Goal sprite" },
-    { key: "BOMB_IMAGE_PATH", kind: "image", stepId: "7-2", label: "Bomb" },
-    { key: "FLOOR_TILE_IMAGE_PATH", kind: "image", stepId: "7-2", label: "Floor tile" },
-    { key: "BOMB_SOUND_PATH", kind: "sound", stepId: "7-6", label: "Bomb explosion sound" },
-    { key: "BACKGROUND_MUSIC_PATH", kind: "sound", stepId: "7-6", label: "Background music" },
+    { key: "PLAYER_IMAGE_PATH", kind: "image", stepId: "9-1", label: "Player sprite" },
+    { key: "GOAL_IMAGE_PATH", kind: "image", stepId: "9-1", label: "Goal sprite" },
+    { key: "BOMB_IMAGE_PATH", kind: "image", stepId: "9-2", label: "Bomb" },
+    { key: "FLOOR_TILE_IMAGE_PATH", kind: "image", stepId: "9-2", label: "Floor tile" },
+    { key: "BOMB_SOUND_PATH", kind: "sound", stepId: "9-6", label: "Bomb explosion sound" },
+    { key: "BACKGROUND_MUSIC_PATH", kind: "sound", stepId: "9-6", label: "Background music" },
   ];
-  var ASSET_PATH_STEPS = ["7-1", "7-2", "7-6"];
+  var ASSET_PATH_STEPS = ["9-1", "9-2", "9-6"];
   var IMAGE_EXT_OK = ["png", "jpg", "jpeg", "gif", "webp"];
   var SOUND_EXT_OK = ["wav", "mp3", "ogg"];
   var IDB_NAME = "dijkstraMazeAssets", IDB_STORE = "handles", IDB_DIR_KEY = "projectDir";
 
-  // Takes TODO 7's whole per-part code array (or any subset of it) and
+  // Takes TODO 9's whole per-part code array (or any subset of it) and
   // reads every NAME = None | "path" it can find. Scanning the parts that
   // actually hold paths (ASSET_PATH_STEPS) rather than a fixed code0/code1
-  // pair is what kept this working when TODO 7 became eight sub-steps.
+  // pair is what kept this working when TODO 9 became eight sub-steps.
   function parseAssetPaths(codes) {
     var out = {};
     var re = /([A-Z_]+)\s*=\s*(None|"[^"]*"|'[^']*')/g;
@@ -5996,8 +5997,8 @@
   // changelog note) - no score, no swamp, no monster.
 
   // The round list and the pacing numbers both come from the student's own
-  // TODO 6 code now (see playRounds() / playPacing() above) - these are only
-  // the values used before TODO 6 has been touched.
+  // TODO 8 code now (see playRounds() / playPacing() above) - these are only
+  // the values used before TODO 8 has been touched.
   var PLAY_MAX_HINT_COUNT = 2; // mirrors settings.py's MAX_HINT_COUNT
   var PLAY_MOVE_DELAY_MS = 100;
 
@@ -6013,8 +6014,8 @@
     var hintsRemaining = PLAY_MAX_HINT_COUNT;
     var running = false;
     var soundOn = false;
-    // The student's parsed CUSTOM_ITEMS (TODO 8) - a list of {name, color,
-    // effect, amount}, or null until TODO 8 is complete and loaded once via
+    // The student's parsed CUSTOM_ITEMS (TODO 10) - a list of {name, color,
+    // effect, amount}, or null until TODO 10 is complete and loaded once via
     // loadCustomItems(). Each spawned item randomly picks one entry, same
     // as the real game's create_game_objects() (random.choice(CUSTOM_ITEMS)).
     var customItemDefs = null;
@@ -6033,10 +6034,10 @@
         // A Bonus capability turns on once EVERY sub-step of its group is
         // completed - the same gate as before the split, just spelled out
         // over the group instead of one id.
-        mapEditor: bonusGroupComplete("6"),
-        assets: bonusGroupComplete("7"),
-        customItem: bonusGroupComplete("8"),
-        rules: bonusGroupComplete("9"),
+        mapEditor: bonusGroupComplete("8"),
+        assets: bonusGroupComplete("9"),
+        customItem: bonusGroupComplete("10"),
+        rules: bonusGroupComplete("11"),
       };
     }
     function allRequiredCompleteExact() { return REQUIRED_ORDER.every(isDoneExact); }
@@ -6121,7 +6122,7 @@
     }
 
     // The one place cell size is decided. Constrained by BOTH axes.
-    // roundCellHint is the round's own cell_size (TODO 6 / PLAY_ROUND_CONFIGS)
+    // roundCellHint is the round's own cell_size (TODO 8 / PLAY_ROUND_CONFIGS)
     // and only caps the normal sidebar view - a painted map passes null, and
     // a roomy view ignores it entirely in favour of filling the screen.
     function computeCellSize(r, c, roundCellHint) {
@@ -6303,10 +6304,10 @@
         ["title", "Title screen shows your title (TODO 1)"],
         ["movement", "Player moves & respects walls (TODO 2/3/4)"],
         ["hint", "Hint button computes a bomb-avoiding route (TODO 5)"],
-        ["mapEditor", "Your painted rounds are used instead of random generation (TODO 6)"],
-        ["assets", "Your chosen images/sounds are used (TODO 7)"],
-        ["customItem", "Custom item(s) (TODO 8)"],
-        ["rules", "Your game's rules (TODO 9)"],
+        ["mapEditor", "Your painted rounds are used instead of random generation (TODO 8)"],
+        ["assets", "Your chosen images/sounds are used (TODO 9)"],
+        ["customItem", "Custom item(s) (TODO 10)"],
+        ["rules", "Your game's rules (TODO 11)"],
       ];
       refs.checklist.innerHTML = "";
       items2.forEach(function (pair) {
@@ -6317,12 +6318,12 @@
     }
 
     // pickCustomItemDef(): every spawned item randomly draws ONE entry from
-    // the student's own CUSTOM_ITEMS (TODO 8) - random.choice(CUSTOM_ITEMS)
+    // the student's own CUSTOM_ITEMS (TODO 10) - random.choice(CUSTOM_ITEMS)
     // in the real game's create_game_objects(). Falls back to a plain
-    // generic "no effect yet" item until TODO 8 is complete/loaded, exactly
+    // generic "no effect yet" item until TODO 10 is complete/loaded, exactly
     // like the real game would if CUSTOM_ITEMS were left empty.
     // explicitIndex (optional): a painted round's own assignment for this
-    // exact cell (see MapEditorViz's itemAssignments, TODO 6's item
+    // exact cell (see MapEditorViz's itemAssignments, TODO 8's item
     // placement) - when present and in range, spawns EXACTLY that item
     // instead of a random one, so a student's deliberate map-editor choice
     // is honored in the real Play tab, not silently re-randomized.
@@ -6340,7 +6341,7 @@
       hintPath = [];
       running = false;
 
-      // A completed TODO 6 with a painted layout for this round REPLACES
+      // A completed TODO 8 with a painted layout for this round REPLACES
       // procedural DFS generation entirely - no Pyodide maze-gen call at
       // all, the student's own hand-painted map is the round.
       if (caps.mapEditor && state.mapEditorData.rounds[index]) {
@@ -6359,7 +6360,7 @@
         goal = { row: painted.goal[0], col: painted.goal[1] };
         timeLeft = cfg.timeLimitSeconds;
         applyBoardSize();
-        statusLine(teachingNote("Using your hand-painted map for this round (TODO 6)."));
+        statusLine(teachingNote("Using your hand-painted map for this round (TODO 8)."));
         renderAll();
         return;
       }
@@ -6396,7 +6397,7 @@
 
     // --- the student's own artwork -----------------------------------
     //
-    // TODO 7 picks image paths and *_IMAGE_SCALE sizes, TODO 8 gives each
+    // TODO 9 picks image paths and *_IMAGE_SCALE sizes, TODO 10 gives each
     // item its own image/size. The Play tab draws all of it, so the visual
     // choices a student makes actually show up in the game they are
     // testing - falling back to the built-in shapes for anything left as
@@ -6405,10 +6406,10 @@
     var playItemImages = {};
 
     function playVisuals() {
-      // Images live in 7-1/7-2, the sizes in 7-3, the sound paths in 7-6.
+      // Images live in 9-1/9-2, the sizes in 9-3, the sound paths in 9-6.
       // Everything is joined for the scale reads so an odd save (or a
       // student who pasted a scale into the wrong sub-step) still works.
-      var code = BONUS_GROUP_IDS["7"].map(bonusCode);
+      var code = BONUS_GROUP_IDS["9"].map(bonusCode);
       var all = code.join("\n");
       var paths = parseAssetPaths(code);
       return {
@@ -6495,7 +6496,7 @@
         }
       });
       // items - each one's artwork, colour and size come from its own
-      // CUSTOM_ITEMS entry (TODO 8), see pickCustomItemDef()
+      // CUSTOM_ITEMS entry (TODO 10), see pickCustomItemDef()
       items.forEach(function (it) {
         if (!it.active) return;
         var def = it.itemDef || {};
@@ -6591,7 +6592,7 @@
         } else if (effect) {
           statusLine("Collected " + name + " (effect: " + effect + " - not a built-in effect, so it's a safe no-op here).");
         } else {
-          statusLine(teachingNote("Collected an item, but TODO 8 isn't finished yet, so it has no effect."));
+          statusLine(teachingNote("Collected an item, but TODO 10 isn't finished yet, so it has no effect."));
         }
         playAudio("pickup");
         updateStatusGrid();
@@ -6663,7 +6664,7 @@
     function onHint() {
       var caps = capabilities();
       if (!caps.hint) return;
-      // ALLOW_PATH_HINT (TODO 6 Part 3/6) can switch the Hint button off
+      // ALLOW_PATH_HINT (TODO 8 Part 3/6) can switch the Hint button off
       // entirely - the Play tab has to respect the student's own setting,
       // or the game they are designing isn't the game they are testing.
       if (!playPacing().allowHint) {
@@ -6691,12 +6692,12 @@
       });
     }
 
-    // Loads the student's parsed CUSTOM_ITEMS (TODO 8) once (and again on
+    // Loads the student's parsed CUSTOM_ITEMS (TODO 10) once (and again on
     // refresh()) - see pickCustomItemDef(), which every spawned item uses.
     function loadCustomItems() {
-      if (!bonusGroupComplete("8")) { customItemDefs = null; return; }
+      if (!bonusGroupComplete("10")) { customItemDefs = null; return; }
       ensurePyodide().then(function (py) {
-        return py.runPythonAsync(traceHarness_customItems(bonusCode("8-1")));
+        return py.runPythonAsync(traceHarness_customItems(bonusCode("10-1")));
       }).then(function (json) {
         var d = JSON.parse(json);
         if (d.ok) {
@@ -6799,7 +6800,7 @@
         if (!mounted) return;
         refreshTitleCard();
         loadCustomItems();
-        // Picking a new sprite or size in TODO 7/8 should show up in the
+        // Picking a new sprite or size in TODO 9/8 should show up in the
         // game immediately, without waiting for the next round to start.
         refreshPlayImages();
         refreshChecklist();
@@ -7181,7 +7182,7 @@
       "",
       "Your progress when this was exported: " + summary.summaryText,
       "",
-      "Custom images/sounds (TODO 7):",
+      "Custom images/sounds (TODO 9):",
       "  Bundled assets are already included in assets/images/ and",
       "  assets/sounds/. If you uploaded your OWN images/sounds on the",
       "  website, copy those same files into THIS project's assets/images/",
@@ -7285,7 +7286,7 @@
 
     getConnectedDirHandle().then(function (handle) {
       if (!handle) {
-        container.appendChild(el("p", { class: "small muted mt-8", text: "Connect your project folder from TODO 7 to write your answers directly into your files instead (with automatic .bak backups)." }));
+        container.appendChild(el("p", { class: "small muted mt-8", text: "Connect your project folder from TODO 9 to write your answers directly into your files instead (with automatic .bak backups)." }));
         return;
       }
       var willChange = EXPORT_TODO_FILES.slice();
@@ -7470,9 +7471,9 @@
     ].join("\n"),
     // One entry per Bonus SUB-STEP now. A sub-step with no entry here
     // simply keeps its starter code, which is already working behaviour
-    // for every game.py sub-step - that is why 6-4 … 6-6, 7-8 and
-    // 8-2 … 8-6 are absent rather than listed as empty strings.
-    "6-1": [
+    // for every game.py sub-step - that is why 8-4 … 8-6, 9-8 and
+    // 10-2 … 10-6 are absent rather than listed as empty strings.
+    "8-1": [
       "ROUND_CONFIGS = [",
       '    {"rows": 9, "cols": 13, "cell_size": 38, "extra_open_walls": 6,',
       '     "bomb_count": 3, "custom_item_count": 3, "time_limit_seconds": 75},',
@@ -7480,58 +7481,58 @@
       '     "bomb_count": 6, "custom_item_count": 4, "time_limit_seconds": 60},',
       "]",
     ].join("\n"),
-    "6-2": "PLAYER_MOVE_DELAY_MS = 90",
-    "6-3": ["ALLOW_PATH_HINT = True", "MAX_HINT_COUNT = 2"].join("\n"),
-    "6-7": ["SHOW_DFS_GENERATION = True", "DFS_STEPS_PER_FRAME = 4"].join("\n"),
-    "6-8": ["STUDENT_NORMAL_WEIGHT = 0", "STUDENT_BOMB_WEIGHT = 1000"].join("\n"),
-    "7-1": [
+    "8-2": "PLAYER_MOVE_DELAY_MS = 90",
+    "8-3": ["ALLOW_PATH_HINT = True", "MAX_HINT_COUNT = 2"].join("\n"),
+    "8-7": ["SHOW_DFS_GENERATION = True", "DFS_STEPS_PER_FRAME = 4"].join("\n"),
+    "8-8": ["STUDENT_NORMAL_WEIGHT = 0", "STUDENT_BOMB_WEIGHT = 1000"].join("\n"),
+    "9-1": [
       'PLAYER_IMAGE_PATH = "assets/images/player_ninja.png"',
       'GOAL_IMAGE_PATH = "assets/images/goal_chest.png"',
     ].join("\n"),
-    "7-2": [
+    "9-2": [
       'BOMB_IMAGE_PATH = "assets/images/bomb_2.png"',
       'FLOOR_TILE_IMAGE_PATH = "assets/images/floor_tile_1.png"',
     ].join("\n"),
-    "7-3": [
+    "9-3": [
       "PLAYER_IMAGE_SCALE = 1.1",
       "GOAL_IMAGE_SCALE = 1.0",
       "BOMB_IMAGE_SCALE = 0.9",
     ].join("\n"),
-    "7-4": [
+    "9-4": [
       "WALL_COLOR = (30, 41, 59)",
       "PLAYER_COLOR = (37, 99, 235)",
       "GOAL_COLOR = (250, 204, 21)",
     ].join("\n"),
-    "7-5": [
+    "9-5": [
       "BOMB_COLOR = (15, 23, 42)",
       "BOMB_EXPLOSION_COLOR = (239, 68, 68)",
     ].join("\n"),
-    "7-6": [
+    "9-6": [
       'BOMB_SOUND_PATH = "assets/sounds/explosion_1.wav"',
       'BACKGROUND_MUSIC_PATH = "assets/sounds/bgm_1.wav"',
     ].join("\n"),
-    "7-7": [
+    "9-7": [
       "BOMB_EXPLOSION_DURATION_MS = 500",
       "BACKGROUND_MUSIC_VOLUME = 0.25",
     ].join("\n"),
-    "7-9": 'BOMB_EXPLOSION_IMAGE_PATH = "assets/images/explode.png"',
-    "7-10": [
+    "9-9": 'BOMB_EXPLOSION_IMAGE_PATH = "assets/images/explode.png"',
+    "9-10": [
       "VISITED_COLOR = (30, 64, 90)",
       "CURRENT_CELL_COLOR = (251, 191, 36)",
       "PATH_COLOR = (34, 255, 136)",
     ].join("\n"),
-    "7-11": [
+    "9-11": [
       "BACKGROUND_COLOR = (12, 18, 32)",
       "PANEL_COLOR = (24, 34, 56)",
       "PANEL_BORDER = (60, 78, 112)",
     ].join("\n"),
-    "7-12": [
+    "9-12": [
       "ACCENT = (56, 189, 248)",
       "SUCCESS = (34, 197, 94)",
       "WARNING = (250, 204, 21)",
       "DANGER = (248, 113, 113)",
     ].join("\n"),
-    "8-1": [
+    "10-1": [
       [
         "CUSTOM_ITEMS = [",
         "    {",
@@ -7564,13 +7565,13 @@
         "]",
       ].join("\n"),
     ].join("\n"),
-    "9-1": [
+    "11-1": [
       "MISSION_RULES = [",
       '    "Reach the vault before time runs out.",',
       '    "Grab crystals along the way for extra seconds.",',
       "]",
     ].join("\n"),
-    "9-2": [
+    "11-2": [
       "HOW_TO_PLAY_RULES = [",
       '    "Move with the Arrow Keys (or E/F/C/D on a controller).",',
       '    "One key press moves you one cell.",',
@@ -7671,7 +7672,7 @@
   // Reuses traceHarness_titleCard exactly as the in-page TitleCardViz does
   // (see 14b) - once with TODO 1's own code (for TITLE/GAME_SUBTITLE; its
   // mission/howto fields come back empty since TODO 1 doesn't define those,
-  // which is fine, they're ignored here) and once with TODO 9's own code
+  // which is fine, they're ignored here) and once with TODO 11's own code
   // (for MISSION_RULES/HOW_TO_PLAY_RULES; its title/subtitle fields come
   // back as fallback placeholders, likewise ignored) - the gate needs both
   // halves showing at once, regardless of which step a student happens to
@@ -7693,15 +7694,15 @@
       refs.subtitle.hidden = true;
     });
 
-    // The rules TEXT lives in TODO 9-1 (the mission) and 9-2 (how to
-    // play) - the two settings.py halves of the TODO 9 group, which is
+    // The rules TEXT lives in TODO 11-1 (the mission) and 11-2 (how to
+    // play) - the two settings.py halves of the TODO 11 group, which is
     // still not a locked "capstone". This is the ONE narrow, explicitly
     // authorized exception to "never show TODO-numbered language in kiosk
     // mode" (see teachingNote() in PlayEngine) - everywhere else in this
     // window stays silent about unfinished work; this single placeholder
     // is allowed because there is no non-TODO-referencing way to explain
     // why the rules section is empty.
-    var RULES_STEP_IDS = ["9-1", "9-2"];
+    var RULES_STEP_IDS = ["11-1", "11-2"];
     var rulesDone = RULES_STEP_IDS.every(function (rid) {
       return !!(state.steps[rid] && state.steps[rid].status === "completed");
     });
