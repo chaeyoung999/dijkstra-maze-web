@@ -3521,6 +3521,12 @@
 
   // ---------------------------------------------------- image asset cache
   var IMAGE_CACHE = {};
+  // Asset path ("assets/images/star.png") -> blob: URL for bytes the student
+  // uploaded in TODO 9's asset picker. Declared up here, next to the cache it
+  // cooperates with, so it exists before anything can load an image; the
+  // functions that fill it live with the rest of the upload code below.
+  var UPLOADED_URLS = {};
+
   function loadImageCached(path) {
     if (!path) return Promise.resolve(null);
     if (IMAGE_CACHE[path]) return IMAGE_CACHE[path];
@@ -3528,7 +3534,10 @@
       var img = new Image();
       img.onload = function () { resolve(img); };
       img.onerror = function () { resolve(null); };
-      img.src = path;
+      // An uploaded file has no copy on the server, so it loads from its
+      // in-browser blob: URL instead. Cached under the ORIGINAL path so
+      // callers (and the code the student wrote) keep using real paths.
+      img.src = resolveAssetPath(path);
     });
     IMAGE_CACHE[path] = p;
     return p;
@@ -5719,6 +5728,17 @@
   var IMAGE_EXT_OK = ["png", "jpg", "jpeg", "gif", "webp"];
   var SOUND_EXT_OK = ["wav", "mp3", "ogg"];
   var IDB_NAME = "dijkstraMazeAssets", IDB_STORE = "handles", IDB_DIR_KEY = "projectDir";
+  // Second store: the actual BYTES of files a student uploads, keyed by the
+  // asset path the code refers to ("assets/images/star.png") -> Blob.
+  //
+  // Why this exists: on the deployed website there is no Python project
+  // folder to connect to, so the File System Access path below can never
+  // fire. Without somewhere to put the bytes, an upload used to only write
+  // a path string into the student's code while the file itself went to
+  // their Downloads folder - so every preview and the Play tab showed
+  // "not found" for a picture they had just chosen. Keeping the blob here
+  // makes an upload work with no folder, no download, and no local Python.
+  var IDB_UPLOADS = "uploads";
 
   // Takes TODO 9's whole per-part code array (or any subset of it) and
   // reads every NAME = None | "path" it can find. Scanning the parts that
@@ -5741,31 +5761,126 @@
   function idbOpen() {
     return new Promise(function (resolve, reject) {
       if (!window.indexedDB) { reject(new Error("IndexedDB not available")); return; }
-      var req = indexedDB.open(IDB_NAME, 1);
-      req.onupgradeneeded = function () { req.result.createObjectStore(IDB_STORE); };
+      // Version 2 added IDB_UPLOADS. Returning students already have a
+      // version-1 database holding only IDB_STORE, so create each store
+      // only if it is actually missing rather than assuming a fresh db.
+      var req = indexedDB.open(IDB_NAME, 2);
+      req.onupgradeneeded = function () {
+        var db = req.result;
+        if (!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE);
+        if (!db.objectStoreNames.contains(IDB_UPLOADS)) db.createObjectStore(IDB_UPLOADS);
+      };
       req.onsuccess = function () { resolve(req.result); };
       req.onerror = function () { reject(req.error); };
+      // Fires instead of onsuccess when another tab still holds this
+      // database open at the older version. Without this the promise would
+      // never settle and every caller would hang forever.
+      req.onblocked = function () { reject(new Error("Another tab has this site open — close it and reload.")); };
     });
   }
-  function idbGet(key) {
+  function idbGet(key, storeName) {
+    var store = storeName || IDB_STORE;
     return idbOpen().then(function (db) {
       return new Promise(function (resolve, reject) {
-        var tx = db.transaction(IDB_STORE, "readonly");
-        var r = tx.objectStore(IDB_STORE).get(key);
+        var tx = db.transaction(store, "readonly");
+        var r = tx.objectStore(store).get(key);
         r.onsuccess = function () { resolve(r.result); };
         r.onerror = function () { reject(r.error); };
       });
     }).catch(function () { return null; });
   }
-  function idbSet(key, val) {
+  function idbSet(key, val, storeName) {
+    var store = storeName || IDB_STORE;
     return idbOpen().then(function (db) {
       return new Promise(function (resolve, reject) {
-        var tx = db.transaction(IDB_STORE, "readwrite");
-        tx.objectStore(IDB_STORE).put(val, key);
+        var tx = db.transaction(store, "readwrite");
+        tx.objectStore(store).put(val, key);
+        tx.oncomplete = function () { resolve(); };
+        tx.onerror = function () { reject(tx.error); };
+      });
+    });
+  }
+  function idbDelete(key, storeName) {
+    var store = storeName || IDB_STORE;
+    return idbOpen().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(store, "readwrite");
+        tx.objectStore(store).delete(key);
         tx.oncomplete = function () { resolve(); };
         tx.onerror = function () { reject(tx.error); };
       });
     }).catch(function () {});
+  }
+  function idbAllUploads() {
+    return idbOpen().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(IDB_UPLOADS, "readonly");
+        var store = tx.objectStore(IDB_UPLOADS);
+        var keysReq = store.getAllKeys();
+        var valsReq = store.getAll();
+        tx.oncomplete = function () {
+          var out = {};
+          (keysReq.result || []).forEach(function (k, i) { out[k] = (valsReq.result || [])[i]; });
+          resolve(out);
+        };
+        tx.onerror = function () { reject(tx.error); };
+      });
+    }).catch(function () { return {}; });
+  }
+
+  function resolveAssetPath(path) {
+    if (!path) return path;
+    return UPLOADED_URLS[path] || path;
+  }
+
+  // Loaded once at startup so uploads survive a reload / a new session on
+  // the same browser. Resolves even on failure - a browser with IndexedDB
+  // blocked simply has no uploads, which is not an error worth surfacing.
+  function loadUploadedAssets() {
+    return idbAllUploads().then(function (map) {
+      Object.keys(map).forEach(function (path) {
+        var blob = map[path];
+        if (!blob) return;
+        try { UPLOADED_URLS[path] = URL.createObjectURL(blob); } catch (e) {}
+      });
+    });
+  }
+
+  function rememberUploadedAsset(path, blob) {
+    return idbSet(path, blob, IDB_UPLOADS).then(function () {
+      if (UPLOADED_URLS[path]) {
+        try { URL.revokeObjectURL(UPLOADED_URLS[path]); } catch (e) {}
+      }
+      UPLOADED_URLS[path] = URL.createObjectURL(blob);
+      // A path can be re-uploaded (same name, new picture), so drop any
+      // image already cached under it or the old one would keep showing.
+      delete IMAGE_CACHE[path];
+      return true;
+    });
+  }
+
+  function forgetUploadedAsset(path) {
+    if (UPLOADED_URLS[path]) {
+      try { URL.revokeObjectURL(UPLOADED_URLS[path]); } catch (e) {}
+      delete UPLOADED_URLS[path];
+    }
+    delete IMAGE_CACHE[path];
+    return idbDelete(path, IDB_UPLOADS);
+  }
+
+  // Single place that turns an asset path into a playable Audio object, so
+  // uploaded sounds work everywhere bundled ones do.
+  function audioForPath(path) {
+    if (!path) return null;
+    try { return new Audio(resolveAssetPath(path)); } catch (e) { return null; }
+  }
+  function playAssetPath(path) {
+    var a = audioForPath(path);
+    if (!a) return;
+    try {
+      var r = a.play();
+      if (r && r.catch) r.catch(function () {});
+    } catch (e) {}
   }
 
   function sanitizeFilename(name) {
@@ -5842,7 +5957,8 @@
 
     function renderInstructions(container) {
       var box = el("div", { class: "asset-instructions" });
-      box.appendChild(el("div", { class: "sidebar-group-title", text: "How custom uploads work" }));
+      box.appendChild(el("div", { class: "sidebar-group-title", text: "Optional: also copy uploads into a local Python project" }));
+      box.appendChild(el("p", { class: "small muted", text: "You do NOT need this to upload a picture or a sound. Uploading already works on its own — the file is kept in this browser and shows up in the preview and the Play tab immediately. Connect a folder only if you have the Python project on this computer and want your uploads copied straight into it." }));
       var diagram = el("div", { class: "asset-folder-diagram", html:
         '<svg viewBox="0 0 20 20" class="icon"><path d="M2 5a1 1 0 0 1 1-1h4l1.5 2H17a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5z" fill="currentColor" opacity="0.85"/></svg> dijkstra_maze/<br>' +
         '&nbsp;&nbsp;<svg viewBox="0 0 20 20" class="icon"><path d="M2 5a1 1 0 0 1 1-1h4l1.5 2H17a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5z" fill="currentColor" opacity="0.85"/></svg> student/  ← select THIS folder<br>' +
@@ -5856,11 +5972,11 @@
         el("li", {}, ["Click \"Connect my project folder\" below. Your browser will ask for permission — that's normal. The site can only read/write inside the one folder you pick."]),
         el("li", {}, ["Select your ", el("code", { text: "dijkstra_maze/student" }), " folder — the one with ", el("code", { text: "settings.py" }), " directly inside (see the diagram above)."]),
         el("li", {}, ["Click \"Allow\" in the dialog. Clicked \"Deny\" by mistake? Just press \"Connect my project folder\" again."]),
-        el("li", {}, ["Drag a file onto a slot below, or use its \"Upload\" button. It's copied into your ", el("code", { text: "assets/" }), " folder and the path is written into your code automatically."]),
+        el("li", {}, ["From then on, every file you upload is also written into your ", el("code", { text: "assets/" }), " folder, on top of being stored here."]),
         el("li", {}, ["Next time, one click on \"Reconnect\" — no need to pick the folder again."]),
       ]);
       box.appendChild(steps);
-      box.appendChild(el("p", { class: "small muted", text: "Browser doesn't support this (or you're on file://)? Uploads still work — the site prepares a renamed download and tells you exactly where to put it." }));
+      box.appendChild(el("p", { class: "small muted", text: "No project folder on this computer (or a browser that doesn't support this)? Nothing to do — keep uploading as normal, and use \"Download a copy\" if you later want the file on disk." }));
       container.appendChild(box);
     }
 
@@ -5875,10 +5991,10 @@
       function setStatus(text, cls) { statusEl.textContent = text; statusEl.className = "small " + (cls || ""); }
 
       if (window.location.protocol === "file:") {
-        setStatus("You're on file:// — connect only works over http(s). Run 로컬서버_실행.bat, then reload.", "verdict-bad-text");
+        setStatus("You're on file:// — connecting a folder only works over http(s). Uploading still works.", "muted");
         connectBtn.disabled = true;
       } else if (!window.showDirectoryPicker) {
-        setStatus("Your browser doesn't support folder access (try Chrome or Edge). Upload still works via download instead.", "muted");
+        setStatus("This browser can't connect a folder (try Chrome or Edge). Uploading still works.", "muted");
         connectBtn.disabled = true;
       } else {
         idbGet(IDB_DIR_KEY).then(function (handle) {
@@ -5969,13 +6085,30 @@
       if (sanitized.changed) warnings.push("Renamed to \"" + finalName + "\" (spaces/non-English characters cause problems for pygame file paths).");
       if (slot.kind === "sound" && ext !== "wav") warnings.push("pygame handles WAV most reliably — " + ext.toUpperCase() + " may not play on every machine.");
 
+      // Storing the bytes in the browser is the step that makes an upload
+      // actually usable HERE - previews and the Play tab load from it. That
+      // has to happen whether or not a local project folder is connected,
+      // because on the deployed site there is no project folder at all.
+      // Writing into a connected folder is a bonus on top, for students who
+      // also run the Python project locally.
       function afterFileReady(blob) {
-        var save = dirHandle ? saveViaDirectoryHandle(slot.kind, finalName, blob) : Promise.reject(new Error("no-handle"));
-        save.then(function () {
-          finishUpload(slot, finalName, warnings.concat(["Saved directly into your project's assets/ folder ✓"]));
-        }).catch(function () {
+        var path = pathFor(finalName, slot.kind);
+        rememberUploadedAsset(path, blob).then(function () {
+          if (!dirHandle) {
+            finishUpload(slot, finalName, warnings.concat(["Saved in this browser ✓ — it shows up in the preview and the Play tab right away. To use it in the downloaded Python project too, press \"Download a copy\" in the list below."]));
+            return;
+          }
+          saveViaDirectoryHandle(slot.kind, finalName, blob).then(function () {
+            finishUpload(slot, finalName, warnings.concat(["Saved in this browser and written into your project's assets/ folder ✓"]));
+          }).catch(function () {
+            finishUpload(slot, finalName, warnings.concat(["Saved in this browser ✓, but writing into your connected project folder failed. Press \"Download a copy\" in the list below and move it into assets/" + (slot.kind === "image" ? "images" : "sounds") + "/ yourself."]));
+          });
+        }).catch(function (err) {
+          // No IndexedDB (private-mode quirks, storage full/blocked): fall
+          // back to the old download-and-copy route rather than pretending
+          // the upload worked.
           downloadFallback(finalName, blob);
-          finishUpload(slot, finalName, warnings.concat(["Downloaded \"" + finalName + "\" — move it into assets/" + (slot.kind === "image" ? "images" : "sounds") + "/ in your project folder, then this path will work in the game."]));
+          finishUpload(slot, finalName, warnings.concat(["This browser wouldn't let the site store your file (" + (err && err.message ? err.message : "storage unavailable") + "), so it was downloaded instead. Previews here will show \"not found\" until you run the project locally with the file in assets/" + (slot.kind === "image" ? "images" : "sounds") + "/."]));
         });
       }
 
@@ -6011,20 +6144,40 @@
       state.assetData.uploadedFiles.push({ name: finalName, kind: slot.kind, addedAt: Date.now() });
       persist();
       writeAssetSlot(slot, '"' + pathFor(finalName, slot.kind) + '"');
+      // Redraw so the "Preview in context" canvas and the uploaded-file list
+      // pick up the file that was just stored, instead of waiting for the
+      // next unrelated render.
+      renderAllPanels();
+      if (typeof PlayEngine !== "undefined" && PlayEngine.refresh) PlayEngine.refresh();
       if (warnings && warnings.length) {
         showConfirm("Upload complete", warnings.join(" "), { confirmLabel: "OK", cancelLabel: "Close" });
       }
     }
 
+    function downloadUploadedCopy(file) {
+      var path = pathFor(file.name, file.kind);
+      idbGet(path, IDB_UPLOADS).then(function (blob) {
+        if (!blob) {
+          showConfirm(
+            "That file isn't stored here anymore",
+            "\"" + file.name + "\" is listed, but its contents aren't in this browser (this happens if it was added on another computer, or if browser storage was cleared). Upload it again to get a copy.",
+            { confirmLabel: "OK", cancelLabel: "Close" }
+          );
+          return;
+        }
+        downloadFallback(file.name, blob);
+      });
+    }
+
     function removeUploaded(file) {
-      showConfirm("Remove from your uploaded list?", "\"" + file.name + "\" will no longer be tracked here. If it's already saved to disk it will stay there unless you delete it yourself.", { confirmLabel: "Remove", dangerConfirm: true }).then(function (ok) {
+      showConfirm("Remove this file?", "\"" + file.name + "\" will be deleted from this browser, so previews and the Play tab will stop showing it. Any copy you downloaded, or that was written into a connected project folder, is not affected.", { confirmLabel: "Remove", dangerConfirm: true }).then(function (ok) {
         if (!ok) return;
         state.assetData.uploadedFiles = state.assetData.uploadedFiles.filter(function (f) { return !(f.name === file.name && f.kind === file.kind); });
         persist();
-        if (dirHandle) {
-          dirHandle.getDirectoryHandle("assets").then(function (a) { return a.getDirectoryHandle(file.kind === "image" ? "images" : "sounds"); }).then(function (sub) { return sub.removeEntry(file.name).catch(function () {}); }).catch(function () {});
-        }
-        renderAllPanels();
+        forgetUploadedAsset(pathFor(file.name, file.kind)).then(function () {
+          renderAllPanels();
+          if (typeof PlayEngine !== "undefined" && PlayEngine.refresh) PlayEngine.refresh();
+        });
       });
     }
 
@@ -6063,7 +6216,7 @@
         var list = el("ul", { class: "asset-sound-list" });
         KNOWN_ASSETS.sounds.forEach(function (fname) {
           var li = el("li", {}, [
-            el("button", { class: "btn btn-small", type: "button", text: "▶", "aria-label": "Preview " + fname, onclick: function () { try { new Audio("assets/sounds/" + fname).play().catch(function () {}); } catch (e) {} } }),
+            el("button", { class: "btn btn-small", type: "button", text: "▶", "aria-label": "Preview " + fname, onclick: function () { playAssetPath("assets/sounds/" + fname); } }),
             el("span", { text: " " + fname + " " }),
             el("button", { class: "btn btn-small btn-secondary", type: "button", text: "Use", onclick: function () { writeAssetSlot(slot, '"' + pathFor(fname, "sound") + '"'); } }),
           ]);
@@ -6136,7 +6289,7 @@
         }
       } else {
         if (val) {
-          box.appendChild(el("button", { class: "btn btn-small btn-primary", type: "button", text: "▶ Play " + val.split("/").pop(), onclick: function () { try { new Audio(val).play().catch(function () {}); } catch (e) {} } }));
+          box.appendChild(el("button", { class: "btn btn-small btn-primary", type: "button", text: "▶ Play " + val.split("/").pop(), onclick: function () { playAssetPath(val); } }));
         } else {
           box.appendChild(el("p", { class: "small muted", text: "None selected — silent." }));
         }
@@ -6147,16 +6300,27 @@
     function renderUploadedList(container) {
       if (!state.assetData.uploadedFiles.length) return;
       var box = el("div", { class: "asset-uploaded-list" });
-      box.appendChild(el("div", { class: "sidebar-group-title", text: "Files you've added this session" }));
+      box.appendChild(el("div", { class: "sidebar-group-title", text: "Files you've added" }));
       var ul = el("ul");
       state.assetData.uploadedFiles.forEach(function (f) {
-        ul.appendChild(el("li", {}, [
+        var path = pathFor(f.name, f.kind);
+        var stored = !!UPLOADED_URLS[path];
+        var row = el("li", {}, [
           f.name + " (" + f.kind + ") ",
-          el("button", { class: "btn btn-small btn-outline-danger", type: "button", text: "Remove", onclick: function () { removeUploaded(f); } }),
-        ]));
+        ]);
+        if (stored) {
+          if (f.kind === "sound") {
+            row.appendChild(el("button", { class: "btn btn-small", type: "button", text: "▶", "aria-label": "Preview " + f.name, onclick: function () { playAssetPath(path); } }));
+          }
+          row.appendChild(el("button", { class: "btn btn-small", type: "button", text: "Download a copy", onclick: function () { downloadUploadedCopy(f); } }));
+        } else {
+          row.appendChild(el("span", { class: "small verdict-bad-text", text: "not stored in this browser — upload again to use it here " }));
+        }
+        row.appendChild(el("button", { class: "btn btn-small btn-outline-danger", type: "button", text: "Remove", onclick: function () { removeUploaded(f); } }));
+        ul.appendChild(row);
       });
       box.appendChild(ul);
-      box.appendChild(el("p", { class: "small muted", text: "Metadata only, saved with your progress — the actual files live on your disk, so keep them. Exporting progress.json does not back up the images/sounds themselves." }));
+      box.appendChild(el("p", { class: "small muted", text: "These are stored in this browser, so they keep working here after a reload. They are NOT inside progress.json — on a different computer you'd upload them again. Use \"Download a copy\" to get the file for the Python project you download." }));
       container.appendChild(box);
     }
 
@@ -6795,12 +6959,17 @@
       refs.pauseBtn.textContent = isRunning ? "Pause" : "Resume";
     }
 
+    // `name` is either one of SPRITE_SOUND's built-in keys or a raw asset
+    // path (so a student's own uploaded sound plays here too, via
+    // resolveAssetPath inside audioForPath).
     function playAudio(name) {
       if (!soundOn) return;
+      var a = audioForPath(SPRITE_SOUND[name] || name);
+      if (!a) return;
       try {
-        var a = new Audio(SPRITE_SOUND[name]);
         a.volume = 0.5;
-        a.play().catch(function () {});
+        var r = a.play();
+        if (r && r.catch) r.catch(function () {});
       } catch (e) { /* ignore */ }
     }
     var SPRITE_SOUND = {
@@ -8139,17 +8308,32 @@
     migrateSavedCode: migrateSavedCode,
   };
 
+  // Pulls the student's uploaded images/sounds out of IndexedDB into
+  // UPLOADED_URLS. Deliberately does NOT block the first paint: if the
+  // browser is slow, has storage disabled, or another tab is holding the
+  // database open, the app still starts - and any files that do load
+  // trigger one extra render so previews pick them up.
+  function initUploadedAssets(onLoaded) {
+    loadUploadedAssets().then(function () {
+      if (Object.keys(UPLOADED_URLS).length && onLoaded) onLoaded();
+    }).catch(function () { /* uploads are optional; never block the app */ });
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     if (isShowcaseMode()) {
       // Seeded in memory only: saveState() is disabled for this window, so
       // opening the demo can never overwrite a student's real progress.
       state = showcaseState();
+      initUploadedAssets(function () { if (PlayEngine.refresh) PlayEngine.refresh(); });
       initKioskMode();
       return;
     }
     state = loadState();
     if (computeStatus(state.currentStepId) === "locked") state.currentStepId = STEPS[0].id;
     if (isKioskMode()) {
+      // The Play popout draws the student's own sprites, so it needs the
+      // uploaded files too.
+      initUploadedAssets(function () { if (PlayEngine.refresh) PlayEngine.refresh(); });
       initKioskMode();
       return;
     }
@@ -8158,6 +8342,10 @@
     initFileProtocolBanner();
     initPlayPopoutButton();
     initFullscreenToggle("#stepViewFullscreenBtn", "#vizPanel");
+    initUploadedAssets(function () {
+      renderAll();
+      if (PlayEngine.refresh) PlayEngine.refresh();
+    });
     renderAll();
   });
 })();

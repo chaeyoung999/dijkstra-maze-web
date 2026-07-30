@@ -24,6 +24,106 @@ Required TODO를 **6·7번 두 개 추가**하기 위해 Bonus 묶음 번호를 
 **아래 옛 세션 기록의 번호는 그때 당시 번호입니다** (역사 기록이라 일부러 안 고쳤습니다).
 이 표로 환산해서 읽으세요.
 
+### 지금의 전체 구조 (37단계 · 코드 칸 38개)
+
+| | 단계 | 시작 상태 | 채점 |
+|---|---|---|---|
+| **Required 1~5** | 5 | **정답 선행 제공** · `prefilled: true` · 열면 바로 `completed` | 엄격 (열자마자 통과) |
+| **Required 6~7** | 2 | **빈칸 (진짜 과제)** · `available` 로 시작 | 엄격 |
+| **Bonus 8-1 … 11-4** | 30 | 그대로 (일부는 "동작하는 값을 바꿔라") | 개방형 "안 터지면 통과" |
+
+**Required 6·7을 끝내야 Bonus가 열립니다.** (새로 열면 Bonus는 잠겨 있습니다 — 의도된 동작.)
+
+---
+
+## 🟢 체크포인트 3 — 배포된 사이트에서 이미지/소리 업로드가 실제로 동작
+
+**증상 (선생님 보고)**: "웹사이트에서 이미지 첨부가 안 된다. 내 로컬 파일에서만 된다. 자꾸 에러난다."
+
+**원인**: 업로드는 파일 바이트를 **어디에도 저장하지 않았습니다.** 로컬 프로젝트 폴더가
+연결돼 있을 때만 거기에 썼고, 아니면 그냥 **다운로드**시킨 뒤 코드에는
+`assets/images/foo.png` 경로만 적었습니다. 배포된 사이트에는 그 파일이 없으니
+미리보기와 Play 탭은 **"not found"** 만 표시 — 학생 입장에선 그냥 에러.
+게다가 학생은 파이썬 프로젝트 폴더 자체가 없어서 "Connect my project folder" 도 무의미.
+
+**해결**: IndexedDB 에 **업로드 저장소(`uploads`)** 를 추가. DB 버전 1 → 2.
+
+- 업로드하면 항상 브라우저에 바이트가 저장됨 (`assets/images/foo.png` → Blob).
+- `UPLOADED_URLS` 레지스트리 + `resolveAssetPath()` 가 경로 → `blob:` URL 로 변환.
+- `loadImageCached()` 와 새 `audioForPath()` / `playAssetPath()` 가 전부 이걸 통과 —
+  그래서 미리보기·Play 탭·키오스크 모두 자동으로 업로드한 파일을 그림.
+- 폴더 연결은 이제 **선택 사항**(로컬 파이썬 프로젝트가 있는 학생용 보너스)으로 문구 정리.
+- 업로드 목록에 **"Download a copy"** 버튼 추가 (파이썬 프로젝트에 넣고 싶을 때).
+- 새로고침해도 유지됨. 같은 이름 재업로드 시 옛 blob URL revoke + 이미지 캐시 무효화.
+- IndexedDB 가 막힌 브라우저면 **조용히 성공한 척하지 않고** 다운로드 폴백 + 사실대로 안내.
+- 다른 탭이 옛 DB 버전을 잡고 있을 때 `onblocked` 로 reject — 안 그러면 부팅이 영원히 멈춤.
+- 업로드 로딩은 첫 렌더를 **막지 않음** (로드되면 한 번 더 렌더).
+
+**주의**: 업로드 파일은 여전히 `progress.json` 에 안 들어갑니다 (브라우저 저장소에만).
+다른 컴퓨터에서는 다시 올려야 합니다. 문구에 그대로 적어놨습니다.
+
+**테스트**: `node tests/test_asset_uploads.js` — 19개 검증 (app.js 에서 함수를 그대로
+추출해 가짜 IndexedDB 로 실행). 기존 테스트 3종도 전부 통과.
+
+---
+
+## 🟢 체크포인트 2 — Required 6·7 신규 추가 (완료·푸시) `baea5c8`
+
+Required 1~5가 정답 선행 제공으로 바뀌면서 **Required에 실제 과제가 하나도 남지 않았습니다.**
+그래서 **진짜 빈칸 과제 두 개**를 새로 넣었습니다. 둘 다 원래 **완성돼 있고 어떤 TODO도
+가져가지 않은** 코드에서 꺼냈습니다 — **Bonus에서 뺏어온 것이 아닙니다.**
+
+| TODO | 파일 | 함수 | 학생이 쓰는 것 |
+|---|---|---|---|
+| **6** | `game.py` | `check_bombs()` | `for bomb in self.bombs:` 의 **몸통 전체** — 플레이어와 같은 칸에 있는 살아 있는 폭탄을 찾아 터뜨리고 플레이어를 시작점으로 되돌리기 |
+| **7** | `game.py` | `check_time_limit()` | 시간이 0 이하가 되면 `round_failed = True` + `failure_reason` 메시지 |
+
+- **채점은 Required 1~5가 원래 그랬던 것처럼 엄격**합니다 (Bonus의 "안 터지면 통과" 아님).
+- 힌트는 규칙대로 **각 1개, 거의 정답 수준**.
+- TODO 6의 마커가 루프 몸통 전체(7줄)로 TODO 3보다 큽니다. **의도한 것입니다** —
+  찾기→터뜨리기→되돌리기→멈추기가 한 덩어리라, 더 작게 쪼개려면 **정답 구현 자체를
+  바꿔야** 했고 그건 허용 범위가 아니었습니다.
+- 시각화 패널은 `bombReset` / `roundTimer` 라는 새 이름을 씁니다. **구현이 없어서 기존
+  플레이스홀더 패널("Visualization coming in a future update")이 뜹니다.** `playerMove`를
+  재사용하면 TODO 2/3/4 코드를 미리보기하므로 **이 단계와 무관한 걸 보여줘서** 일부러
+  피했습니다. → **다음 세션 우선 후보**(아래 "남은 일" 참조).
+
+### ⚠️ `prefilled` 플래그 — `required` 로 판단하면 안 됩니다
+
+중간에 들어온 커밋 `8359ea6` 이 `defaultStepState()` 를
+`status: step.required ? "completed" : "available"` 로 바꿨습니다. 근거는 "Required는
+정답이 이미 있으니 채점할 게 없다" 였는데, **1~5에는 맞지만 새 6·7에는 틀립니다.**
+
+그래서 `data.js` 의 Required **1~5에만 `prefilled: true`** 를 달고,
+`defaultStepState()` 는 **`step.prefilled`** 를 봅니다.
+6·7은 `required: true` 는 유지(순서·Bonus 잠금용)하되 **`available` 로 시작**합니다.
+이게 없으면 **학생이 하지도 않은 작업을 통과 처리**받습니다.
+
+**따라온 결과 (의도한 것입니다)**: 새로 열면 **Bonus가 다시 잠겨 있습니다.**
+6·7을 끝내야 Required가 끝나기 때문입니다. Bonus가 바로 열리면 **남은 단 두 개의 Required
+과제를 그냥 지나칠 수 있어서**, 이쪽이 맞습니다. `8359ea6` 의 "새로 열면 Bonus가 열려 있다"
+검사는 새 구조에 맞는 검사들로 **교체**했고, 잠금 규칙 회귀 케이스는 **더 강하게** 만들었습니다
+(전부 완료 상태에서 **7개를 하나씩 되돌려** 검사 — 새 상태에서 하나 되돌리는 건 무의미).
+
+### 검증
+
+- `test_alt_implementations.py` 에 **새 케이스 22개** (전체 **124개** 통과):
+  정답, **서로 다르지만 맞는 구현 5가지**, 그리고 negative control —
+  `<= 0` 대신 `== 0` · 시간 남았는데 실패시킴 · 메시지 없음 · 폭탄 위치 안 봄 ·
+  플레이어 안 움직임 · 소리 파일 없을 때 `bomb_sound.play()` 크래시 · 손 안 댄 스타터 · 무한루프.
+- **negative control 하나가 자기 전제를 반증했습니다**: `bomb.trigger()` 를 감싼 `if` 를
+  빼도 **맞습니다** — `trigger()` 는 state가 ACTIVE가 아닐 때만 False를 돌려주고, 바깥
+  조건이 이미 그걸 걸러내기 때문입니다. 지금은 **통과하는 대안**으로 문서화했고, 하네스는
+  **두 가드 중 최소 하나**를 요구하며, **둘 다 없는** 진짜 오답 케이스로 그 요구가 실제로
+  작동함을 증명합니다. (지우지 않고 남긴 이유: 다음 사람이 같은 착각을 반복하지 않도록.)
+- 실제 headless pygame end-to-end: `complete/` 는 폭탄에서 (0,0)으로 되돌아가고 bomb이
+  EXPLODING이 되고 시간 초과로 라운드 실패 + 메시지가 나옵니다. **빈칸인 `student/` 는 둘 다
+  안 됩니다** — 그래서 진짜 과제입니다.
+- `SHOWCASE_CODE` 에 6·7 항목을 넣었습니다. 없으면 시연 모드가 두 단계를 "완료"로 표시하면서
+  편집기에는 `pass` 를 보여줍니다. 둘 다 **일부러 다른 모양의 동등 구현**이고, 각각
+  `test_alt_implementations.py` 의 이름 붙은 케이스로 못박았습니다.
+- 테스트 **6종 전부 통과**.
+
 ---
 
 ## 🟢 체크포인트 1 — Required 1~5를 정답이 미리 채워진 상태로 배포 (완료·푸시)
@@ -319,12 +419,22 @@ Play 탭이 멈출 수 있습니다. `traceHarness_playerMove` 에 넣은 `_prev
 
 ```
 cd C:\Users\손채영\Desktop\kazh\pygame\dijkstra_maze_web
-node   tests/test_app_load.js               # 가장 빠름 (구조 + 잠금 규칙)
-node   tests/test_project_export.js         # 이번에 추가 (zip 내용물 + 실제 실행)
+node   tests/test_app_load.js               # 가장 빠름 (구조 + 잠금 규칙 + 선행제공 불변식)
+node   tests/test_project_export.js         # zip 내용물 + 실제 파이썬 실행
 node   tests/test_board_sizing.js           # 보드 크기
-python tests/test_alt_implementations.py    # 102 케이스
+python tests/test_alt_implementations.py    # 124 케이스 (6·7 추가로 102 → 124)
 python tests/test_trace_harnesses.py        # 18 케이스
+python tests/test_prefilled_required.py     # 신규 — 새로 열고 Run만 눌러도 통과하는지
 ```
+
+**테스트 6종입니다** (`test_prefilled_required.py` 가 이번에 추가됐습니다).
+`tests/_dump_fresh_code.js` 는 그 테스트의 보조 파일로, app.js 의 `freshState()` 가
+편집기에 넣는 코드를 JSON 으로 덤프합니다.
+
+> **하네스를 새로 만들면 `tests/extract_harnesses.py` 의 `FUNCS` 목록에 반드시 추가하세요.**
+> 안 넣으면 cscript 가 "그런 함수 없음"으로 죽습니다. `harness_bombCollision_6` 은
+> `buildFnSourceBombLoop` 도 같이 필요합니다(학생 코드가 `for` 루프의 몸통이라
+> 루프까지 생성해야 `break` 가 문법적으로 유효합니다).
 
 Node 는 PATH 에 없습니다: `C:\Users\손채영\tools\node-v22.14.0-win-x64\node.exe`
 파이썬 출력이 깨지면 `PYTHONIOENCODING=utf-8` 을 붙이세요 (콘솔이 cp949).
