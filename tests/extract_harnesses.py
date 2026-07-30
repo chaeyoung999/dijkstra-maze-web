@@ -276,6 +276,10 @@ FUNCS = [
     # `for` loop and contains a `break`, so the loop has to be generated too.
     "buildFnSourceBombLoop",
     "harness_bombCollision_6", "harness_timeLimit_7",
+    # Turns KNOWN_ASSETS plus the student's uploads into the list of asset
+    # filenames the harnesses treat as "available" (an uploaded picture must
+    # not be reported as "not one of the bundled files").
+    "availableAssetNames",
     # The four multi-part Bonus harnesses: each mixes settings-block parts
     # with real method-body parts (see app.js section 10).
     "harness_roundDesign_8", "harness_lookAndFeel_9", "harness_customItems_10",
@@ -300,7 +304,17 @@ VARS = [
 _known_assets_obj = extract_const_object(DATA_SRC, "KNOWN_ASSET_FILES")
 _known_assets_var_line = "var KNOWN_ASSETS = %s;" % _known_assets_obj
 
-_pieces = [extract_var_line(v) for v in VARS] + [_known_assets_var_line] + [extract_function(f) for f in FUNCS]
+# availableAssetNames() also merges in the student's uploaded files. There are
+# no uploads in a grading regression run, so an empty registry is the right
+# stand-in - and it pins the behaviour the negative controls depend on: with
+# nothing uploaded, only the bundled files count as known.
+_uploaded_urls_var_line = "var UPLOADED_URLS = {};"
+
+_pieces = (
+    [extract_var_line(v) for v in VARS]
+    + [_known_assets_var_line, _uploaded_urls_var_line]
+    + [extract_function(f) for f in FUNCS]
+)
 COMBINED_ES3 = "\n\n".join(_pieces)
 COMBINED_ES3 = COMBINED_ES3.replace("const ", "var ")
 COMBINED_ES3 = re.sub(r",(\s*\n\s*[}\]])", r"\1", COMBINED_ES3)

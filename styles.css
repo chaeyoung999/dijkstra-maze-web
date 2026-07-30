@@ -1298,29 +1298,6 @@ a.btn { text-decoration: none; cursor: pointer; }
 /* =========================================================================
    Asset picker (TODO 8)
    ========================================================================= */
-.asset-instructions {
-  background: var(--info-bg);
-  border: 1px solid color-mix(in srgb, var(--accent-2) 35%, transparent);
-  border-radius: 8px;
-  padding: 12px 14px;
-  margin-bottom: 12px;
-  font-size: 0.86rem;
-}
-.asset-folder-diagram {
-  font-family: "Cascadia Mono", Consolas, monospace;
-  font-size: 0.8rem;
-  line-height: 1.7;
-  background: var(--stone-900);
-  color: #ece3cf;
-  border-radius: 6px;
-  padding: 10px 12px;
-  margin: 8px 0;
-  overflow-x: auto;
-}
-.asset-folder-diagram .icon { width: 14px; height: 14px; display: inline-block; vertical-align: -2px; color: #caa94a; }
-.asset-steps { margin: 10px 0 6px; padding-left: 20px; font-size: 0.86rem; }
-.asset-steps li { margin-bottom: 6px; }
-.asset-steps code { background: var(--context-bg); padding: 1px 5px; border-radius: 4px; }
 
 .asset-body { display: flex; flex-direction: column; gap: 4px; }
 

@@ -48,7 +48,7 @@
 3. 파이썬이 없으면 배치 파일이 설치 안내를 띄웁니다
    (python.org 설치 시 "Add python.exe to PATH" 체크 필요).
 4. `index.html`을 그냥 더블클릭해도 페이지는 뜨지만 `file://` 경고 배너가 뜹니다.
-   채점은 되지만 파일 업로드(File System Access API)는 `http://localhost` 가 필요합니다.
+   채점과 이미지·소리 업로드는 `file://` 에서도 동작합니다.
 5. **인터넷 연결이 필요합니다** — Pyodide를 CDN에서 최초 1회 내려받습니다.
    학교 방화벽이 막는 경우가 있으니 수업 전 최소 1대에서 "Run my code"를 눌러보세요.
 
@@ -171,7 +171,9 @@ node scripts/gen_todos.js         # data.js       -> dijkstra_maze/todos.json
 - 여러 학생이 같은 컴퓨터를 쓰면 상단의 **"Save my work" / "Load my work"** 를 안내하세요.
 - 제출물은 **두 가지를 함께** 받으세요: `progress.json`("Save my work") +
   **"Download my project"** zip(실제로 실행되는 파이썬 프로젝트).
-  학생이 직접 업로드한 이미지·소리는 zip에 자동 포함되지 않으니 따로 받으세요.
+  학생이 직접 업로드한 이미지·소리도 zip의 `assets/` 에 자동으로 들어갑니다.
+- 단, 업로드한 파일 자체는 `progress.json` 에는 없고 **그 브라우저에만** 저장됩니다.
+  다른 컴퓨터에서 이어서 하려면 다시 업로드해야 합니다 (zip 제출을 함께 받는 이유).
 - 단계 구조가 바뀌어도 저장된 진행 상황은 살아남습니다 — 파트가 늘어난 단계는
   이미 쓴 파트를 그대로 두고 새 파트만 스타터 코드로 채웁니다.
 

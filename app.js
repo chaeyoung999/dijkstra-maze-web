@@ -2856,8 +2856,8 @@
       b64Line("CODE11", code11),
       b64Line("CODE12", code12),
       b64Line("FN3_SRC", fn8),
-      "KNOWN_IMAGES = " + JSON.stringify(KNOWN_ASSETS.images).replace(/"/g, "'"),
-      "KNOWN_SOUNDS = " + JSON.stringify(KNOWN_ASSETS.sounds).replace(/"/g, "'"),
+      "KNOWN_IMAGES = " + JSON.stringify(availableAssetNames("image")).replace(/"/g, "'"),
+      "KNOWN_SOUNDS = " + JSON.stringify(availableAssetNames("sound")).replace(/"/g, "'"),
       // Every settings block is still EXECUTED (TODO 9-8 needs 9-6's music
       // path and 9-7's volume to run against), but only the focused one is
       // reported on and only its problems can fail the step. The trailing
@@ -2997,8 +2997,8 @@
       b64Line("FN3_SRC", fn3Src),
       "ITEM_KEYS = " + JSON.stringify(itemKeys).replace(/"/g, "'"),
       "KNOWN_EFFECTS = ['add_time', 'add_hint']",
-      "KNOWN_IMAGES = " + JSON.stringify(KNOWN_ASSETS.images).replace(/"/g, "'"),
-      "KNOWN_SOUNDS = " + JSON.stringify(KNOWN_ASSETS.sounds).replace(/"/g, "'"),
+      "KNOWN_IMAGES = " + JSON.stringify(availableAssetNames("image")).replace(/"/g, "'"),
+      "KNOWN_SOUNDS = " + JSON.stringify(availableAssetNames("sound")).replace(/"/g, "'"),
       "IMAGE_EXT = ('.png', '.jpg', '.jpeg', '.gif', '.bmp')",
       "SOUND_EXT = ('.wav', '.mp3', '.ogg')",
       // Stand-ins for Parts 4-6: one spawned item, and just enough of Game
@@ -3456,7 +3456,7 @@
     if (state.assetData && state.assetData.uploadedFiles && state.assetData.uploadedFiles.length) {
       showConfirm(
         "Remember your uploaded files",
-        "progress.json saved your code, painted maps, and the list of " + state.assetData.uploadedFiles.length + " file(s) you added in TODO 9 — but NOT the image/sound files themselves. Those live on your disk (or your connected project folder). Keep them safe, or you'll need to re-upload them next time.",
+        "progress.json saved your code, your painted maps, and the names of the " + state.assetData.uploadedFiles.length + " file(s) you uploaded in TODO 9 — but NOT the pictures and sounds themselves. Those are stored in THIS browser, so they keep working here, but on another computer you'd upload them again. To keep a copy of the files, use \"Download my project\" — the zip includes them.",
         { confirmLabel: "Got it", cancelLabel: "Close" }
       );
     }
@@ -5727,7 +5727,12 @@
   var ASSET_PATH_STEPS = ["9-1", "9-2", "9-6"];
   var IMAGE_EXT_OK = ["png", "jpg", "jpeg", "gif", "webp"];
   var SOUND_EXT_OK = ["wav", "mp3", "ogg"];
-  var IDB_NAME = "dijkstraMazeAssets", IDB_STORE = "handles", IDB_DIR_KEY = "projectDir";
+  // IDB_STORE ("handles") once held the File System Access directory handle
+  // for the removed "Connect my project folder" flow. Nothing writes to it
+  // any more, but idbOpen still creates it: returning students have it in
+  // their existing database, and the default store name for idbGet/idbSet
+  // has to point at a store that exists.
+  var IDB_NAME = "dijkstraMazeAssets", IDB_STORE = "handles";
   // Second store: the actual BYTES of files a student uploads, keyed by the
   // asset path the code refers to ("assets/images/star.png") -> Blob.
   //
@@ -5833,6 +5838,33 @@
     return UPLOADED_URLS[path] || path;
   }
 
+  // Filenames the student can legitimately point a path at: the files
+  // bundled with the site PLUS anything they have uploaded. The grader
+  // warns about a path it doesn't recognize, so an upload has to count
+  // here - otherwise choosing your own picture always produced
+  // "PLAYER_IMAGE_PATH = 'assets/images/mine.png' - this isn't one of the
+  // bundled files", which is simply wrong now that the file really is
+  // stored and really does render.
+  // Plain for-in / indexOf rather than Object.keys + forEach: this function
+  // is extracted and re-run under cscript's JScript engine by
+  // tests/extract_harnesses.py, which cannot be relied on for ES5 built-ins.
+  function availableAssetNames(kind) {
+    var prefix = "assets/" + (kind === "image" ? "images" : "sounds") + "/";
+    var bundled = (kind === "image" ? KNOWN_ASSETS.images : KNOWN_ASSETS.sounds) || [];
+    var names = [];
+    var i;
+    for (i = 0; i < bundled.length; i++) names.push(bundled[i]);
+    for (var path in UPLOADED_URLS) {
+      if (!UPLOADED_URLS.hasOwnProperty(path)) continue;
+      if (path.indexOf(prefix) !== 0) continue;
+      var name = path.substring(prefix.length);
+      var seen = false;
+      for (i = 0; i < names.length; i++) { if (names[i] === name) { seen = true; break; } }
+      if (!seen) names.push(name);
+    }
+    return names;
+  }
+
   // Loaded once at startup so uploads survive a reload / a new session on
   // the same browser. Resolves even on failure - a browser with IndexedDB
   // blocked simply has no uploads, which is not an error worth surfacing.
@@ -5923,15 +5955,18 @@
     // unless you happen to click a sound row in the slot list first).
     var soundSlots = ASSET_SLOTS.filter(function (s) { return s.kind === "sound"; });
     var activeSoundSlotKey = soundSlots.length ? soundSlots[0].key : null;
-    var dirHandle = null;
-    var dirStatus = "unchecked"; // unchecked | none | granted | denied | unsupported
-    // The custom-upload flow (folder connect + drag/drop + uploaded list)
-    // is collapsed behind a toggle by default - most students only ever
-    // use the bundled picker above it. `connectSectionNode` is built once
-    // and cached (not rebuilt on every slot switch) so re-opening it never
-    // re-triggers the folder-permission check unnecessarily.
+    // The custom-upload flow (drag/drop + the uploaded list) is collapsed
+    // behind a toggle by default - most students only ever use the bundled
+    // picker above it.
+    //
+    // "Connect my project folder" used to live here too: a File System
+    // Access flow that wrote uploads straight into a local
+    // dijkstra_maze/student folder. It is gone. Students using the deployed
+    // site have no such folder, so the button could only ever fail for
+    // them, and uploads now go into browser storage and into the downloaded
+    // zip's assets/ folder automatically - which is what the folder connect
+    // was trying to achieve in the first place.
     var customSectionExpanded = false;
-    var connectSectionNode = null;
 
     function slotByKey(key) { return ASSET_SLOTS.filter(function (s) { return s.key === key; })[0]; }
 
@@ -5955,88 +5990,6 @@
 
     function pathFor(filename, kind) { return "assets/" + (kind === "image" ? "images" : "sounds") + "/" + filename; }
 
-    function renderInstructions(container) {
-      var box = el("div", { class: "asset-instructions" });
-      box.appendChild(el("div", { class: "sidebar-group-title", text: "Optional: also copy uploads into a local Python project" }));
-      box.appendChild(el("p", { class: "small muted", text: "You do NOT need this to upload a picture or a sound. Uploading already works on its own — the file is kept in this browser and shows up in the preview and the Play tab immediately. Connect a folder only if you have the Python project on this computer and want your uploads copied straight into it." }));
-      var diagram = el("div", { class: "asset-folder-diagram", html:
-        '<svg viewBox="0 0 20 20" class="icon"><path d="M2 5a1 1 0 0 1 1-1h4l1.5 2H17a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5z" fill="currentColor" opacity="0.85"/></svg> dijkstra_maze/<br>' +
-        '&nbsp;&nbsp;<svg viewBox="0 0 20 20" class="icon"><path d="M2 5a1 1 0 0 1 1-1h4l1.5 2H17a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5z" fill="currentColor" opacity="0.85"/></svg> student/  ← select THIS folder<br>' +
-        '&nbsp;&nbsp;&nbsp;&nbsp;<svg viewBox="0 0 20 20" class="icon"><path d="M4 3h5l1 2h6a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.5"/></svg> settings.py<br>' +
-        '&nbsp;&nbsp;&nbsp;&nbsp;<svg viewBox="0 0 20 20" class="icon"><path d="M2 5a1 1 0 0 1 1-1h4l1.5 2H17a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5z" fill="currentColor" opacity="0.85"/></svg> assets/<br>' +
-        '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<svg viewBox="0 0 20 20" class="icon"><path d="M2 5a1 1 0 0 1 1-1h4l1.5 2H17a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5z" fill="currentColor" opacity="0.6"/></svg> images/<br>' +
-        '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<svg viewBox="0 0 20 20" class="icon"><path d="M2 5a1 1 0 0 1 1-1h4l1.5 2H17a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5z" fill="currentColor" opacity="0.6"/></svg> sounds/'
-      });
-      box.appendChild(diagram);
-      var steps = el("ol", { class: "asset-steps" }, [
-        el("li", {}, ["Click \"Connect my project folder\" below. Your browser will ask for permission — that's normal. The site can only read/write inside the one folder you pick."]),
-        el("li", {}, ["Select your ", el("code", { text: "dijkstra_maze/student" }), " folder — the one with ", el("code", { text: "settings.py" }), " directly inside (see the diagram above)."]),
-        el("li", {}, ["Click \"Allow\" in the dialog. Clicked \"Deny\" by mistake? Just press \"Connect my project folder\" again."]),
-        el("li", {}, ["From then on, every file you upload is also written into your ", el("code", { text: "assets/" }), " folder, on top of being stored here."]),
-        el("li", {}, ["Next time, one click on \"Reconnect\" — no need to pick the folder again."]),
-      ]);
-      box.appendChild(steps);
-      box.appendChild(el("p", { class: "small muted", text: "No project folder on this computer (or a browser that doesn't support this)? Nothing to do — keep uploading as normal, and use \"Download a copy\" if you later want the file on disk." }));
-      container.appendChild(box);
-    }
-
-    function renderConnectBar(container) {
-      var bar = el("div", { class: "viz-controlbar" });
-      var statusEl = el("span", { class: "small" });
-      var connectBtn = el("button", { class: "btn btn-small btn-primary", type: "button", text: "Connect my project folder" });
-      bar.appendChild(connectBtn);
-      bar.appendChild(statusEl);
-      container.appendChild(bar);
-
-      function setStatus(text, cls) { statusEl.textContent = text; statusEl.className = "small " + (cls || ""); }
-
-      if (window.location.protocol === "file:") {
-        setStatus("You're on file:// — connecting a folder only works over http(s). Uploading still works.", "muted");
-        connectBtn.disabled = true;
-      } else if (!window.showDirectoryPicker) {
-        setStatus("This browser can't connect a folder (try Chrome or Edge). Uploading still works.", "muted");
-        connectBtn.disabled = true;
-      } else {
-        idbGet(IDB_DIR_KEY).then(function (handle) {
-          if (!handle) { setStatus("Not connected yet.", "muted"); return; }
-          handle.queryPermission({ mode: "readwrite" }).then(function (perm) {
-            if (perm === "granted") {
-              dirHandle = handle; dirStatus = "granted";
-              setStatus("Connected to your project folder ✓", "verdict-good-text");
-            } else {
-              setStatus("Found a remembered folder, but permission needs re-granting.", "muted");
-              connectBtn.textContent = "Reconnect";
-            }
-          }).catch(function () { setStatus("Not connected yet.", "muted"); });
-        });
-        connectBtn.addEventListener("click", function () {
-          idbGet(IDB_DIR_KEY).then(function (handle) {
-            if (handle) {
-              return handle.requestPermission({ mode: "readwrite" }).then(function (perm) {
-                if (perm === "granted") { dirHandle = handle; dirStatus = "granted"; setStatus("Connected to your project folder ✓", "verdict-good-text"); return; }
-                dirStatus = "denied";
-                setStatus("Permission was not granted. Click Connect again and choose \"Allow\".", "verdict-bad-text");
-              });
-            }
-            return window.showDirectoryPicker({ id: "dijkstra-maze-student", mode: "readwrite" }).then(function (h) {
-              return h.getFileHandle("settings.py").then(function () {
-                return h.getDirectoryHandle("assets");
-              }).then(function () {
-                dirHandle = h; dirStatus = "granted";
-                setStatus("Connected to your project folder ✓", "verdict-good-text");
-                idbSet(IDB_DIR_KEY, h);
-              }).catch(function () {
-                setStatus("That doesn't look like the student/ folder — it's missing settings.py or an assets/ folder. Please select the folder that directly contains settings.py.", "verdict-bad-text");
-              });
-            });
-          }).catch(function (err) {
-            if (err && err.name === "AbortError") { setStatus("Cancelled — no folder selected yet.", "muted"); return; }
-            setStatus("Could not connect: " + (err && err.message ? err.message : err), "verdict-bad-text");
-          });
-        });
-      }
-    }
-
     function downscaleImageBlob(file, targetSize) {
       return new Promise(function (resolve, reject) {
         var img = new Image();
@@ -6049,18 +6002,6 @@
         };
         img.onerror = reject;
         img.src = URL.createObjectURL(file);
-      });
-    }
-
-    function saveViaDirectoryHandle(kind, safeName, blob) {
-      return dirHandle.getDirectoryHandle("assets").then(function (assetsDir) {
-        return assetsDir.getDirectoryHandle(kind === "image" ? "images" : "sounds", { create: true });
-      }).then(function (subDir) {
-        return subDir.getFileHandle(safeName, { create: true });
-      }).then(function (fileHandle) {
-        return fileHandle.createWritable().then(function (writable) {
-          return writable.write(blob).then(function () { return writable.close(); });
-        });
       });
     }
 
@@ -6085,30 +6026,21 @@
       if (sanitized.changed) warnings.push("Renamed to \"" + finalName + "\" (spaces/non-English characters cause problems for pygame file paths).");
       if (slot.kind === "sound" && ext !== "wav") warnings.push("pygame handles WAV most reliably — " + ext.toUpperCase() + " may not play on every machine.");
 
-      // Storing the bytes in the browser is the step that makes an upload
-      // actually usable HERE - previews and the Play tab load from it. That
-      // has to happen whether or not a local project folder is connected,
-      // because on the deployed site there is no project folder at all.
-      // Writing into a connected folder is a bonus on top, for students who
-      // also run the Python project locally.
+      // Storing the bytes in browser storage is the whole upload. From that
+      // one step the file behaves like a bundled asset everywhere: previews
+      // and the Play tab draw it, the grader stops calling the path unknown,
+      // and buildProjectZip() puts it in the downloaded project's assets/
+      // folder. There is nothing for the student to copy by hand.
       function afterFileReady(blob) {
-        var path = pathFor(finalName, slot.kind);
-        rememberUploadedAsset(path, blob).then(function () {
-          if (!dirHandle) {
-            finishUpload(slot, finalName, warnings.concat(["Saved in this browser ✓ — it shows up in the preview and the Play tab right away. To use it in the downloaded Python project too, press \"Download a copy\" in the list below."]));
-            return;
-          }
-          saveViaDirectoryHandle(slot.kind, finalName, blob).then(function () {
-            finishUpload(slot, finalName, warnings.concat(["Saved in this browser and written into your project's assets/ folder ✓"]));
-          }).catch(function () {
-            finishUpload(slot, finalName, warnings.concat(["Saved in this browser ✓, but writing into your connected project folder failed. Press \"Download a copy\" in the list below and move it into assets/" + (slot.kind === "image" ? "images" : "sounds") + "/ yourself."]));
-          });
+        var folder = slot.kind === "image" ? "images" : "sounds";
+        rememberUploadedAsset(pathFor(finalName, slot.kind), blob).then(function () {
+          finishUpload(slot, finalName, warnings.concat(["Added to assets/" + folder + "/ ✓ — it shows up in the preview and the Play tab right away, and it's included when you download your project."]));
         }).catch(function (err) {
-          // No IndexedDB (private-mode quirks, storage full/blocked): fall
-          // back to the old download-and-copy route rather than pretending
-          // the upload worked.
+          // No IndexedDB (private-mode quirks, storage full/blocked): hand
+          // the file back as a download rather than pretending the upload
+          // worked and leaving the student with a path to nothing.
           downloadFallback(finalName, blob);
-          finishUpload(slot, finalName, warnings.concat(["This browser wouldn't let the site store your file (" + (err && err.message ? err.message : "storage unavailable") + "), so it was downloaded instead. Previews here will show \"not found\" until you run the project locally with the file in assets/" + (slot.kind === "image" ? "images" : "sounds") + "/."]));
+          finishUpload(slot, finalName, warnings.concat(["This browser wouldn't let the site store your file (" + (err && err.message ? err.message : "storage unavailable") + "), so it was downloaded instead. To use it, put it in assets/" + folder + "/ of a downloaded project and run the game there."]));
         });
       }
 
@@ -6170,7 +6102,7 @@
     }
 
     function removeUploaded(file) {
-      showConfirm("Remove this file?", "\"" + file.name + "\" will be deleted from this browser, so previews and the Play tab will stop showing it. Any copy you downloaded, or that was written into a connected project folder, is not affected.", { confirmLabel: "Remove", dangerConfirm: true }).then(function (ok) {
+      showConfirm("Remove this file?", "\"" + file.name + "\" will be deleted from this browser, so previews, the Play tab and future project downloads will stop using it. Any copy you already downloaded is not affected.", { confirmLabel: "Remove", dangerConfirm: true }).then(function (ok) {
         if (!ok) return;
         state.assetData.uploadedFiles = state.assetData.uploadedFiles.filter(function (f) { return !(f.name === file.name && f.kind === file.kind); });
         persist();
@@ -6320,26 +6252,14 @@
         ul.appendChild(row);
       });
       box.appendChild(ul);
-      box.appendChild(el("p", { class: "small muted", text: "These are stored in this browser, so they keep working here after a reload. They are NOT inside progress.json — on a different computer you'd upload them again. Use \"Download a copy\" to get the file for the Python project you download." }));
+      box.appendChild(el("p", { class: "small muted", text: "These live in assets/ now: they keep working here after a reload, and they're included automatically when you download your project. They are NOT inside progress.json, so on a different computer you'd upload them again." }));
       container.appendChild(box);
     }
 
-    // Built once and cached (see customSectionExpanded/connectSectionNode
-    // above) so switching slots or re-rendering doesn't re-run the
-    // permission/IndexedDB check inside renderConnectBar every time.
-    function ensureConnectSectionBuilt() {
-      if (connectSectionNode) return connectSectionNode;
-      var wrap = el("div", { class: "asset-connect-wrap" });
-      renderInstructions(wrap);
-      renderConnectBar(wrap);
-      connectSectionNode = wrap;
-      return wrap;
-    }
-
     // Most students only ever use the bundled picker above - the whole
-    // custom-upload flow (walkthrough, folder connect, drag/drop, uploaded
-    // list) lives behind this one toggle, collapsed by default, so the
-    // panel stays uncluttered for everyone else.
+    // custom-upload flow (drag/drop plus the uploaded list) lives behind
+    // this one toggle, collapsed by default, so the panel stays
+    // uncluttered for everyone else.
     function renderCustomUploadSection(container, slot) {
       var section = el("div", { class: "asset-custom-section" });
       section.appendChild(el("button", {
@@ -6350,7 +6270,6 @@
       if (customSectionExpanded) {
         var inner = el("div", { class: "asset-custom-inner" });
         inner.appendChild(el("p", { class: "small muted", text: "Most students don't need this — the bundled options above already cover most games. This is only for adding your own picture or sound file." }));
-        inner.appendChild(ensureConnectSectionBuilt());
         renderUploadArea(inner, slot);
         renderUploadedList(inner);
         section.appendChild(inner);
@@ -7591,11 +7510,9 @@
       "Your progress when this was exported: " + summary.summaryText,
       "",
       "Custom images/sounds (TODO 9):",
-      "  Bundled assets are already included in assets/images/ and",
-      "  assets/sounds/. If you uploaded your OWN images/sounds on the",
-      "  website, copy those same files into THIS project's assets/images/",
-      "  or assets/sounds/ folder too - they are not automatically included",
-      "  in this download, since they live on your computer, not on the site.",
+      "  Everything is already in assets/images/ and assets/sounds/ - both",
+      "  the files bundled with the website AND any picture or sound you",
+      "  uploaded yourself. There is nothing to copy by hand.",
       "",
       "If a file couldn't be exported with your latest code, it was replaced",
       "with the original starter version (with a comment at the top",
@@ -7625,35 +7542,28 @@
             .catch(function () {})
         );
       });
+      // The student's OWN uploads, straight from browser storage into the
+      // same assets/ folders. Without this the zip shipped a settings.py
+      // pointing at "assets/images/their_picture.png" and no such file, so
+      // the downloaded game crashed back to its built-in shapes and the
+      // student had to hand-copy files they had already uploaded.
+      Object.keys(UPLOADED_URLS).forEach(function (path) {
+        assetPromises.push(
+          idbGet(path, IDB_UPLOADS).then(function (blob) {
+            if (!blob || !blob.arrayBuffer) return;
+            return blob.arrayBuffer().then(function (buf) {
+              zip.addFile(path, new Uint8Array(buf));
+            });
+          }).catch(function () {})
+        );
+      });
       return Promise.all(assetPromises).then(function () { return { zip: zip, built: built }; });
     });
   }
 
-  function getConnectedDirHandle() {
-    return idbGet(IDB_DIR_KEY).then(function (handle) {
-      if (!handle) return null;
-      return handle.queryPermission({ mode: "readwrite" }).then(function (perm) {
-        return perm === "granted" ? handle : null;
-      }).catch(function () { return null; });
-    }).catch(function () { return null; });
-  }
 
-  function writeExportedFilesToFolder(handle, names, files) {
-    return Promise.all(names.map(function (name) {
-      return handle.getFileHandle(name).then(function (fh) {
-        return fh.getFile().then(function (file) { return file.text(); });
-      }).then(function (originalText) {
-        return handle.getFileHandle(name + ".bak", { create: true }).then(function (bak) {
-          return bak.createWritable().then(function (w) { return w.write(originalText).then(function () { return w.close(); }); });
-        });
-      }).then(function () {
-        return handle.getFileHandle(name, { create: true }).then(function (fh2) {
-          return fh2.createWritable().then(function (w2) { return w2.write(files[name]).then(function () { return w2.close(); }); });
-        });
-      }).then(function () { return { name: name, ok: true }; })
-        .catch(function (err) { return { name: name, ok: false, error: err && err.message ? err.message : String(err) }; });
-    }));
-  }
+
+
 
   function renderExportActions(container, built) {
     container.innerHTML = "";
@@ -7692,38 +7602,11 @@
     container.appendChild(el("div", { class: "small muted mt-8", text: "Or just one file, if you already have the folder:" }));
     container.appendChild(singleRow);
 
-    getConnectedDirHandle().then(function (handle) {
-      if (!handle) {
-        container.appendChild(el("p", { class: "small muted mt-8", text: "Connect your project folder from TODO 9 to write your answers directly into your files instead (with automatic .bak backups)." }));
-        return;
-      }
-      var willChange = EXPORT_TODO_FILES.slice();
-      var writeBox = el("div", { class: "asset-upload-box mt-8" });
-      writeBox.appendChild(el("div", { class: "sidebar-group-title", text: "Write my answers into my connected project folder" }));
-      writeBox.appendChild(el("p", { class: "small", text: "This will back up and overwrite: " + willChange.join(", ") + ". Each original is saved as <name>.py.bak first." }));
-      var writeBtn = el("button", { class: "btn btn-primary", type: "button", text: "Write into my folder" });
-      writeBox.appendChild(writeBtn);
-      var resultBox = el("div", { class: "small mt-8" });
-      writeBox.appendChild(resultBox);
-      writeBtn.addEventListener("click", function () {
-        showConfirm(
-          "Write into your project folder?",
-          "This overwrites " + willChange.join(", ") + " in your connected folder (originals saved as .py.bak first). Continue?",
-          { confirmLabel: "Write files", dangerConfirm: true }
-        ).then(function (ok) {
-          if (!ok) return;
-          writeBtn.disabled = true;
-          writeExportedFilesToFolder(handle, willChange, built.files).then(function (results) {
-            writeBtn.disabled = false;
-            resultBox.innerHTML = "";
-            results.forEach(function (r) {
-              resultBox.appendChild(el("div", { class: r.ok ? "verdict-good-text" : "verdict-bad-text", text: (r.ok ? "✓ " : "✗ ") + r.name + (r.ok ? " written (backup saved as " + r.name + ".bak)" : " failed: " + r.error) }));
-            });
-          });
-        });
-      });
-      container.appendChild(writeBox);
-    });
+    // A third option used to live here: "write my answers straight into my
+    // connected project folder". It went away with the folder-connect flow
+    // in TODO 9 - no handle can exist any more, so the option could only
+    // ever render as an instruction to use a button that no longer exists.
+    // The zip already contains everything, uploads included.
   }
 
   function openExportModal() {

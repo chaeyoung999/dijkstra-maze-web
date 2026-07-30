@@ -62,8 +62,31 @@ Required TODO를 **6·7번 두 개 추가**하기 위해 Bonus 묶음 번호를 
 **주의**: 업로드 파일은 여전히 `progress.json` 에 안 들어갑니다 (브라우저 저장소에만).
 다른 컴퓨터에서는 다시 올려야 합니다. 문구에 그대로 적어놨습니다.
 
-**테스트**: `node tests/test_asset_uploads.js` — 19개 검증 (app.js 에서 함수를 그대로
+**테스트**: `node tests/test_asset_uploads.js` — 24개 검증 (app.js 에서 함수를 그대로
 추출해 가짜 IndexedDB 로 실행). 기존 테스트 3종도 전부 통과.
+
+### 3-b. "Connect my project folder" 완전 제거 + 업로드가 진짜 assets/ 로 들어감
+
+선생님 요청: "connect my project folder 를 제거해줘. 업로드하면 바로 assets 폴더에 넣어줘.
+`PLAYER_IMAGE_PATH = 'assets/images/nubzuki.png' — this isn't one of the bundled files`
+이 에러가 애초에 존재하지 않겠지."
+
+1. **폴더 연결 기능 삭제** — `renderInstructions`, `renderConnectBar`,
+   `saveViaDirectoryHandle`, `getConnectedDirHandle`, `writeExportedFilesToFolder`,
+   `dirHandle`/`dirStatus`/`connectSectionNode`/`IDB_DIR_KEY`, 관련 CSS 3블록,
+   export 모달의 "연결된 폴더에 쓰기" 옵션까지 전부 제거.
+   배포 사이트 학생에겐 그 폴더가 없어서 **실패만 하는 버튼**이었습니다.
+   `IDB_STORE`("handles")는 남겨둡니다 — 기존 학생 DB 에 이미 있고 기본 store 이름이라서.
+2. **업로드 파일이 다운로드 zip 의 `assets/` 에 자동 포함** (`buildProjectZip`).
+   전에는 zip 의 settings.py 가 `assets/images/내그림.png` 를 가리키는데 그 파일이 없어서
+   다운로드한 게임이 기본 도형으로 떨어졌습니다. 이게 "자동으로 asset 폴더에 넣어줘"의 핵심.
+3. **"isn't one of the bundled files" 경고 제거** — 새 `availableAssetNames(kind)` 가
+   번들 파일 + 업로드 파일을 합쳐서 하네스의 `KNOWN_IMAGES`/`KNOWN_SOUNDS` 에 주입.
+   업로드 안 한 파일은 **여전히 경고**가 뜹니다 (오타 잡아주는 원래 목적은 유지).
+   ⚠️ 이 함수는 `tests/extract_harnesses.py` 가 **cscript(ES3)** 로 재실행하므로
+   `Object.keys`/`forEach` 대신 `for...in` 을 씁니다. ES5 문법 쓰면 테스트가 깨집니다.
+   추출기의 `FUNCS` 에 `availableAssetNames`, 그리고 `var UPLOADED_URLS = {};` 추가했습니다.
+4. HOW_TO_RUN.txt 의 "직접 복사해 넣으세요" 문단 삭제, progress.json 경고문·README 갱신.
 
 ---
 

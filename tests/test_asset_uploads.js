@@ -65,8 +65,9 @@ function extractFunction(name) {
 
 const NAMES = [
   "idbOpen", "idbGet", "idbSet", "idbDelete", "idbAllUploads",
-  "resolveAssetPath", "loadUploadedAssets", "rememberUploadedAsset",
-  "forgetUploadedAsset", "audioForPath", "loadImageCached",
+  "resolveAssetPath", "availableAssetNames", "loadUploadedAssets",
+  "rememberUploadedAsset", "forgetUploadedAsset", "audioForPath",
+  "loadImageCached",
 ];
 
 // The two constants the extracted functions close over. Read from app.js so
@@ -153,6 +154,9 @@ function makeEnv(idbOpts, sharedDbs) {
     IDB_NAME, IDB_STORE, IDB_UPLOADS,
     IMAGE_CACHE: {},
     UPLOADED_URLS: {},
+    // Stand-in for the site's bundled asset list, so availableAssetNames()
+    // can be checked without pulling in all of data.js.
+    KNOWN_ASSETS: { images: ["boy.png", "item_star.png"], sounds: ["pickup_3.wav"] },
     window: { indexedDB: null },
     URL: {
       createObjectURL(blob) { const u = `blob:fake/${++urlCounter}`; created.push({ u, blob }); return u; },
@@ -238,6 +242,24 @@ const tick = () => new Promise((r) => setTimeout(r, 5));
     vm.runInContext(`audioForPath("assets/sounds/pickup_3.wav").src`, env) === "assets/sounds/pickup_3.wav");
   check("audioForPath(null) is a no-op rather than a crash",
     vm.runInContext(`audioForPath(null)`, env) === null);
+
+  // ---- 3b. the grader stops calling an uploaded path unknown -----------
+  // This is the warning the teacher hit: "PLAYER_IMAGE_PATH =
+  // 'assets/images/nubzuki.png' - this isn't one of the bundled files".
+  // Once the file is uploaded it really is available, so it must count as
+  // known or the warning is simply wrong.
+  const imgNames = vm.runInContext(`availableAssetNames("image")`, env);
+  check("an uploaded image counts as an available asset for the grader",
+    imgNames.includes("my_star.png"), `(${imgNames.join(", ")})`);
+  check("bundled images are still listed alongside it",
+    imgNames.includes("boy.png") && imgNames.includes("item_star.png"));
+  const sndNames = vm.runInContext(`availableAssetNames("sound")`, env);
+  check("an uploaded sound counts as an available asset for the grader",
+    sndNames.includes("mine.wav"), `(${sndNames.join(", ")})`);
+  check("an uploaded image does not leak into the sound list",
+    !sndNames.includes("my_star.png"));
+  check("a file nobody uploaded is still unknown (the warning still works)",
+    !imgNames.includes("nubzuki.png"));
 
   // ---- 4. uploads survive a reload ------------------------------------
   const env2 = makeEnv({}, browser);
