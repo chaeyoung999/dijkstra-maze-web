@@ -289,7 +289,12 @@
   function defaultStepState(step) {
     return {
       code: step.parts ? step.parts.map(function (p) { return linesOf(p.starter); }) : linesOf(step.starter),
-      status: "available",
+      // Required steps ship with the reference answer as their starter code
+      // (see the "Ship Required TODOs 1-5 pre-filled" change) - there is
+      // nothing left to solve, so a fresh visitor should see them already
+      // completed (all Bonus unlocked immediately) rather than sitting in
+      // an ungraded "available" state waiting for someone to press Run.
+      status: step.required ? "completed" : "available",
       hintsRevealed: 0,
       attempts: 0,
       lastFeedback: null,

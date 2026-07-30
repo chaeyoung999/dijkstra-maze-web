@@ -388,10 +388,25 @@ check("every marker text appears in its file",
     return s;
   }
 
-  // Before Required is finished, no Bonus sub-step is reachable.
+  // Required now ships pre-filled with the reference answer and defaults to
+  // "completed" (see defaultStepState) - so a genuinely fresh, untouched
+  // state already has every Required step done, and Bonus is unlocked from
+  // the very first load. This is the intended behavior, not a regression.
   const fresh = hooks.freshState();
   hooks.setState(fresh);
-  check("Bonus stays locked until Required is finished",
+  check("a fresh (default) state has every Required step already completed",
+    DATA.REQUIRED_ORDER.every((id) => fresh.steps[id].status === "completed"));
+  check("Bonus is unlocked from a fresh load, since Required defaults to done",
+    DATA.BONUS_GROUPS.map((g) => g.ids[0]).every((id) => hooks.computeStatus(id) === "available"));
+
+  // The underlying LOCK RULE itself (Bonus requires Required done-or-skipped)
+  // must still hold if a Required step is ever put back into a non-done
+  // state (e.g. a future "reset this step" action) - only the default
+  // changed, not the rule.
+  const requiredReset = hooks.freshState();
+  requiredReset.steps[DATA.REQUIRED_ORDER[0]].status = "available";
+  hooks.setState(requiredReset);
+  check("Bonus re-locks if a Required step is put back to not-done",
     DATA.BONUS_ORDER.every((id) => hooks.computeStatus(id) === "locked"));
 
   stateWith({});
